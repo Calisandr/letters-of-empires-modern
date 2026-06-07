@@ -739,6 +739,9 @@ function EmpirePanel({
     >
       <section className="empire-card framed-panel">
         <h1>Россия</h1>
+        <div className="player-country-flag" aria-label="Флаг России">
+          <span className="flag russia" />
+        </div>
         <div className="state-emblem" aria-hidden="true">
           <svg viewBox="0 0 130 122">
             <path className="wing left" d="M62 39C43 23 26 27 12 38c15 2 27 7 37 17-15-8-28-9-40-5 15 6 27 13 35 26-13-8-24-11-34-9 9 10 21 17 37 21-12 1-22 0-31-3 11 12 26 18 46 18z" />
