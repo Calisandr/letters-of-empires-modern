@@ -52,16 +52,45 @@ import type {
   ChatMessage,
   DiplomacyRelation,
   Letter,
+  NationProfile,
   Order,
   OrderIconKey,
   QuickActionId,
+  ResourceDelta,
   ResourceState,
+  SelectedCountry,
   TimelineEvent,
+  TurnReport,
+  WorldEvent,
 } from './game/types';
 
 type ToastState = {
   message: string;
 };
+
+type MapLayerId = 'borders' | 'labels' | 'capitals' | 'ports' | 'regions' | 'routes' | 'intel';
+
+type MapLayersState = Record<MapLayerId, boolean>;
+
+const initialMapLayers: MapLayersState = {
+  borders: true,
+  labels: true,
+  capitals: true,
+  ports: true,
+  regions: true,
+  routes: true,
+  intel: true,
+};
+
+const mapLayerOptions: Array<{ id: MapLayerId; label: string; description: string }> = [
+  { id: 'borders', label: 'Границы', description: 'Контуры стран и зон влияния' },
+  { id: 'labels', label: 'Подписи', description: 'Названия стран и океанов' },
+  { id: 'capitals', label: 'Столицы', description: 'Столицы и ключевые центры' },
+  { id: 'ports', label: 'Порты', description: 'Морские узлы и гавани' },
+  { id: 'regions', label: 'Регионы', description: 'Стратегические области' },
+  { id: 'routes', label: 'Маршруты', description: 'Торговые и рискованные пути' },
+  { id: 'intel', label: 'Разведка', description: 'Карточка выбранной страны' },
+];
 
 const navItems = [
   { label: 'Карта мира', icon: MapIcon },
@@ -199,16 +228,323 @@ const MiniMap = memo(function MiniMap({ zoom }: { zoom: number }) {
   );
 });
 
+const focusLabels: Record<NationProfile['focus'], string> = {
+  trade: 'Торговля',
+  military: 'Военное давление',
+  industry: 'Промышленность',
+  diplomacy: 'Дипломатия',
+  defense: 'Оборона',
+};
+
+const resourceDeltaLabels: Record<keyof ResourceDelta, string> = {
+  gold: 'золото',
+  wood: 'дерево',
+  stone: 'камень',
+  iron: 'железо',
+  grain: 'зерно',
+  population: 'население',
+};
+
+function hashCountryName(name: string) {
+  return [...name].reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) % 9973, 17);
+}
+
+function clampStat(value: number) {
+  return Math.max(8, Math.min(96, Math.round(value)));
+}
+
+function fallbackRelation(status: string) {
+  if (status === 'russia') return 200;
+  if (status === 'ally') return 115;
+  if (status === 'friendly') return 64;
+  if (status === 'neutral') return 0;
+  if (status === 'risk') return -34;
+  if (status === 'hostile') return -78;
+  return -6;
+}
+
+function relationVisibility(relation: number, status: string) {
+  if (status === 'russia' || relation >= 150) return 'Полные данные';
+  if (relation >= 100) return 'Союзная разведка';
+  if (relation >= 45) return 'Достоверная оценка';
+  if (relation > -25) return 'Неполная оценка';
+  if (relation > -65) return 'Пограничные слухи';
+  return 'Данные скрыты';
+}
+
+function statBand(value: number) {
+  if (value >= 76) return 'высоко';
+  if (value >= 56) return 'средне';
+  if (value >= 36) return 'низко';
+  return 'слабо';
+}
+
+function visibleStat(value: number, relation: number, status: string, hiddenForEnemy = false) {
+  if (status === 'russia' || relation >= 100) return `${value}/100`;
+  if (relation >= 45) return `≈${Math.round(value / 5) * 5}/100`;
+  if (relation > -25) return statBand(value);
+  if (hiddenForEnemy) return 'скрыто';
+  return statBand(value);
+}
+
+function buildFallbackNation(selected: SelectedCountry): NationProfile {
+  const hash = hashCountryName(selected.name);
+  const relation = fallbackRelation(selected.status);
+  const focusOptions: NationProfile['focus'][] = ['trade', 'military', 'industry', 'diplomacy', 'defense'];
+  const focus = focusOptions[hash % focusOptions.length];
+  const isSmall = selected.status === 'common';
+
+  return {
+    id: selected.key || selected.name,
+    name: selected.name,
+    flag: 'neutral',
+    focus,
+    economy: clampStat((isSmall ? 34 : 44) + (hash % 39)),
+    army: clampStat((isSmall ? 24 : 36) + ((hash >> 2) % 42)),
+    stability: clampStat(42 + ((hash >> 3) % 44)),
+    treasury: clampStat(30 + ((hash >> 4) % 45)),
+    grain: clampStat(34 + ((hash >> 5) % 46)),
+    relation,
+    threat: clampStat((relation < -50 ? 58 : relation < -20 ? 42 : 20) + (hash % 20)),
+    pressure: clampStat((relation < -50 ? 54 : relation < -20 ? 38 : 18) + ((hash >> 6) % 22)),
+    goals: [
+      focus === 'trade' ? 'Ищет выгодный торговый путь' : 'Оценивает соседей и угрозы',
+      focus === 'military' ? 'Укрепляет войска' : 'Сохраняет внутренний порядок',
+      relation < -40 ? 'Скрывает реальные резервы' : 'Готова к осторожным переговорам',
+    ],
+    lastAction: 'Открытых донесений пока мало: нужна дипломатия, торговля или разведка.',
+  };
+}
+
+function getCountryIntel(
+  selectedCountry: SelectedCountry | null,
+  nations: NationProfile[],
+  diplomacy: DiplomacyRelation[],
+  worldEvents: WorldEvent[],
+) {
+  const selected = selectedCountry || { key: 'Russia', name: playerCountry.name, status: 'russia' };
+  const detailedNation = nations.find((nation) => nation.name === selected.name);
+  const diplomaticRelation = diplomacy.find((relation) => relation.name === selected.name);
+  const baseNation = detailedNation || buildFallbackNation(selected);
+  const relation = diplomaticRelation?.score ?? baseNation.relation;
+  const flag = diplomaticRelation?.flag || baseNation.flag;
+  const relatedEvent = worldEvents.find((event) => event.actor === selected.name);
+
+  return {
+    ...baseNation,
+    relation,
+    flag,
+    visibility: relationVisibility(relation, selected.status),
+    statusLabel: statusText[selected.status] || statusText.common,
+    relatedEvent,
+    isDetailed: Boolean(detailedNation),
+  };
+}
+
+function formatResourceDelta(delta: ResourceDelta) {
+  const parts = Object.entries(delta)
+    .filter(([, value]) => value)
+    .map(([key, value]) => {
+      const label = resourceDeltaLabels[key as keyof ResourceDelta] || key;
+      const formatted = key === 'population' ? Number(value).toFixed(1) : Math.round(Number(value)).toLocaleString('ru-RU');
+      return `${Number(value) > 0 ? '+' : ''}${formatted} ${label}`;
+    });
+
+  return parts.length ? parts.join(', ') : 'без прямых изменений';
+}
+
+function CountryIntelPanel({
+  selectedCountry,
+  nations,
+  diplomacy,
+  worldEvents,
+}: {
+  selectedCountry: SelectedCountry | null;
+  nations: NationProfile[];
+  diplomacy: DiplomacyRelation[];
+  worldEvents: WorldEvent[];
+}) {
+  const intel = getCountryIntel(selectedCountry, nations, diplomacy, worldEvents);
+  const relationText = intel.relation > 0 ? `+${intel.relation}` : String(intel.relation);
+
+  return (
+    <aside className="country-intel" aria-label="Разведка выбранной страны">
+      <header>
+        <span className={`flag ${intel.flag}`} />
+        <div>
+          <strong>{intel.name}</strong>
+          <small>{intel.statusLabel}</small>
+        </div>
+      </header>
+      <dl>
+        <div>
+          <dt>Доступ</dt>
+          <dd>{intel.visibility}</dd>
+        </div>
+        <div>
+          <dt>Фокус</dt>
+          <dd>{focusLabels[intel.focus]}</dd>
+        </div>
+        <div>
+          <dt>Отношения</dt>
+          <dd>{relationText}</dd>
+        </div>
+        <div>
+          <dt>Угроза</dt>
+          <dd>{visibleStat(intel.threat, intel.relation, selectedCountry?.status || 'russia')}</dd>
+        </div>
+        <div>
+          <dt>Экономика</dt>
+          <dd>{visibleStat(intel.economy, intel.relation, selectedCountry?.status || 'russia')}</dd>
+        </div>
+        <div>
+          <dt>Армия</dt>
+          <dd>{visibleStat(intel.army, intel.relation, selectedCountry?.status || 'russia', true)}</dd>
+        </div>
+      </dl>
+      <p>{intel.relatedEvent?.text || intel.lastAction}</p>
+      <small>{intel.isDetailed ? 'Досье обновляется каждый ход.' : 'Базовое досье: точность растет через дипломатию и разведку.'}</small>
+    </aside>
+  );
+}
+
+function TurnReportDialog({ report, onClose }: { report: TurnReport; onClose: () => void }) {
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="turn-report framed-panel" role="dialog" aria-modal="true" aria-labelledby="turnReportTitle">
+        <div className="panel-heading">
+          <h2 id="turnReportTitle">Отчет хода {report.turn}</h2>
+          <button type="button" aria-label="Закрыть отчет хода" onClick={onClose}>
+            <X aria-hidden="true" />
+          </button>
+        </div>
+        <p className="report-summary">{report.summary}</p>
+        <div className="report-grid">
+          <section>
+            <h3>Приказы</h3>
+            {report.completedOrders.length ? (
+              report.completedOrders.map((order) => (
+                <article key={`${order.title}-${order.target}`} className={order.succeeded ? 'success' : 'danger'}>
+                  <b>{order.succeeded ? 'Выполнен' : 'Провален'}</b>
+                  <span>{order.title}</span>
+                  <small>{order.text}</small>
+                </article>
+              ))
+            ) : (
+              <p>Приказы продвинулись, но ничего не завершилось.</p>
+            )}
+          </section>
+          <section>
+            <h3>Мир</h3>
+            {report.worldEvents.map((event) => (
+              <article key={event.id} className={event.tone}>
+                <b>{event.actor}</b>
+                <span>{event.title}</span>
+                <small>{event.text}</small>
+              </article>
+            ))}
+          </section>
+          <section>
+            <h3>Предупреждения</h3>
+            {(report.warnings.length ? report.warnings : ['Критических предупреждений нет.']).map((item) => (
+              <p key={item}>{item}</p>
+            ))}
+          </section>
+          <section>
+            <h3>Возможности</h3>
+            {(report.opportunities.length ? report.opportunities : ['Новых возможностей не обнаружено.']).map((item) => (
+              <p key={item}>{item}</p>
+            ))}
+          </section>
+        </div>
+        <footer>
+          <span>Ресурсы: {formatResourceDelta(report.resourceDelta)}</span>
+          <button type="button" className="primary" onClick={onClose}>
+            Принять отчет
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function MapToolbarMenu({
+  activeMenu,
+  mapLayers,
+  activeModeIndex,
+  onToggleLayer,
+  onSelectMode,
+}: {
+  activeMenu: 'layers' | 'mode' | null;
+  mapLayers: MapLayersState;
+  activeModeIndex: number;
+  onToggleLayer: (id: MapLayerId) => void;
+  onSelectMode: (index: number) => void;
+}) {
+  if (!activeMenu) return null;
+
+  if (activeMenu === 'mode') {
+    return (
+      <div className="map-menu map-mode-menu" role="menu" aria-label="Режим карты">
+        {mapModes.map((mode, index) => (
+          <button
+            key={mode.title}
+            type="button"
+            role="menuitemradio"
+            aria-checked={activeModeIndex === index}
+            className={activeModeIndex === index ? 'active' : ''}
+            onClick={() => onSelectMode(index)}
+          >
+            <span>{mode.title}</span>
+            <small>
+              {index === 0
+                ? 'Границы, столицы и дипломатический статус.'
+                : index === 1
+                  ? 'Маршруты, порты и торговые возможности.'
+                  : 'Риски, регионы и военное давление.'}
+            </small>
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="map-menu map-layer-menu" role="menu" aria-label="Слои карты">
+      {mapLayerOptions.map((layer) => (
+        <button
+          key={layer.id}
+          type="button"
+          role="menuitemcheckbox"
+          aria-checked={mapLayers[layer.id]}
+          className={mapLayers[layer.id] ? 'active' : ''}
+          onClick={() => onToggleLayer(layer.id)}
+        >
+          <span className="layer-check" aria-hidden="true">
+            {mapLayers[layer.id] ? '✓' : ''}
+          </span>
+          <span>
+            <b>{layer.label}</b>
+            <small>{layer.description}</small>
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function App() {
   const [gameState, dispatchGame] = useReducer(gameReducer, undefined, loadGameState);
   const [activeNav, setActiveNav] = useState('Карта мира');
-  const [routesVisible, setRoutesVisible] = useState(true);
+  const [mapLayers, setMapLayers] = useState<MapLayersState>(initialMapLayers);
+  const [activeMapMenu, setActiveMapMenu] = useState<'layers' | 'mode' | null>(null);
   const [mapModeIndex, setMapModeIndex] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [chatInput, setChatInput] = useState('');
   const [activeChatTab, setActiveChatTab] = useState('Мировой чат');
   const [activeUtilityPanel, setActiveUtilityPanel] = useState<string | null>(null);
   const [pendingQuickAction, setPendingQuickAction] = useState<QuickActionId | null>(null);
+  const [turnReportOpen, setTurnReportOpen] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(18 * 3600 + 42 * 60 + 31);
   const [toast, setToast] = useState<ToastState | null>(null);
   const {
@@ -217,6 +553,10 @@ function App() {
     timelineEvents,
     letters,
     diplomacy,
+    nations,
+    worldEvents,
+    worldTension,
+    lastTurnReport,
     chatMessages,
     quickActionTurns,
     turnNumber,
@@ -238,6 +578,7 @@ function App() {
   } | null>(null);
   const chatMessagesRef = useRef<HTMLDivElement | null>(null);
   const turnLockRef = useRef(false);
+  const seenTurnReportRef = useRef(lastTurnReport?.turn ?? null);
 
   const showToast = useCallback((message: string) => {
     const now = window.performance.now();
@@ -264,6 +605,12 @@ function App() {
     return ['app-shell', mapModes[mapModeIndex].className].filter(Boolean).join(' ');
   }, [mapModeIndex]);
 
+  const mapLayerAttributes = useMemo(() => {
+    return Object.fromEntries(
+      Object.entries(mapLayers).map(([key, value]) => [`data-layer-${key}`, value ? 'on' : 'off']),
+    ) as Record<`data-layer-${MapLayerId}`, string>;
+  }, [mapLayers]);
+
   useEffect(() => {
     saveGameState(gameState);
   }, [gameState]);
@@ -271,6 +618,12 @@ function App() {
   useEffect(() => {
     if (gameState.lastNotice) showToast(gameState.lastNotice.message);
   }, [gameState.lastNotice, showToast]);
+
+  useEffect(() => {
+    if (!lastTurnReport || lastTurnReport.turn === seenTurnReportRef.current) return;
+    seenTurnReportRef.current = lastTurnReport.turn;
+    setTurnReportOpen(true);
+  }, [lastTurnReport]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -308,9 +661,21 @@ function App() {
   };
 
   const handleMapModeClick = () => {
-    const nextIndex = (mapModeIndex + 1) % mapModes.length;
-    setMapModeIndex(nextIndex);
-    showToast(`Включен режим: ${mapModes[nextIndex].title}`);
+    setActiveMapMenu((current) => (current === 'mode' ? null : 'mode'));
+  };
+
+  const selectMapMode = (index: number) => {
+    setMapModeIndex(index);
+    setActiveMapMenu(null);
+    showToast(`Включен режим: ${mapModes[index].title}`);
+  };
+
+  const toggleMapLayer = (id: MapLayerId) => {
+    setMapLayers((current) => {
+      const next = { ...current, [id]: !current[id] };
+      showToast(`${mapLayerOptions.find((item) => item.id === id)?.label}: ${next[id] ? 'показано' : 'скрыто'}`);
+      return next;
+    });
   };
 
   const hideMapTooltip = () => {
@@ -530,7 +895,7 @@ function App() {
 
   return (
     <>
-      <div className={appClassName} data-routes={routesVisible ? 'on' : 'off'}>
+      <div className={appClassName} data-routes={mapLayers.routes ? 'on' : 'off'}>
         <Topbar
           activeNav={activeNav}
           mailCount={letters.length}
@@ -551,6 +916,8 @@ function App() {
         <EmpirePanel
           clock={formatClock(secondsLeft)}
           resources={resources}
+          nations={nations}
+          worldTension={worldTension}
           quickActionTurns={quickActionTurns}
           turnNumber={turnNumber}
           onEndTurn={handleEndTurn}
@@ -566,11 +933,24 @@ function App() {
             transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
           >
             <div className="map-toolbar">
-              <button className="tool-select" type="button" onClick={() => showToast('Слой карты')}>
+              <button
+                className="tool-select"
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={activeMapMenu === 'layers'}
+                onClick={() => setActiveMapMenu((current) => (current === 'layers' ? null : 'layers'))}
+              >
                 <Layers aria-hidden="true" />
                 Слой карты
               </button>
-              <button id="mapMode" className="tool-select wide" type="button" onClick={handleMapModeClick}>
+              <button
+                id="mapMode"
+                className="tool-select wide"
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={activeMapMenu === 'mode'}
+                onClick={handleMapModeClick}
+              >
                 {mapModes[mapModeIndex].title}
                 <ChevronDown aria-hidden="true" />
               </button>
@@ -578,11 +958,18 @@ function App() {
                 <input
                   id="routeToggle"
                   type="checkbox"
-                  checked={routesVisible}
-                  onChange={(event) => setRoutesVisible(event.currentTarget.checked)}
+                  checked={mapLayers.routes}
+                  onChange={() => toggleMapLayer('routes')}
                 />
                 <span>Показать маршруты</span>
               </label>
+              <MapToolbarMenu
+                activeMenu={activeMapMenu}
+                mapLayers={mapLayers}
+                activeModeIndex={mapModeIndex}
+                onToggleLayer={toggleMapLayer}
+                onSelectMode={selectMapMode}
+              />
             </div>
 
             <div
@@ -592,9 +979,18 @@ function App() {
               onMouseLeave={handleMapLeave}
               onClick={handleMapClick}
               onKeyDown={handleMapKeyDown}
+              {...mapLayerAttributes}
             >
               <div className="ocean-glow" aria-hidden="true" />
               <WorldMapLayer zoom={zoom} mapSvgRef={mapSvgRef} />
+              {mapLayers.intel ? (
+                <CountryIntelPanel
+                  selectedCountry={gameState.selectedCountry}
+                  nations={nations}
+                  diplomacy={diplomacy}
+                  worldEvents={worldEvents}
+                />
+              ) : null}
               <div className="map-title-label">Северный Ледовитый океан</div>
               <div className="map-controls" aria-label="Управление картой">
                 <button id="centerMap" type="button" aria-label="Центрировать" onClick={centerMap}>
@@ -664,6 +1060,8 @@ function App() {
           timeline={timelineEvents}
           letters={letters}
           diplomacy={diplomacy}
+          nations={nations}
+          worldEvents={worldEvents}
           onComposeLetter={() => handleQuickAction('compose-letter')}
           showToast={showToast}
         />
@@ -675,6 +1073,10 @@ function App() {
           onCancel={() => setPendingQuickAction(null)}
           onConfirm={confirmPendingQuickAction}
         />
+      ) : null}
+
+      {turnReportOpen && lastTurnReport ? (
+        <TurnReportDialog report={lastTurnReport} onClose={() => setTurnReportOpen(false)} />
       ) : null}
 
       <div
@@ -859,6 +1261,8 @@ function UtilityPanel({
 function EmpirePanel({
   clock,
   resources,
+  nations,
+  worldTension,
   quickActionTurns,
   turnNumber,
   onEndTurn,
@@ -866,11 +1270,15 @@ function EmpirePanel({
 }: {
   clock: string;
   resources: ResourceState[];
+  nations: NationProfile[];
+  worldTension: number;
   quickActionTurns: Partial<Record<QuickActionId, number>>;
   turnNumber: number;
   onEndTurn: () => void;
   onQuickAction: (id: QuickActionId) => void;
 }) {
+  const russia = nations.find((nation) => nation.id === 'russia');
+
   return (
     <motion.aside
       className="side-panel left-panel"
@@ -904,6 +1312,22 @@ function EmpirePanel({
             </li>
           ))}
         </ul>
+        <div className="section-title">Пульс державы</div>
+        <div className="empire-pulse">
+          <div>
+            <span>Стабильность</span>
+            <b>{russia?.stability ?? 72}/100</b>
+          </div>
+          <div>
+            <span>Армия</span>
+            <b>{russia?.army ?? 78}/100</b>
+          </div>
+          <div>
+            <span>Напряжение мира</span>
+            <b className={worldTension >= 70 ? 'danger' : worldTension >= 50 ? 'warn' : ''}>{worldTension}/100</b>
+          </div>
+          <p>{russia?.lastAction || 'Совет ожидает распоряжений правителя.'}</p>
+        </div>
         <div className="turn-info">
           <div>
             <small>Текущий ход</small>
@@ -1175,15 +1599,21 @@ function RightPanel({
   timeline,
   letters,
   diplomacy,
+  nations,
+  worldEvents,
   onComposeLetter,
   showToast,
 }: {
   timeline: TimelineEvent[];
   letters: Letter[];
   diplomacy: DiplomacyRelation[];
+  nations: NationProfile[];
+  worldEvents: WorldEvent[];
   onComposeLetter: () => void;
   showToast: (message: string) => void;
 }) {
+  const latestWorldEvent = worldEvents[0];
+
   return (
     <motion.aside
       className="side-panel right-panel"
@@ -1198,7 +1628,17 @@ function RightPanel({
             Смотреть все
           </button>
         </div>
-        {timeline.map((event, index) => (
+        {latestWorldEvent ? (
+          <article className="world-pulse-row">
+            <span className={`flag ${latestWorldEvent.flag}`} />
+            <div>
+              <h3>{latestWorldEvent.title}</h3>
+              <p>{latestWorldEvent.text}</p>
+            </div>
+            <time>ход {latestWorldEvent.turn}</time>
+          </article>
+        ) : null}
+        {timeline.slice(0, latestWorldEvent ? 4 : 5).map((event, index) => (
           <article key={`${event.title}-${event.time}-${index}`}>
             <span className={`event-icon ${event.tone}`}>{event.icon}</span>
             <div>
@@ -1242,14 +1682,19 @@ function RightPanel({
           </button>
         </div>
         <ul>
-          {diplomacy.map((item) => (
-            <li key={item.name}>
-              <span className={`flag ${item.flag}`} />
-              <b>{item.name}</b>
-              <em className={item.tone}>{item.status}</em>
-              <strong>{item.score > 0 ? `+${item.score}` : item.score}</strong>
-            </li>
-          ))}
+          {diplomacy.map((item) => {
+            const nation = nations.find((entry) => entry.name === item.name);
+
+            return (
+              <li key={item.name}>
+                <span className={`flag ${item.flag}`} />
+                <b>{item.name}</b>
+                <em className={item.tone}>{item.status}</em>
+                <strong>{item.score > 0 ? `+${item.score}` : item.score}</strong>
+                <small>{nation ? `Давление ${nation.pressure}/100 · ${nation.lastAction}` : 'Досье ожидает разведданных'}</small>
+              </li>
+            );
+          })}
         </ul>
       </section>
     </motion.aside>

@@ -126,6 +126,52 @@ try {
     assert.equal(next.lastNotice.kind, 'error');
   });
 
+  test('end turn produces a living world report and nation actions', () => {
+    const state = clone(initialGameState);
+    const next = endTurn(state);
+
+    assert.equal(next.turnNumber, state.turnNumber + 1);
+    assert.ok(next.lastTurnReport);
+    assert.equal(next.lastTurnReport.turn, next.turnNumber);
+    assert.ok(next.worldEvents.length > state.worldEvents.length);
+    assert.ok(next.chatMessages.length > state.chatMessages.length);
+    assert.ok(next.worldTension >= 0 && next.worldTension <= 100);
+  });
+
+  test('reckless completed order can fail with validated consequences', () => {
+    const state = {
+      ...clone(initialGameState),
+      orders: [
+        {
+          id: 'forced-fail',
+          iconKey: 'swords',
+          title: 'Опасная проверка границы',
+          owner: 'Генеральный штаб',
+          target: 'Украина',
+          status: 'В работе',
+          statusClass: 'progress',
+          due: '1 день',
+          remainingTurns: 1,
+          totalTurns: 1,
+          cost: { gold: 10 },
+          reward: { gold: 5000 },
+          completeText: 'Не должен пройти.',
+          riskLevel: 'critical',
+          successChance: 0,
+          failureCost: { gold: -250, grain: -100 },
+          failureDiplomacyDelta: { Украина: -8 },
+          failureText: 'Проверочный приказ провален, ресурсы потеряны.',
+        },
+      ],
+    };
+    const next = endTurn(state);
+
+    assert.ok(next.lastTurnReport.completedOrders.some((order) => !order.succeeded));
+    assert.ok(next.lastTurnReport.warnings.length > 0);
+    assert.ok(next.diplomacy.find((relation) => relation.name === 'Украина').score < -80);
+    assert.equal(next.orders.length, 0);
+  });
+
   console.log(JSON.stringify({ passed: results.length, tests: results }, null, 2));
 } finally {
   await server.close();

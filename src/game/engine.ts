@@ -1,6 +1,8 @@
 import { formatOrderDue } from './formatters';
+import { mergeWorldEvents, simulateWorldTurn } from './world';
 import type {
   ActionStatusKind,
+  CompletedOrderReport,
   DiplomacyRelation,
   EngineEffect,
   GameState,
@@ -16,8 +18,9 @@ import type {
 } from './types';
 
 export const MAX_ACTIVE_ORDERS = 5;
-export const MAX_TIMELINE_EVENTS = 5;
+export const MAX_TIMELINE_EVENTS = 7;
 export const MAX_LETTERS = 5;
+export const MAX_CHAT_MESSAGES = 80;
 export const oncePerTurnQuickActions = new Set<QuickActionId>(['compose-letter', 'manage-lands', 'diplomacy']);
 
 export function createNotice(state: GameState, message: string, kind: ActionStatusKind = 'success') {
@@ -39,6 +42,25 @@ export function applyResourceDelta(resources: ResourceState[], delta: ResourceDe
       value: Math.max(0, Number((resource.value + change).toFixed(resource.format === 'population' ? 1 : 0))),
     };
   });
+}
+
+function mergeResourceDelta(...deltas: ResourceDelta[]) {
+  return deltas.reduce<ResourceDelta>((merged, delta) => {
+    Object.entries(delta || {}).forEach(([key, value]) => {
+      const resourceKey = key as ResourceId;
+      merged[resourceKey] = (merged[resourceKey] || 0) + value;
+    });
+    return merged;
+  }, {});
+}
+
+function mergeDiplomacyDelta(...deltas: Record<string, number>[]) {
+  return deltas.reduce<Record<string, number>>((merged, delta) => {
+    Object.entries(delta || {}).forEach(([name, value]) => {
+      merged[name] = (merged[name] || 0) + value;
+    });
+    return merged;
+  }, {});
 }
 
 export function canPay(resources: ResourceState[], cost: ResourceDelta = {}) {
@@ -177,6 +199,87 @@ export function cancelOrder(state: GameState, id: string): GameState {
   );
 }
 
+type ResolvedOrderOutcome = {
+  report: CompletedOrderReport;
+  event: TimelineEvent;
+  resourceDelta: ResourceDelta;
+  diplomacyDelta: Record<string, number>;
+  letter?: Letter;
+};
+
+function defaultSuccessChance(order: Order) {
+  if (typeof order.successChance === 'number') return Math.max(0, Math.min(100, order.successChance));
+  if (order.riskLevel === 'critical') return 38;
+  if (order.riskLevel === 'high') return 62;
+  if (order.riskLevel === 'medium') return 82;
+  return 95;
+}
+
+function deterministicOrderRoll(order: Order, nextTurn: number) {
+  return (nextTurn * 37 + order.id.length * 17 + order.title.length * 11 + order.target.length * 5) % 100;
+}
+
+function resolveCompletedOrder(order: Order, nextTurn: number): ResolvedOrderOutcome {
+  const chance = defaultSuccessChance(order);
+  const succeeded = deterministicOrderRoll(order, nextTurn) < chance;
+
+  if (succeeded) {
+    return {
+      report: {
+        title: order.title,
+        target: order.target,
+        succeeded: true,
+        text: order.completeText,
+      },
+      event: {
+        icon: '✓',
+        tone: order.diplomacyDelta?.Украина ? 'bronze' : 'green',
+        title: 'Приказ выполнен',
+        text: order.completeText,
+        time: `Ход ${nextTurn}`,
+      },
+      resourceDelta: order.reward || {},
+      diplomacyDelta: order.diplomacyDelta || {},
+    };
+  }
+
+  const failureCost =
+    order.failureCost ||
+    (order.riskLevel === 'critical' || order.riskLevel === 'high'
+      ? { gold: -360, grain: -220, population: -0.1 }
+      : { gold: -180, grain: -90 });
+  const fallbackDiplomacy =
+    order.riskLevel === 'critical' || order.riskLevel === 'high' ? { [order.target]: -4 } : {};
+  const failureDiplomacyDelta = order.failureDiplomacyDelta || fallbackDiplomacy;
+  const text =
+    order.failureText ||
+    `Приказ "${order.title}" сорвался: исполнители недооценили риск, часть ресурсов потеряна, а положение у цели "${order.target}" ухудшилось.`;
+
+  return {
+    report: {
+      title: order.title,
+      target: order.target,
+      succeeded: false,
+      text,
+    },
+    event: {
+      icon: '×',
+      tone: 'red',
+      title: 'Приказ провален',
+      text,
+      time: `Ход ${nextTurn}`,
+    },
+    resourceDelta: failureCost,
+    diplomacyDelta: failureDiplomacyDelta,
+    letter: {
+      tone: 'red',
+      from: 'Военный совет',
+      subject: `Провал приказа: ${order.target}`,
+      time: 'только что',
+    },
+  };
+}
+
 export function endTurn(state: GameState): GameState {
   const nextTurn = state.turnNumber + 1;
   const completedOrders: Order[] = [];
@@ -203,42 +306,45 @@ export function endTurn(state: GameState): GameState {
     delta[resource.id] = resource.perTurn;
     return delta;
   }, {});
-
-  const rewardDelta = completedOrders.reduce<ResourceDelta>((delta, order) => {
-    Object.entries(order.reward || {}).forEach(([key, value]) => {
-      const resourceKey = key as ResourceId;
-      delta[resourceKey] = (delta[resourceKey] || 0) + value;
-    });
-    return delta;
-  }, incomeDelta);
-
-  const relationDelta = completedOrders.reduce<Record<string, number>>((delta, order) => {
-    Object.entries(order.diplomacyDelta || {}).forEach(([name, value]) => {
-      delta[name] = (delta[name] || 0) + value;
-    });
-    return delta;
-  }, {});
-
-  const completedEvents = completedOrders.map<TimelineEvent>((order) => ({
-    icon: '✓',
-    tone: order.diplomacyDelta?.Украина ? 'bronze' : 'green',
-    title: 'Приказ выполнен',
-    text: order.completeText,
+  const resolvedOrders = completedOrders.map((order) => resolveCompletedOrder(order, nextTurn));
+  const orderResourceDelta = mergeResourceDelta(...resolvedOrders.map((order) => order.resourceDelta));
+  const orderDiplomacyDelta = mergeDiplomacyDelta(...resolvedOrders.map((order) => order.diplomacyDelta));
+  const world = simulateWorldTurn(
+    {
+      ...state,
+      resources: applyResourceDelta(state.resources, mergeResourceDelta(incomeDelta, orderResourceDelta)),
+      diplomacy: applyDiplomacyDelta(state.diplomacy, orderDiplomacyDelta),
+    },
+    nextTurn,
+    resolvedOrders.map((order) => order.report),
+  );
+  const totalResourceDelta = mergeResourceDelta(incomeDelta, orderResourceDelta, world.resourceDelta);
+  const totalDiplomacyDelta = mergeDiplomacyDelta(orderDiplomacyDelta, world.diplomacyDelta);
+  const completedEvents = resolvedOrders.map((order) => order.event);
+  const worldTimelineEvents = world.events.slice(0, 2).map<TimelineEvent>((event) => ({
+    icon: event.tone === 'red' ? '!' : event.tone === 'green' ? '✓' : '•',
+    tone: event.tone,
+    title: event.title,
+    text: event.text,
     time: `Ход ${nextTurn}`,
   }));
-
   const turnEvent: TimelineEvent = {
     icon: '⌛',
     tone: 'blue',
     title: `Ход ${nextTurn} начался`,
     text: completedOrders.length
-      ? `Завершено приказов: ${completedOrders.length}. Доход державы начислен.`
-      : 'Доход державы начислен, текущие приказы продвинулись.',
+      ? `Завершено приказов: ${completedOrders.length}. Доход начислен, державы мира сделали ответные ходы.`
+      : 'Доход начислен, текущие приказы продвинулись, державы мира сделали ответные ходы.',
     time: 'только что',
   };
-
   let nextLetters = state.letters;
-  if (completedOrders.length) {
+  resolvedOrders.forEach((order) => {
+    if (order.letter) nextLetters = pushLetter(nextLetters, order.letter);
+  });
+  world.letters.forEach((letter) => {
+    nextLetters = pushLetter(nextLetters, letter);
+  });
+  if (completedOrders.length || world.events.length) {
     nextLetters = pushLetter(nextLetters, {
       tone: 'neutral',
       from: 'Совет империи',
@@ -252,10 +358,19 @@ export function endTurn(state: GameState): GameState {
       ...state,
       turnNumber: nextTurn,
       orders: activeOrders,
-      resources: applyResourceDelta(state.resources, rewardDelta),
-      diplomacy: applyDiplomacyDelta(state.diplomacy, relationDelta),
-      timelineEvents: [...completedEvents, turnEvent, ...state.timelineEvents].slice(0, MAX_TIMELINE_EVENTS),
+      resources: applyResourceDelta(state.resources, totalResourceDelta),
+      diplomacy: applyDiplomacyDelta(state.diplomacy, totalDiplomacyDelta),
+      nations: world.nations,
+      worldEvents: mergeWorldEvents(state.worldEvents, world.events),
+      worldTension: world.worldTension,
+      lastTurnReport: {
+        ...world.report,
+        resourceDelta: totalResourceDelta,
+        diplomacyDelta: totalDiplomacyDelta,
+      },
+      timelineEvents: [...completedEvents, ...worldTimelineEvents, turnEvent, ...state.timelineEvents].slice(0, MAX_TIMELINE_EVENTS),
       letters: nextLetters,
+      chatMessages: [...state.chatMessages, ...world.chatMessages].slice(-MAX_CHAT_MESSAGES),
       quickActionTurns: {},
     },
     `Ход ${nextTurn} начался`,
@@ -282,7 +397,7 @@ export function applyValidatedEffect(state: GameState, effect: EngineEffect): Ga
     ? {
         ...withLetter,
         timelineEvents: pushTimeline(withLetter.timelineEvents, {
-          icon: effect.kind === 'diplomacy-delta' ? '◎' : '⚑',
+          icon: effect.kind === 'diplomacy-delta' ? '◌' : '⚑',
           tone: effect.kind === 'diplomacy-delta' ? 'green' : 'blue',
           title: effect.eventTitle || 'Событие мира',
           text: effect.eventText || 'Совет империи зафиксировал новое событие.',

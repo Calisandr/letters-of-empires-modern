@@ -13,6 +13,9 @@ export type ResourceFormat = 'integer' | 'population';
 export type OrderStatusClass = 'moving' | 'progress' | 'cancelled' | 'completed' | 'failed';
 export type OrderIconKey = 'package' | 'swords' | 'pickaxe' | 'anchor' | 'shield' | 'landmark' | 'mail';
 export type ActionStatusKind = 'idle' | 'loading' | 'success' | 'error';
+export type NationFocus = 'trade' | 'military' | 'industry' | 'diplomacy' | 'defense';
+export type WorldEventTone = 'blue' | 'green' | 'bronze' | 'red';
+export type WorldEventImpact = 'trade' | 'military' | 'diplomacy' | 'economy' | 'stability' | 'threat';
 
 export type ResourceState = {
   id: ResourceId;
@@ -40,6 +43,10 @@ export type Order = {
   diplomacyDelta?: Record<string, number>;
   completeText: string;
   riskLevel?: 'low' | 'medium' | 'high' | 'critical';
+  successChance?: number;
+  failureText?: string;
+  failureCost?: ResourceDelta;
+  failureDiplomacyDelta?: Record<string, number>;
 };
 
 export type OrderDraft = Omit<Order, 'id' | 'status' | 'statusClass' | 'due'>;
@@ -67,6 +74,23 @@ export type DiplomacyRelation = {
   score: number;
 };
 
+export type NationProfile = {
+  id: string;
+  name: string;
+  flag: string;
+  focus: NationFocus;
+  economy: number;
+  army: number;
+  stability: number;
+  treasury: number;
+  grain: number;
+  relation: number;
+  threat: number;
+  pressure: number;
+  goals: string[];
+  lastAction: string;
+};
+
 export type ChatMessage = {
   id: string;
   time: string;
@@ -92,6 +116,35 @@ export type ActionStatus = {
   message: string;
 };
 
+export type WorldEvent = {
+  id: string;
+  turn: number;
+  actor: string;
+  flag: string;
+  title: string;
+  text: string;
+  tone: WorldEventTone;
+  impact: WorldEventImpact;
+};
+
+export type CompletedOrderReport = {
+  title: string;
+  target: string;
+  succeeded: boolean;
+  text: string;
+};
+
+export type TurnReport = {
+  turn: number;
+  summary: string;
+  completedOrders: CompletedOrderReport[];
+  worldEvents: WorldEvent[];
+  resourceDelta: ResourceDelta;
+  diplomacyDelta: Record<string, number>;
+  warnings: string[];
+  opportunities: string[];
+};
+
 export type GameState = {
   version: number;
   resources: ResourceState[];
@@ -99,6 +152,10 @@ export type GameState = {
   timelineEvents: TimelineEvent[];
   letters: Letter[];
   diplomacy: DiplomacyRelation[];
+  nations: NationProfile[];
+  worldEvents: WorldEvent[];
+  worldTension: number;
+  lastTurnReport: TurnReport | null;
   chatMessages: ChatMessage[];
   quickActionTurns: Partial<Record<QuickActionId, number>>;
   turnNumber: number;

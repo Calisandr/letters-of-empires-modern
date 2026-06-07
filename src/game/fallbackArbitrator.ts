@@ -145,6 +145,17 @@ export function fallbackJudgeCouncilCommand(text: string, state: GameState): AiA
   }
 
   const order = makeOrderFromText(normalized, target);
+  if (includesAny(normalized, ['атак', 'напасть', 'война', 'захват', 'наступ'])) {
+    const relation = state.diplomacy.find((item) => item.name === target)?.score ?? 0;
+    order.riskLevel = relation >= 50 ? 'critical' : 'high';
+    order.successChance = relation >= 50 ? 28 : 54;
+    order.failureCost = { gold: -520, iron: -360, grain: -260, population: -0.2 };
+    order.failureDiplomacyDelta = target === 'Москва' ? undefined : { [target]: relation >= 50 ? -12 : -8 };
+    order.failureText =
+      relation >= 50
+        ? `Необдуманная атака по цели "${target}" сорвала доверие союзников: войска потеряли снабжение, а дипломатическое положение резко ухудшилось.`
+        : `Военная операция по цели "${target}" провалилась из-за высокого риска: часть войска и припасов потеряна.`;
+  }
   return attemptable(`Совет подготовил приказ: ${order.title}.`, {
     kind: 'create-order',
     order,

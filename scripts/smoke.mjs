@@ -52,12 +52,17 @@ try {
   });
 
   await page.locator('#mapMode').click();
+  await page.locator('.map-mode-menu button').nth(1).click();
   await page.waitForFunction(() => document.querySelector('.app-shell')?.classList.contains('trade-mode'));
   await page.locator('#mapMode').click();
+  await page.locator('.map-mode-menu button').nth(2).click();
   await page.waitForFunction(() => document.querySelector('.app-shell')?.classList.contains('strategy-mode'));
 
   await page.locator('#routeToggle').uncheck();
   const routesState = await page.locator('.app-shell').getAttribute('data-routes');
+  await page.locator('.map-toolbar .tool-select').first().click();
+  await page.locator('.map-layer-menu button').nth(1).click();
+  const labelsLayerState = await page.locator('.map-canvas').getAttribute('data-layer-labels');
 
   const beforeZoom = await page.locator('#mapZoomLayer').evaluate((node) => getComputedStyle(node).transform);
   await page.locator('#zoomIn').click();
@@ -213,6 +218,7 @@ try {
     legacyScriptResponse,
     countryCount,
     routesState,
+    labelsLayerState,
     beforeZoom,
     afterZoom,
     tooltip,
