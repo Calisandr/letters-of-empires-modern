@@ -372,6 +372,46 @@ input:focus-visible,
   transform: translate(-50%, -49%);
 }
 
+.flag.neutral {
+  background:
+    linear-gradient(135deg, rgba(224, 196, 123, .18), transparent 48%),
+    linear-gradient(180deg, #192827, #0b1214);
+}
+
+.flag.neutral::after {
+  width: 48%;
+  height: 2px;
+  left: 50%;
+  top: 50%;
+  border-radius: 999px;
+  background: rgba(226, 203, 139, .72);
+  transform: translate(-50%, -50%);
+}
+
+.flag.emoji-flag {
+  display: inline-grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(244, 221, 159, .12), transparent 58%),
+    #10191a;
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+}
+
+.flag.emoji-flag::after {
+  content: attr(data-flag);
+  position: static;
+  width: auto;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: inherit;
+  font-size: calc(var(--flag-h) * .78);
+  line-height: 1;
+  transform: none;
+}
+
 .chat-messages .flag {
   --flag-w: 22px;
   --flag-h: 15px;
@@ -561,7 +601,7 @@ input:focus-visible,
 
 .country-intel header {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr);
+  grid-template-columns: 26px minmax(0, 1fr) 28px;
   align-items: center;
   gap: 8px;
   padding-bottom: 7px;
@@ -584,6 +624,37 @@ input:focus-visible,
   color: rgba(160, 179, 157, .86);
   font-size: 10.5px;
   line-height: 1.25;
+}
+
+.country-intel-close {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(205, 162, 85, .28);
+  background: rgba(5, 10, 11, .52);
+  color: #d8b765;
+  cursor: pointer;
+  transition:
+    border-color .16s ease,
+    color .16s ease,
+    background .16s ease,
+    transform .16s ease;
+}
+
+.country-intel-close:hover,
+.country-intel-close:focus-visible {
+  border-color: rgba(244, 210, 129, .64);
+  background: rgba(34, 25, 13, .7);
+  color: #f0ce78;
+  transform: translateY(-1px);
+}
+
+.country-intel-close svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.8;
 }
 
 .country-intel dl {

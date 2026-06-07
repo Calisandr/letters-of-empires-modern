@@ -90,6 +90,27 @@ try {
     label: node.getAttribute('aria-label'),
   }));
 
+  const greenlandCountry = page.locator('.country[data-name="Greenland"]');
+  await greenlandCountry.click();
+  await page.waitForFunction(() =>
+    document.querySelector('.country[data-name="Greenland"]')?.classList.contains('selected'),
+  );
+  const greenlandIntel = await page.evaluate(() => {
+    const flag = document.querySelector('.country-intel .flag');
+    return {
+      title: document.querySelector('.country-intel strong')?.textContent?.trim() || '',
+      flagClass: flag?.className.toString() || '',
+      flagData: flag?.getAttribute('data-flag') || '',
+      flagTitle: flag?.getAttribute('title') || '',
+      visibleBeforeClose: Boolean(document.querySelector('.country-intel')),
+    };
+  });
+  await page.locator('.country-intel-close').click();
+  const countryIntelClosed = (await page.locator('.country-intel').count()) === 0;
+  await franceCountry.focus();
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.country-intel');
+
   await page.locator('#chatInput').fill('React smoke message');
   await page.locator('.chat-input .send').click();
   const chatText = await page.locator('.chat-messages').innerText();
@@ -224,6 +245,8 @@ try {
     tooltip,
     selectedRussia,
     keyboardSelectedFrance,
+    greenlandIntel,
+    countryIntelClosed,
     chatTabDiagnostics,
     chatAdded: chatText.includes('React smoke message'),
     cancelledStyle,
@@ -247,6 +270,10 @@ try {
     !keyboardSelectedFrance.selected ||
     keyboardSelectedFrance.role !== 'button' ||
     !keyboardSelectedFrance.label?.includes('Франция') ||
+    !greenlandIntel.visibleBeforeClose ||
+    !greenlandIntel.flagClass.includes('emoji-flag') ||
+    !greenlandIntel.flagData ||
+    !countryIntelClosed ||
     !result.chatAdded ||
     chatTabDiagnostics.activeText !== 'Альянс' ||
     !chatTabDiagnostics.allianceSelected ||

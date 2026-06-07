@@ -169,6 +169,200 @@ const countryNames: Record<string, string> = {
   'W. Sahara': 'Западная Сахара',
 };
 
+const countryFlagCodes: Record<string, string> = {
+  Afghanistan: 'AF',
+  Albania: 'AL',
+  Algeria: 'DZ',
+  Angola: 'AO',
+  Argentina: 'AR',
+  Armenia: 'AM',
+  Australia: 'AU',
+  Austria: 'AT',
+  Azerbaijan: 'AZ',
+  Bahamas: 'BS',
+  Bangladesh: 'BD',
+  Belarus: 'BY',
+  Belgium: 'BE',
+  Belize: 'BZ',
+  Benin: 'BJ',
+  Bhutan: 'BT',
+  Bolivia: 'BO',
+  'Bosnia and Herz.': 'BA',
+  Botswana: 'BW',
+  Brazil: 'BR',
+  Brunei: 'BN',
+  Bulgaria: 'BG',
+  'Burkina Faso': 'BF',
+  Burundi: 'BI',
+  Cambodia: 'KH',
+  Cameroon: 'CM',
+  Canada: 'CA',
+  'Central African Rep.': 'CF',
+  Chad: 'TD',
+  Chile: 'CL',
+  China: 'CN',
+  Colombia: 'CO',
+  Congo: 'CG',
+  'Costa Rica': 'CR',
+  "Côte d'Ivoire": 'CI',
+  Croatia: 'HR',
+  Cuba: 'CU',
+  Cyprus: 'CY',
+  Czechia: 'CZ',
+  'Dem. Rep. Congo': 'CD',
+  Denmark: 'DK',
+  Djibouti: 'DJ',
+  'Dominican Rep.': 'DO',
+  Ecuador: 'EC',
+  Egypt: 'EG',
+  'El Salvador': 'SV',
+  'Eq. Guinea': 'GQ',
+  Eritrea: 'ER',
+  Estonia: 'EE',
+  eSwatini: 'SZ',
+  Ethiopia: 'ET',
+  'Falkland Is.': 'FK',
+  Fiji: 'FJ',
+  Finland: 'FI',
+  'Fr. S. Antarctic Lands': 'TF',
+  France: 'FR',
+  Gabon: 'GA',
+  Gambia: 'GM',
+  Georgia: 'GE',
+  Germany: 'DE',
+  Ghana: 'GH',
+  Greece: 'GR',
+  Greenland: 'GL',
+  Guatemala: 'GT',
+  Guinea: 'GN',
+  'Guinea-Bissau': 'GW',
+  Guyana: 'GY',
+  Haiti: 'HT',
+  Honduras: 'HN',
+  Hungary: 'HU',
+  Iceland: 'IS',
+  India: 'IN',
+  Indonesia: 'ID',
+  Iran: 'IR',
+  Iraq: 'IQ',
+  Ireland: 'IE',
+  Israel: 'IL',
+  Italy: 'IT',
+  Jamaica: 'JM',
+  Japan: 'JP',
+  Jordan: 'JO',
+  Kazakhstan: 'KZ',
+  Kenya: 'KE',
+  Kosovo: 'XK',
+  Kuwait: 'KW',
+  Kyrgyzstan: 'KG',
+  Laos: 'LA',
+  Latvia: 'LV',
+  Lebanon: 'LB',
+  Lesotho: 'LS',
+  Liberia: 'LR',
+  Libya: 'LY',
+  Lithuania: 'LT',
+  Luxembourg: 'LU',
+  Macedonia: 'MK',
+  Madagascar: 'MG',
+  Malawi: 'MW',
+  Malaysia: 'MY',
+  Mali: 'ML',
+  Mauritania: 'MR',
+  Mexico: 'MX',
+  Moldova: 'MD',
+  Mongolia: 'MN',
+  Montenegro: 'ME',
+  Morocco: 'MA',
+  Mozambique: 'MZ',
+  Myanmar: 'MM',
+  'N. Cyprus': 'CY',
+  Namibia: 'NA',
+  Nepal: 'NP',
+  Netherlands: 'NL',
+  'New Caledonia': 'NC',
+  'New Zealand': 'NZ',
+  Nicaragua: 'NI',
+  Niger: 'NE',
+  Nigeria: 'NG',
+  'North Korea': 'KP',
+  Norway: 'NO',
+  Oman: 'OM',
+  Pakistan: 'PK',
+  Palestine: 'PS',
+  Panama: 'PA',
+  'Papua New Guinea': 'PG',
+  Paraguay: 'PY',
+  Peru: 'PE',
+  Philippines: 'PH',
+  Poland: 'PL',
+  Portugal: 'PT',
+  'Puerto Rico': 'PR',
+  Qatar: 'QA',
+  Romania: 'RO',
+  Russia: 'RU',
+  Rwanda: 'RW',
+  'S. Sudan': 'SS',
+  'Saudi Arabia': 'SA',
+  Senegal: 'SN',
+  Serbia: 'RS',
+  'Sierra Leone': 'SL',
+  Slovakia: 'SK',
+  Slovenia: 'SI',
+  'Solomon Is.': 'SB',
+  Somalia: 'SO',
+  Somaliland: 'SO',
+  'South Africa': 'ZA',
+  'South Korea': 'KR',
+  Spain: 'ES',
+  'Sri Lanka': 'LK',
+  Sudan: 'SD',
+  Suriname: 'SR',
+  Sweden: 'SE',
+  Switzerland: 'CH',
+  Syria: 'SY',
+  Taiwan: 'TW',
+  Tajikistan: 'TJ',
+  Tanzania: 'TZ',
+  Thailand: 'TH',
+  'Timor-Leste': 'TL',
+  Togo: 'TG',
+  'Trinidad and Tobago': 'TT',
+  Tunisia: 'TN',
+  Turkey: 'TR',
+  Turkmenistan: 'TM',
+  Uganda: 'UG',
+  Ukraine: 'UA',
+  'United Arab Emirates': 'AE',
+  'United Kingdom': 'GB',
+  'United States of America': 'US',
+  Uruguay: 'UY',
+  Uzbekistan: 'UZ',
+  Vanuatu: 'VU',
+  Venezuela: 'VE',
+  Vietnam: 'VN',
+  'W. Sahara': 'EH',
+  Yemen: 'YE',
+  Zambia: 'ZM',
+  Zimbabwe: 'ZW',
+};
+
+const flagClassByCode: Record<string, string> = {
+  CN: 'china',
+  DE: 'germany',
+  FR: 'france',
+  IN: 'india',
+  JP: 'japan',
+  RU: 'russia',
+  TR: 'turkey',
+  UA: 'ukraine',
+};
+
+const codeByFlagClass = Object.fromEntries(
+  Object.entries(flagClassByCode).map(([code, className]) => [className, code]),
+) as Record<string, string>;
+
 const quickActions: Array<{ id: QuickActionId; label: string; icon: LucideIcon; toast?: string }> = [
   { id: 'compose-letter', label: 'Написать письмо', icon: Mail },
   { id: 'create-order', label: 'Создать приказ', icon: Flag },
@@ -251,6 +445,27 @@ function hashCountryName(name: string) {
 
 function clampStat(value: number) {
   return Math.max(8, Math.min(96, Math.round(value)));
+}
+
+function emojiFlagFromCountryCode(code?: string) {
+  const normalizedCode = code?.trim().toUpperCase();
+  if (!normalizedCode || !/^[A-Z]{2}$/.test(normalizedCode)) return '';
+
+  return [...normalizedCode]
+    .map((char) => String.fromCodePoint(127397 + char.charCodeAt(0)))
+    .join('');
+}
+
+function getCountryFlagView(countryKey?: string, countryName?: string, fallbackFlag?: string) {
+  const legacyCode = fallbackFlag ? codeByFlagClass[fallbackFlag] : undefined;
+  const code = countryFlagCodes[countryKey || ''] || countryFlagCodes[countryName || ''] || legacyCode;
+  const className = code ? flagClassByCode[code] : fallbackFlag && fallbackFlag !== 'neutral' ? fallbackFlag : '';
+  const emoji = className ? '' : emojiFlagFromCountryCode(code);
+
+  if (className) return { className, code, emoji: '' };
+  if (emoji) return { className: 'emoji-flag', code, emoji };
+
+  return { className: 'neutral', code: '', emoji: '' };
 }
 
 function fallbackRelation(status: string) {
@@ -358,23 +573,42 @@ function CountryIntelPanel({
   nations,
   diplomacy,
   worldEvents,
+  onClose,
 }: {
   selectedCountry: SelectedCountry | null;
   nations: NationProfile[];
   diplomacy: DiplomacyRelation[];
   worldEvents: WorldEvent[];
+  onClose: () => void;
 }) {
   const intel = getCountryIntel(selectedCountry, nations, diplomacy, worldEvents);
   const relationText = intel.relation > 0 ? `+${intel.relation}` : String(intel.relation);
+  const flagView = getCountryFlagView(selectedCountry?.key || intel.id, intel.name, intel.flag);
 
   return (
     <aside className="country-intel" aria-label="Разведка выбранной страны">
       <header>
-        <span className={`flag ${intel.flag}`} />
+        <span
+          className={`flag ${flagView.className}`}
+          data-flag={flagView.emoji || undefined}
+          title={flagView.code ? `Флаг: ${flagView.code}` : undefined}
+          aria-hidden="true"
+        />
         <div>
           <strong>{intel.name}</strong>
           <small>{intel.statusLabel}</small>
         </div>
+        <button
+          type="button"
+          className="country-intel-close"
+          aria-label="Закрыть разведку страны"
+          onClick={(event) => {
+            event.stopPropagation();
+            onClose();
+          }}
+        >
+          <X aria-hidden="true" />
+        </button>
       </header>
       <dl>
         <div>
@@ -539,6 +773,7 @@ function App() {
   const [mapLayers, setMapLayers] = useState<MapLayersState>(initialMapLayers);
   const [activeMapMenu, setActiveMapMenu] = useState<'layers' | 'mode' | null>(null);
   const [mapModeIndex, setMapModeIndex] = useState(0);
+  const [closedIntelKey, setClosedIntelKey] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [chatInput, setChatInput] = useState('');
   const [activeChatTab, setActiveChatTab] = useState('Мировой чат');
@@ -611,6 +846,8 @@ function App() {
     ) as Record<`data-layer-${MapLayerId}`, string>;
   }, [mapLayers]);
 
+  const activeIntelKey = gameState.selectedCountry?.key || 'Russia';
+
   useEffect(() => {
     saveGameState(gameState);
   }, [gameState]);
@@ -671,6 +908,8 @@ function App() {
   };
 
   const toggleMapLayer = (id: MapLayerId) => {
+    if (id === 'intel') setClosedIntelKey(null);
+
     setMapLayers((current) => {
       const next = { ...current, [id]: !current[id] };
       showToast(`${mapLayerOptions.find((item) => item.id === id)?.label}: ${next[id] ? 'показано' : 'скрыто'}`);
@@ -762,6 +1001,8 @@ function App() {
 
     country.classList.add('selected');
     selectedCountryRef.current = country;
+    setClosedIntelKey(null);
+    setActiveMapMenu(null);
 
     dispatchGame({
       type: 'SELECT_COUNTRY',
@@ -983,12 +1224,13 @@ function App() {
             >
               <div className="ocean-glow" aria-hidden="true" />
               <WorldMapLayer zoom={zoom} mapSvgRef={mapSvgRef} />
-              {mapLayers.intel ? (
+              {mapLayers.intel && closedIntelKey !== activeIntelKey ? (
                 <CountryIntelPanel
                   selectedCountry={gameState.selectedCountry}
                   nations={nations}
                   diplomacy={diplomacy}
                   worldEvents={worldEvents}
+                  onClose={() => setClosedIntelKey(activeIntelKey)}
                 />
               ) : null}
               <div className="map-title-label">Северный Ледовитый океан</div>
