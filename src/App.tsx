@@ -1,4 +1,16 @@
-import { FormEvent, KeyboardEvent, MouseEvent, memo, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import {
+  FormEvent,
+  KeyboardEvent,
+  MouseEvent,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import { motion } from 'motion/react';
 import {
   Anchor,
@@ -147,6 +159,11 @@ const orderIcons: Record<OrderIconKey, LucideIcon> = {
   mail: Mail,
 };
 
+const miniWorldMapSvg = worldMapSvg
+  .replaceAll('capitalGlow', 'miniCapitalGlow')
+  .replace('class="world-svg"', 'class="world-svg mini-world-svg"')
+  .replaceAll('class="country ', 'class="mini-country ');
+
 const getCountryElement = (target: EventTarget | null) => {
   if (!(target instanceof Element)) return null;
   return target.closest('.country') as SVGElement | null;
@@ -167,6 +184,18 @@ const WorldMapLayer = memo(function WorldMapLayer({
       style={{ transform: `scale(${zoom.toFixed(2)})` }}
       dangerouslySetInnerHTML={{ __html: worldMapSvg }}
     />
+  );
+});
+
+const MiniMap = memo(function MiniMap({ zoom }: { zoom: number }) {
+  const viewportSize = `${Math.min(90, Math.max(48, 90 / zoom))}%`;
+  const viewportStyle = { '--mini-viewport-size': viewportSize } as CSSProperties;
+
+  return (
+    <div className="mini-map" aria-hidden="true">
+      <div className="mini-map-frame" dangerouslySetInnerHTML={{ __html: miniWorldMapSvg }} />
+      <span className="mini-map-window" style={viewportStyle} />
+    </div>
   );
 });
 
@@ -595,9 +624,7 @@ function App() {
                 <span>N</span>
                 <i />
               </div>
-              <div className="mini-map" aria-hidden="true">
-                <div />
-              </div>
+              <MiniMap zoom={zoom} />
               <MapLegend />
               <div
                 ref={tooltipRef}
@@ -767,7 +794,7 @@ function UtilityPanel({
     },
     Почта: {
       text: `Во входящих сейчас ${mailCount} писем. Новые ответы приходят после дипломатических действий и завершения приказов.`,
-      action: 'Кнопка "Написать" справа отправляет исходящее письмо через GameState.',
+      action: 'Кнопка "Написать" справа отправляет исходящее письмо через канцелярию.',
     },
     Уведомления: {
       text: 'Здесь собираются важные игровые изменения: завершение хода, результаты приказов, дипломатические ответы.',
@@ -775,26 +802,26 @@ function UtilityPanel({
     },
     Помощь: {
       text: 'Совет понимает обычные сообщения и игровые команды: построить, развить, отправить, укрепить, начать переговоры.',
-      action: 'Абсурдные команды блокируются fallback-арбитром и не ломают баланс.',
+      action: 'Невозможные приказы отклоняются советом, чтобы партия не ломалась нелепыми решениями.',
     },
     'Профиль правителя': {
       text: `Правитель России управляет партией через приказы, письма, дипломатию и выбранную цель на карте: ${selectedCountryName}.`,
       action: 'Состояние партии сохраняется автоматически после игровых действий.',
     },
     Настройки: {
-      text: 'Автосохранение партии включено. Карта, ходы, приказы, письма и ресурсы сохраняются в браузере.',
-      action: 'Расширенные настройки графики и мобильный режим лучше вынести в следующий этап.',
+      text: 'Автосохранение партии включено. Карта, ходы, приказы, письма и ресурсы сохраняются на этом устройстве.',
+      action: 'Расширенные настройки графики и малый экран будут добавлены отдельным разделом.',
     },
     'Карта мира': {
       text: `Карта выбирает цель для приказов и дипломатии. Текущая цель: ${selectedCountryName}.`,
       action: 'Страны можно выбирать мышью или клавиатурой через Enter.',
     },
     Письма: {
-      text: `Панель писем справа связана с GameState. Входящих сейчас: ${mailCount}.`,
+      text: `Канцелярия справа ведет входящую переписку. Входящих сейчас: ${mailCount}.`,
       action: 'Исходящие письма идут в хронику, а входящие появляются как ответы мира.',
     },
     Приказы: {
-      text: `Активных приказов: ${orderCount}/5. Создание приказа теперь открывает подтверждение и проверку движка.`,
+      text: `Активных приказов: ${orderCount}/5. Создание приказа открывает подтверждение и проверку казны.`,
       action: 'Сроки приказов двигаются при завершении хода.',
     },
     Хроника: {
@@ -807,7 +834,7 @@ function UtilityPanel({
     },
     Фракции: {
       text: 'Фракции опираются на список стран, флаги и дипломатический статус справа.',
-      action: 'Следующий слой: отдельные цели и поведение стран.',
+      action: 'Дальше здесь появятся цели, интересы и поведение каждой державы.',
     },
   };
   const content = panelCopy[title] || {
@@ -1129,7 +1156,7 @@ function PendingActionDialog({
           <dt>Срок</dt>
           <dd>2 дня</dd>
           <dt>Проверка</dt>
-          <dd>Ресурсы и лимит приказов проверит движок</dd>
+          <dd>Казна и канцелярия проверят доступность приказа</dd>
         </dl>
         <div className="dialog-actions">
           <button type="button" onClick={onCancel}>

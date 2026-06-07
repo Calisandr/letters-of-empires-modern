@@ -925,24 +925,110 @@ button {
   z-index: 4;
   right: 7px;
   bottom: 12px;
-  width: 134px;
-  height: 78px;
-  padding: 5px;
+  width: 136px;
+  height: 80px;
+  padding: 4px;
   border: 1px solid rgba(197, 145, 73, .44);
-  background: rgba(9, 17, 19, .78);
+  background:
+    radial-gradient(ellipse at 50% 44%, rgba(34, 93, 107, .62), rgba(7, 22, 30, .94) 74%),
+    rgba(9, 17, 19, .82);
   box-shadow: 0 0 16px rgba(0,0,0,.38), inset 0 0 18px rgba(105, 132, 120, .08);
+  pointer-events: none;
 }
 
-.mini-map div {
+.mini-map-frame {
+  position: relative;
   height: 100%;
+  overflow: hidden;
   border: 1px solid rgba(225, 192, 122, .16);
   background:
-    radial-gradient(ellipse at 23% 38%, rgba(147, 144, 94, .8) 0 10%, transparent 11%),
-    radial-gradient(ellipse at 48% 38%, rgba(147, 144, 94, .8) 0 18%, transparent 19%),
-    radial-gradient(ellipse at 67% 47%, rgba(147, 144, 94, .82) 0 17%, transparent 18%),
-    radial-gradient(ellipse at 35% 67%, rgba(147, 144, 94, .75) 0 9%, transparent 10%),
-    radial-gradient(ellipse at 82% 68%, rgba(147, 144, 94, .72) 0 7%, transparent 8%),
+    radial-gradient(ellipse at 50% 48%, rgba(41, 98, 112, .48), rgba(7, 22, 30, .94) 100%),
     linear-gradient(180deg, rgba(24, 77, 88, .55), rgba(13, 42, 52, .9));
+}
+
+.mini-map-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(rgba(175, 215, 222, .06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(175, 215, 222, .05) 1px, transparent 1px);
+  background-size: 24px 18px;
+  opacity: .55;
+}
+
+.mini-map .world-svg {
+  width: 100%;
+  height: 100%;
+  opacity: .94;
+  transform: scale(1.05);
+  transform-origin: center;
+}
+
+.mini-map .latitude-lines,
+.mini-map .strategic-regions,
+.mini-map .routes,
+.mini-map .ports,
+.mini-map .country-label,
+.mini-map .capital-label,
+.mini-map .capital-star,
+.mini-map .capital-halo {
+  display: none;
+}
+
+.mini-map .mini-country {
+  cursor: default;
+  fill: rgba(105, 106, 72, .76);
+  stroke: rgba(230, 215, 156, .25);
+  stroke-width: 1;
+  fill-rule: evenodd;
+  vector-effect: non-scaling-stroke;
+}
+
+.mini-map .mini-country.continent-africa { fill: rgba(142, 111, 67, .80); }
+.mini-map .mini-country.continent-asia { fill: rgba(129, 121, 77, .78); }
+.mini-map .mini-country.continent-europe { fill: rgba(103, 121, 83, .75); }
+.mini-map .mini-country.continent-north-america { fill: rgba(95, 111, 78, .77); }
+.mini-map .mini-country.continent-south-america { fill: rgba(95, 118, 75, .78); }
+.mini-map .mini-country.continent-oceania { fill: rgba(108, 93, 73, .78); }
+
+.mini-map .mini-country.status-russia {
+  fill: rgba(111, 110, 69, .96);
+  stroke: rgba(240, 226, 159, .55);
+}
+
+.mini-map .mini-country.status-ally { fill: rgba(117, 131, 78, .95); }
+.mini-map .mini-country.status-friendly { fill: rgba(97, 126, 88, .86); }
+.mini-map .mini-country.status-neutral { fill: rgba(120, 113, 89, .84); }
+.mini-map .mini-country.status-risk { fill: rgba(135, 95, 64, .88); }
+.mini-map .mini-country.status-hostile { fill: rgba(133, 65, 51, .92); }
+
+.mini-map .mini-country:hover,
+.mini-map .mini-country.status-russia:hover {
+  fill: inherit !important;
+  stroke: rgba(230, 215, 156, .25);
+  filter: none;
+}
+
+.mini-map .capital-dot {
+  r: 3;
+  fill: rgba(244, 211, 126, .88);
+  stroke: rgba(4, 12, 13, .92);
+  stroke-width: 1;
+}
+
+.mini-map-window {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--mini-viewport-size, 90%);
+  height: calc(var(--mini-viewport-size, 90%) * .58);
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(255, 222, 142, .7);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, .46),
+    0 0 10px rgba(226, 183, 100, .24);
+  background: rgba(255, 219, 130, .04);
 }
 
 .map-legend {
