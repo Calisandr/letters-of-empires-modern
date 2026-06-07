@@ -11,6 +11,7 @@ import type {
   NationDelta,
   NationProfile,
   Order,
+  OrderCounterMove,
   OrderDraft,
   OperationPlan,
   OrderStatusClass,
@@ -953,6 +954,235 @@ function deterministicOrderRoll(order: Order, nextTurn: number) {
   return (nextTurn * 37 + order.id.length * 17 + order.title.length * 11 + order.target.length * 5) % 100;
 }
 
+function clampOrderChance(value: number) {
+  return Math.max(15, Math.min(96, Math.round(value)));
+}
+
+function clampCounterPressure(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function orderCounterSeverity(chanceDelta: number): OrderCounterMove['severity'] {
+  const weight = Math.abs(chanceDelta);
+  if (weight >= 9) return 'high';
+  if (weight >= 5) return 'medium';
+  return 'low';
+}
+
+function explicitOrderNationNames(order: Order) {
+  return [
+    ...Object.keys(order.diplomacyDelta || {}),
+    ...Object.keys(order.failureDiplomacyDelta || {}),
+    ...Object.keys(order.nationDelta || {}),
+    ...Object.keys(order.failureNationDelta || {}),
+  ];
+}
+
+function findOrderTargetNation(state: GameState, order: Order) {
+  const explicitNames = explicitOrderNationNames(order);
+  const explicit = explicitNames
+    .map((name) => state.nations.find((nation) => nation.name === name))
+    .find(Boolean);
+  if (explicit) return explicit;
+
+  return state.nations.find(
+    (nation) =>
+      order.target === nation.name ||
+      order.title.includes(nation.name) ||
+      order.completeText.includes(nation.name),
+  );
+}
+
+function relationForOrderTarget(state: GameState, nation: NationProfile) {
+  return state.diplomacy.find((relation) => relation.name === nation.name)?.score ?? nation.relation;
+}
+
+type BuiltOrderCounterMove = {
+  move: OrderCounterMove;
+  resourceDelta: ResourceDelta;
+  diplomacyDelta: Record<string, number>;
+  nationDelta: Record<string, NationDelta>;
+  warning?: string;
+  opportunity?: string;
+  event: TimelineEvent;
+};
+
+function buildOrderCounterMove(state: GameState, order: Order, nextTurn: number): BuiltOrderCounterMove | null {
+  if (order.remainingTurns <= 1) return null;
+
+  const targetNation = findOrderTargetNation(state, order);
+  const seed = (nextTurn * 13 + order.id.length * 7 + order.target.length * 3) % 3;
+
+  if (!targetNation || targetNation.id === 'russia') {
+    const pressure = state.worldTension >= 68 || order.riskLevel === 'critical';
+    const chanceDelta = pressure ? -(3 + seed) : 3 + seed;
+    const pressureDelta = pressure ? 2 + seed : -(2 + seed);
+    const move: OrderCounterMove = {
+      actor: 'Россия',
+      title: pressure ? 'Внутренний штаб перегружен' : 'Внутренний штаб ускоряет приказ',
+      text: pressure
+        ? `Канцелярия фиксирует перегрузку снабжения по приказу "${order.title}": шанс исполнения снижен на ${Math.abs(chanceDelta)}%.`
+        : `Штаб сверил снабжение по приказу "${order.title}" и поднял шанс исполнения на ${chanceDelta}%.`,
+      severity: orderCounterSeverity(chanceDelta),
+      chanceDelta,
+      pressureDelta,
+    };
+
+    return {
+      move,
+      resourceDelta: pressure ? { gold: -70, grain: -40 } : {},
+      diplomacyDelta: {},
+      nationDelta: { Россия: { pressure: pressureDelta, stability: pressure ? -1 : 1 } },
+      warning: pressure ? move.text : undefined,
+      opportunity: pressure ? undefined : move.text,
+      event: {
+        icon: pressure ? '!' : '✓',
+        tone: pressure ? 'bronze' : 'green',
+        title: move.title,
+        text: move.text,
+        time: `Ход ${nextTurn}`,
+      },
+    };
+  }
+
+  const relation = relationForOrderTarget(state, targetNation);
+  const intent = targetNation.currentIntent;
+  const hostileIntent = intent?.type === 'military' || intent?.type === 'covert' || intent?.type === 'defense';
+  const hostile = relation <= -45 || hostileIntent || targetNation.threat + targetNation.pressure >= 130;
+  const supportive =
+    relation >= 100 ||
+    (relation >= 70 && (intent?.type === 'trade' || intent?.type === 'diplomacy' || intent?.type === 'industry'));
+
+  if (hostile) {
+    const intentPenalty = intent?.type === 'covert' ? 4 : intent?.type === 'military' ? 3 : intent?.type === 'defense' ? 2 : 0;
+    const relationPenalty = relation <= -75 ? 4 : relation <= -45 ? 2 : 0;
+    const chanceDelta = -(5 + intentPenalty + relationPenalty + seed);
+    const pressureDelta = 4 + intentPenalty + seed;
+    const move: OrderCounterMove = {
+      actor: targetNation.name,
+      title: `${targetNation.name} мешает приказу`,
+      text: `${targetNation.name} отвечает на приказ "${order.title}": усиливает охрану, давит на снабжение и снижает шанс успеха на ${Math.abs(chanceDelta)}%.`,
+      severity: orderCounterSeverity(chanceDelta),
+      chanceDelta,
+      pressureDelta,
+    };
+
+    return {
+      move,
+      resourceDelta: move.severity === 'high' ? { gold: -110, grain: -70 } : { gold: -70 },
+      diplomacyDelta: relation <= -45 ? { [targetNation.name]: -1 } : {},
+      nationDelta: { [targetNation.name]: { pressure: pressureDelta, threat: Math.ceil(pressureDelta / 2) } },
+      warning: move.text,
+      event: {
+        icon: '!',
+        tone: move.severity === 'high' ? 'red' : 'bronze',
+        title: move.title,
+        text: move.text,
+        time: `Ход ${nextTurn}`,
+      },
+    };
+  }
+
+  if (supportive) {
+    const chanceDelta = 4 + (relation >= 100 ? 2 : 0) + (seed > 1 ? 1 : 0);
+    const pressureDelta = -(3 + seed);
+    const move: OrderCounterMove = {
+      actor: targetNation.name,
+      title: `${targetNation.name} поддерживает приказ`,
+      text: `${targetNation.name} открывает каналы для приказа "${order.title}": шанс успеха вырос на ${chanceDelta}%.`,
+      severity: orderCounterSeverity(chanceDelta),
+      chanceDelta,
+      pressureDelta,
+    };
+
+    return {
+      move,
+      resourceDelta: relation >= 100 ? { grain: 60 } : {},
+      diplomacyDelta: relation >= 100 ? { [targetNation.name]: 1 } : {},
+      nationDelta: { [targetNation.name]: { pressure: pressureDelta, threat: -1 } },
+      opportunity: move.text,
+      event: {
+        icon: '✓',
+        tone: 'green',
+        title: move.title,
+        text: move.text,
+        time: `Ход ${nextTurn}`,
+      },
+    };
+  }
+
+  if (relation < 20 || order.riskLevel === 'medium' || order.riskLevel === 'high') {
+    const chanceDelta = -(2 + seed);
+    const pressureDelta = 1 + seed;
+    const move: OrderCounterMove = {
+      actor: targetNation.name,
+      title: `${targetNation.name} требует гарантий`,
+      text: `${targetNation.name} не срывает приказ "${order.title}" напрямую, но затягивает согласования: шанс снижен на ${Math.abs(chanceDelta)}%.`,
+      severity: orderCounterSeverity(chanceDelta),
+      chanceDelta,
+      pressureDelta,
+    };
+
+    return {
+      move,
+      resourceDelta: {},
+      diplomacyDelta: {},
+      nationDelta: { [targetNation.name]: { pressure: pressureDelta } },
+      warning: move.text,
+      event: {
+        icon: '•',
+        tone: 'bronze',
+        title: move.title,
+        text: move.text,
+        time: `Ход ${nextTurn}`,
+      },
+    };
+  }
+
+  return null;
+}
+
+function applyOrderCounterMoves(state: GameState, orders: Order[], nextTurn: number) {
+  const timelineEvents: TimelineEvent[] = [];
+  const warnings: string[] = [];
+  const opportunities: string[] = [];
+  let resourceDelta: ResourceDelta = {};
+  let diplomacyDelta: Record<string, number> = {};
+  let nationDelta: Record<string, NationDelta> = {};
+
+  const nextOrders = orders.map((order) => {
+    const counter = buildOrderCounterMove(state, order, nextTurn);
+    if (!counter) return order;
+
+    const nextChance = clampOrderChance(defaultSuccessChance(order) + counter.move.chanceDelta);
+    const nextPressure = clampCounterPressure((order.counterPressure || 0) + counter.move.pressureDelta);
+
+    resourceDelta = mergeResourceDelta(resourceDelta, counter.resourceDelta);
+    diplomacyDelta = mergeDiplomacyDelta(diplomacyDelta, counter.diplomacyDelta);
+    nationDelta = mergeNationDelta(nationDelta, counter.nationDelta);
+    if (counter.warning) warnings.push(counter.warning);
+    if (counter.opportunity) opportunities.push(counter.opportunity);
+    if (timelineEvents.length < 2) timelineEvents.push(counter.event);
+
+    return {
+      ...order,
+      successChance: nextChance,
+      counterPressure: nextPressure,
+      lastCounterMove: counter.move,
+    };
+  });
+
+  return {
+    orders: nextOrders,
+    resourceDelta,
+    diplomacyDelta,
+    nationDelta,
+    timelineEvents,
+    warnings,
+    opportunities,
+  };
+}
+
 function resolveCompletedOrder(order: Order, nextTurn: number): ResolvedOrderOutcome {
   const chance = defaultSuccessChance(order);
   const succeeded = deterministicOrderRoll(order, nextTurn) < chance;
@@ -1025,8 +1255,12 @@ export function endTurn(state: GameState): GameState {
   const completedOrders: Order[] = [];
   const activeOperationPlans = state.operationPlans.filter((plan) => plan.expiresTurn >= nextTurn);
   const expiredOperationPlans = state.operationPlans.filter((plan) => plan.expiresTurn < nextTurn);
-  const activeOrders = state.orders
-    .filter((order) => order.statusClass !== 'cancelled')
+  const counterMoves = applyOrderCounterMoves(
+    state,
+    state.orders.filter((order) => order.statusClass !== 'cancelled'),
+    nextTurn,
+  );
+  const activeOrders = counterMoves.orders
     .map((order) => {
       const remainingTurns = Math.max(0, order.remainingTurns - 1);
       if (remainingTurns <= 0) {
@@ -1052,18 +1286,21 @@ export function endTurn(state: GameState): GameState {
   const orderResourceDelta = mergeResourceDelta(...resolvedOrders.map((order) => order.resourceDelta));
   const orderDiplomacyDelta = mergeDiplomacyDelta(...resolvedOrders.map((order) => order.diplomacyDelta));
   const orderNationDelta = mergeNationDelta(...resolvedOrders.map((order) => order.nationDelta));
+  const preWorldResourceDelta = mergeResourceDelta(incomeDelta, counterMoves.resourceDelta, orderResourceDelta);
+  const preWorldDiplomacyDelta = mergeDiplomacyDelta(counterMoves.diplomacyDelta, orderDiplomacyDelta);
+  const preWorldNationDelta = mergeNationDelta(counterMoves.nationDelta, orderNationDelta);
   const world = simulateWorldTurn(
     {
       ...state,
-      resources: applyResourceDelta(state.resources, mergeResourceDelta(incomeDelta, orderResourceDelta)),
-      diplomacy: applyDiplomacyDelta(state.diplomacy, orderDiplomacyDelta),
-      nations: applyNationDeltaToNations(state.nations, orderNationDelta),
+      resources: applyResourceDelta(state.resources, preWorldResourceDelta),
+      diplomacy: applyDiplomacyDelta(state.diplomacy, preWorldDiplomacyDelta),
+      nations: applyNationDeltaToNations(state.nations, preWorldNationDelta),
     },
     nextTurn,
     resolvedOrders.map((order) => order.report),
   );
-  const totalResourceDelta = mergeResourceDelta(incomeDelta, orderResourceDelta, world.resourceDelta);
-  const totalDiplomacyDelta = mergeDiplomacyDelta(orderDiplomacyDelta, world.diplomacyDelta);
+  const totalResourceDelta = mergeResourceDelta(preWorldResourceDelta, world.resourceDelta);
+  const totalDiplomacyDelta = mergeDiplomacyDelta(preWorldDiplomacyDelta, world.diplomacyDelta);
   const completedEvents = resolvedOrders.map((order) => order.event);
   const worldTimelineEvents = world.events.slice(0, 2).map<TimelineEvent>((event) => ({
     icon: event.tone === 'red' ? '!' : event.tone === 'green' ? '✓' : '•',
@@ -1121,9 +1358,12 @@ export function endTurn(state: GameState): GameState {
         ...world.report,
         resourceDelta: totalResourceDelta,
         diplomacyDelta: totalDiplomacyDelta,
+        warnings: [...counterMoves.warnings, ...world.report.warnings].slice(0, 6),
+        opportunities: [...counterMoves.opportunities, ...world.report.opportunities].slice(0, 6),
       },
       timelineEvents: [
         ...completedEvents,
+        ...counterMoves.timelineEvents,
         ...worldTimelineEvents,
         ...(expiredPlanEvent ? [expiredPlanEvent] : []),
         turnEvent,

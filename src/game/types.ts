@@ -40,6 +40,17 @@ export type ResourceState = {
 export type ResourceDelta = Partial<Record<ResourceId, number>>;
 export type NationDelta = Partial<Record<NationMetricId, number>>;
 
+export type OrderCounterMoveSeverity = 'low' | 'medium' | 'high';
+
+export type OrderCounterMove = {
+  actor: string;
+  title: string;
+  text: string;
+  severity: OrderCounterMoveSeverity;
+  chanceDelta: number;
+  pressureDelta: number;
+};
+
 export type Order = {
   id: string;
   iconKey: OrderIconKey;
@@ -62,6 +73,8 @@ export type Order = {
   failureDiplomacyDelta?: Record<string, number>;
   nationDelta?: Record<string, NationDelta>;
   failureNationDelta?: Record<string, NationDelta>;
+  counterPressure?: number;
+  lastCounterMove?: OrderCounterMove;
 };
 
 export type OrderDraft = Omit<Order, 'id' | 'status' | 'statusClass' | 'due'>;

@@ -368,6 +368,70 @@ try {
     assert.ok(changedUkraine.pressure < baselineUkraine.pressure);
   });
 
+  test('hostile nations counter active orders before they resolve', () => {
+    const state = {
+      ...clone(initialGameState),
+      orders: [
+        {
+          id: 'hostile-counter-check',
+          iconKey: 'swords',
+          title: 'Проверить укрепления у Украины',
+          owner: 'Оперативный штаб',
+          target: 'Харьков',
+          status: 'В пути',
+          statusClass: 'moving',
+          due: '2 дня',
+          remainingTurns: 2,
+          totalTurns: 2,
+          cost: { gold: 10 },
+          completeText: 'Операция должна была пройти.',
+          riskLevel: 'medium',
+          successChance: 80,
+          diplomacyDelta: { Украина: -2 },
+        },
+      ],
+    };
+    const next = endTurn(state);
+    const order = next.orders[0];
+
+    assert.equal(order.lastCounterMove.actor, 'Украина');
+    assert.ok(order.successChance < 80);
+    assert.ok(order.counterPressure > 0);
+    assert.ok(next.lastTurnReport.warnings.some((warning) => warning.includes('Украина')));
+  });
+
+  test('allied nations can support active orders', () => {
+    const state = {
+      ...clone(initialGameState),
+      orders: [
+        {
+          id: 'allied-support-check',
+          iconKey: 'package',
+          title: 'Проверить торговый коридор с Индией',
+          owner: 'Торговый совет',
+          target: 'Дели',
+          status: 'В пути',
+          statusClass: 'moving',
+          due: '2 дня',
+          remainingTurns: 2,
+          totalTurns: 2,
+          cost: { gold: 10 },
+          completeText: 'Торговый коридор должен пройти.',
+          riskLevel: 'low',
+          successChance: 80,
+          diplomacyDelta: { Индия: 2 },
+        },
+      ],
+    };
+    const next = endTurn(state);
+    const order = next.orders[0];
+
+    assert.equal(order.lastCounterMove.actor, 'Индия');
+    assert.ok(order.successChance > 80);
+    assert.equal(order.lastCounterMove.chanceDelta > 0, true);
+    assert.ok(next.lastTurnReport.opportunities.some((opportunity) => opportunity.includes('Индия')));
+  });
+
   test('map intel exposes nation intentions in map modes', () => {
     const next = endTurn(clone(initialGameState));
     const countryKeys = {

@@ -1739,7 +1739,6 @@ function App() {
               onCreateOrder={() => handleQuickAction('create-order')}
               onRunPlan={runOperationPlan}
               onDismissPlan={dismissOperationPlan}
-              showToast={showToast}
             />
           </section>
         </main>
@@ -2172,7 +2171,6 @@ function OrdersPanel({
   onCreateOrder,
   onRunPlan,
   onDismissPlan,
-  showToast,
 }: {
   orders: Order[];
   operationPlans: OperationPlan[];
@@ -2181,9 +2179,9 @@ function OrdersPanel({
   onCreateOrder: () => void;
   onRunPlan: (id: string) => void;
   onDismissPlan: (id: string) => void;
-  showToast: (message: string) => void;
 }) {
   const activeOrderCount = orders.filter((order) => order.statusClass !== 'cancelled').length;
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   return (
     <motion.section
@@ -2247,17 +2245,22 @@ function OrdersPanel({
         {orders.map((order) => {
           const Icon = orderIcons[order.iconKey];
           const isCancelled = order.statusClass === 'cancelled';
+          const isExpanded = expandedOrderId === order.id;
+          const chance = typeof order.successChance === 'number' ? Math.round(order.successChance) : null;
+          const counterMove = order.lastCounterMove;
+          const counterPressure = order.counterPressure || 0;
+          const hasCounterInfo = Boolean(counterMove || chance !== null || counterPressure > 0);
 
           return (
             <article
               key={order.id}
-              className="order-card"
+              className={`order-card${isExpanded ? ' expanded' : ''}`}
               style={isCancelled ? { opacity: 0.38, filter: 'grayscale(.55)' } : undefined}
             >
               <span className="order-icon">
                 <Icon aria-hidden="true" />
               </span>
-              <div>
+              <div className="order-main">
                 <h3>{order.title}</h3>
                 <p>Исполнитель: {order.owner}</p>
               </div>
@@ -2269,11 +2272,33 @@ function OrdersPanel({
                 <dt>Срок</dt>
                 <dd>{order.due}</dd>
               </dl>
+              {hasCounterInfo ? (
+                <p
+                  className={`order-countermove ${counterMove?.severity || 'low'}${
+                    counterMove && counterMove.chanceDelta > 0 ? ' support' : ''
+                  }`}
+                >
+                  <span>{counterMove ? counterMove.title : 'Оценка штаба обновлена'}</span>
+                  {chance !== null ? <b>шанс {chance}%</b> : null}
+                  {counterPressure > 0 ? <em>давление {counterPressure}/100</em> : null}
+                </p>
+              ) : null}
+              {isExpanded ? (
+                <section className="order-expanded" aria-label={`Досье приказа: ${order.title}`}>
+                  <p>{counterMove?.text || order.completeText}</p>
+                  <small>
+                    Риск: {planRiskLabel(order.riskLevel || 'low')} · стоимость: {formatResourceCost(order.cost || {})} ·
+                    награда: {formatResourceCost(order.reward || {})}
+                  </small>
+                  {order.failureText ? <small>Провал: {order.failureText}</small> : null}
+                </section>
+              ) : null}
               <button
                 type="button"
-                title="Посмотреть"
+                title={isExpanded ? 'Скрыть досье' : 'Посмотреть'}
                 aria-label={`Посмотреть приказ: ${order.title}`}
-                onClick={() => showToast(`${order.title}: ${order.completeText}`)}
+                aria-expanded={isExpanded}
+                onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
               >
                 <Eye aria-hidden="true" />
               </button>

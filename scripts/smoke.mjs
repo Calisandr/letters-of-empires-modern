@@ -282,6 +282,18 @@ try {
   await page.locator('.end-turn-button').dblclick();
   await page.waitForTimeout(120);
   const afterEndTurn = await readGameState();
+  const orderCounterMoveDiagnostics = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('.order-countermove')].map((node) =>
+      node.textContent?.replace(/\s+/g, ' ').trim() || '',
+    );
+
+    return {
+      count: rows.length,
+      first: rows[0] || '',
+      hasChance: rows.some((text) => text.includes('шанс')),
+      hasPressure: rows.some((text) => text.includes('давление')),
+    };
+  });
   await page.waitForSelector('.strategic-response');
   const strategicResponseBefore = await page.evaluate(() => {
     const responses = [...document.querySelectorAll('.strategic-response')];
@@ -307,6 +319,10 @@ try {
       toast: document.querySelector('.toast')?.textContent || '',
     };
   });
+  await page.getByLabel('Закрыть отчет хода').click();
+  await page.waitForTimeout(80);
+  await page.locator('.order-card').nth(1).locator('button').first().click();
+  const orderDetailsVisible = (await page.locator('.order-expanded').count()) > 0;
   const composeButtonUnlockedAfterTurn = !(await page.locator('.quick-actions button').first().isDisabled());
   const savedTurnAfterReload = await (async () => {
     await page.reload({ waitUntil: 'networkidle' });
@@ -340,6 +356,8 @@ try {
     afterStrategicResponse,
     strategicResponseBefore,
     strategicResponseAfter,
+    orderCounterMoveDiagnostics,
+    orderDetailsVisible,
     composeButtonUnlockedAfterTurn,
     savedTurnAfterReload,
     countryIntentAfterReload,
@@ -450,6 +468,9 @@ try {
     !gameCycle.resourcesChangedAfterAction ||
     !gameCycle.turnAdvanced ||
     !gameCycle.resourcesChangedAfterTurn ||
+    gameCycle.orderCounterMoveDiagnostics.count < 1 ||
+    !gameCycle.orderCounterMoveDiagnostics.hasChance ||
+    !gameCycle.orderDetailsVisible ||
     gameCycle.strategicResponseBefore.count < 1 ||
     !gameCycle.strategicResponseBefore.hasEnabledButton ||
     !gameCycle.strategicResponseAfter.firstUsed ||

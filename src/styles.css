@@ -1376,7 +1376,9 @@ input:focus-visible,
   grid-template-columns: 30px minmax(0, 1fr) 23px 23px;
   grid-template-areas:
     "icon title view cancel"
-    "icon details details details";
+    "icon details details details"
+    "icon counter counter counter"
+    "icon expanded expanded expanded";
   gap: 3px 7px;
   min-height: 52px;
   overflow: hidden;
@@ -1386,17 +1388,19 @@ input:focus-visible,
   grid-area: icon;
 }
 
-.order-card > div,
-.order-card dl {
+.order-main,
+.order-card dl,
+.order-countermove,
+.order-expanded {
   min-width: 0;
 }
 
-.order-card > div {
+.order-main {
   grid-area: title;
 }
 
 .order-card h3,
-.order-card p,
+.order-main p,
 .order-card dt,
 .order-card dd {
   min-width: 0;
@@ -1411,6 +1415,76 @@ input:focus-visible,
   align-items: center;
   gap: 3px 7px;
   font-size: 9.5px;
+}
+
+.order-countermove {
+  grid-area: counter;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: -1px 0 0;
+  color: rgba(232, 198, 109, .88);
+  font-size: 9.8px;
+  line-height: 1.1;
+}
+
+.order-countermove span,
+.order-countermove b,
+.order-countermove em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-countermove span {
+  flex: 1 1 auto;
+}
+
+.order-countermove b {
+  flex: 0 0 auto;
+  color: #f7d986;
+  font-weight: 700;
+}
+
+.order-countermove em {
+  flex: 0 0 auto;
+  color: rgba(166, 185, 162, .82);
+  font-style: normal;
+}
+
+.order-countermove.high {
+  color: #ff9d8f;
+}
+
+.order-countermove.medium {
+  color: #e8bd65;
+}
+
+.order-countermove.support {
+  color: #a8df9a;
+}
+
+.order-expanded {
+  grid-area: expanded;
+  display: grid;
+  gap: 3px;
+  margin-top: 2px;
+  padding: 6px 7px;
+  border: 1px solid rgba(205, 162, 85, .16);
+  background: rgba(3, 9, 10, .42);
+}
+
+.order-expanded p,
+.order-expanded small {
+  margin: 0;
+  color: rgba(218, 209, 176, .88);
+  font-size: 10.3px;
+  line-height: 1.25;
+}
+
+.order-expanded small {
+  color: rgba(166, 185, 162, .82);
 }
 
 .order-card button:nth-of-type(1) {
@@ -1818,7 +1892,7 @@ input:focus-visible,
     overflow: visible;
   }
 
-  .order-card > div {
+  .order-main {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     align-items: start;
@@ -1834,7 +1908,7 @@ input:focus-visible,
     line-height: 1.06;
   }
 
-  .order-card p {
+  .order-main p {
     justify-self: start;
     max-width: 100%;
     overflow: visible;
@@ -1843,7 +1917,7 @@ input:focus-visible,
     white-space: normal;
   }
 
-  .order-card p,
+  .order-main p,
   .order-card dl {
     font-size: 13.2px;
     line-height: 1.1;
@@ -1852,6 +1926,16 @@ input:focus-visible,
   .order-card dl {
     flex-wrap: wrap;
     gap: 2px 8px;
+  }
+
+  .order-countermove {
+    font-size: 12.4px;
+    gap: 8px;
+  }
+
+  .order-expanded p,
+  .order-expanded small {
+    font-size: 12.2px;
   }
 
   .create-order {
@@ -1968,7 +2052,9 @@ input:focus-visible,
     grid-template-columns: 30px minmax(0, 1fr);
     grid-template-areas:
       "icon title"
-      "icon details";
+      "icon details"
+      "icon counter"
+      "icon expanded";
   }
 
   .order-card button {
