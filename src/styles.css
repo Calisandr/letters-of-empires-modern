@@ -681,6 +681,68 @@ input:focus-visible,
   white-space: nowrap;
 }
 
+.country-intel-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  margin: 0 0 8px;
+}
+
+.country-intel-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 28px;
+  gap: 5px;
+  padding: 5px 6px;
+  border: 1px solid rgba(205, 162, 85, .2);
+  background: rgba(6, 13, 14, .56);
+  color: rgba(222, 213, 177, .9);
+  cursor: pointer;
+  font: 700 10.5px/1.05 var(--sans);
+  transition:
+    border-color .16s ease,
+    color .16s ease,
+    background .16s ease,
+    transform .16s ease;
+}
+
+.country-intel-action svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  color: #d5ae5d;
+  stroke-width: 1.9;
+}
+
+.country-intel-action span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.country-intel-action:hover,
+.country-intel-action:focus-visible {
+  border-color: rgba(240, 206, 120, .55);
+  background: rgba(64, 45, 19, .56);
+  color: #f0ce78;
+  transform: translateY(-1px);
+}
+
+.country-intel-action.trade svg {
+  color: #8ac6cc;
+}
+
+.country-intel-action.intel svg {
+  color: #c8d18d;
+}
+
+.country-intel-action.military svg {
+  color: #d88466;
+}
+
 .country-intel p {
   display: -webkit-box;
   margin: 0 0 6px;

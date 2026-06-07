@@ -11,7 +11,7 @@ const clone = (value) => structuredClone(value);
 try {
   const { initialGameState } = await server.ssrLoadModule('/src/game/initialState.ts');
   const { gameReducer } = await server.ssrLoadModule('/src/game/reducer.ts');
-  const { createStrategicOrder, endTurn } = await server.ssrLoadModule('/src/game/engine.ts');
+  const { applyValidatedEffect, createStrategicOrder, endTurn } = await server.ssrLoadModule('/src/game/engine.ts');
   const { fallbackJudgeCouncilCommand, validateEngineEffect } = await server.ssrLoadModule(
     '/src/game/fallbackArbitrator.ts',
   );
@@ -97,6 +97,79 @@ try {
 
     assert.ok(next.diplomacy.find((relation) => relation.name === 'Франция').score > 75);
     assert.equal(next.letters[0].from, 'Франция');
+  });
+
+  test('country intel envoy creates diplomacy for a new map country', () => {
+    const country = { key: 'Brazil', name: 'Бразилия', status: 'friendly' };
+    const selected = gameReducer(clone(initialGameState), { type: 'SELECT_COUNTRY', country });
+    const next = gameReducer(selected, { type: 'RUN_COUNTRY_INTEL_ACTION', id: 'send-envoy', country });
+    const relation = next.diplomacy.find((item) => item.name === 'Бразилия');
+    const nation = next.nations.find((item) => item.name === 'Бразилия');
+
+    assert.ok(relation);
+    assert.equal(relation.flag, 'Brazil');
+    assert.ok(relation.score > 64);
+    assert.ok(nation);
+    assert.ok(nation.lastAction.includes('посольство'));
+    assert.ok(next.resources.find((resource) => resource.id === 'gold').value < selected.resources.find((resource) => resource.id === 'gold').value);
+    assert.equal(next.letters[0].from, 'Бразилия');
+  });
+
+  test('council diplomacy can target a newly selected map country', () => {
+    const country = { key: 'Brazil', name: 'Бразилия', status: 'friendly' };
+    const selected = gameReducer(clone(initialGameState), { type: 'SELECT_COUNTRY', country });
+    const next = gameReducer(selected, {
+      type: 'SUBMIT_COUNCIL_MESSAGE',
+      text: 'Начать переговоры и улучшить отношения с Бразилией',
+      time: '13:20',
+    });
+    const relation = next.diplomacy.find((item) => item.name === 'Бразилия');
+
+    assert.ok(relation);
+    assert.ok(relation.score > 64);
+    assert.ok(next.nations.some((item) => item.name === 'Бразилия'));
+    assert.notEqual(next.lastNotice.kind, 'error');
+  });
+
+  test('negative selected-country diplomacy raises dossier pressure', () => {
+    const country = { key: 'Brazil', name: 'Бразилия', status: 'friendly' };
+    const selected = gameReducer(clone(initialGameState), { type: 'SELECT_COUNTRY', country });
+    const discovered = gameReducer(selected, { type: 'RUN_COUNTRY_INTEL_ACTION', id: 'gather-intel', country });
+    const before = discovered.nations.find((item) => item.name === 'Бразилия');
+    const next = applyValidatedEffect(discovered, {
+      kind: 'diplomacy-delta',
+      diplomacyDelta: { Бразилия: -8 },
+    });
+    const after = next.nations.find((item) => item.name === 'Бразилия');
+
+    assert.ok(before);
+    assert.ok(after);
+    assert.ok(after.pressure > before.pressure);
+    assert.ok(after.threat > before.threat);
+  });
+
+  test('country intel recon creates a detailed dossier without creating an order', () => {
+    const country = { key: 'Algeria', name: 'Алжир', status: 'common' };
+    const selected = gameReducer(clone(initialGameState), { type: 'SELECT_COUNTRY', country });
+    const next = gameReducer(selected, { type: 'RUN_COUNTRY_INTEL_ACTION', id: 'gather-intel', country });
+    const nation = next.nations.find((item) => item.name === 'Алжир');
+
+    assert.ok(nation);
+    assert.ok(nation.lastAction.includes('Разведка'));
+    assert.equal(next.orders.length, selected.orders.length);
+    assert.ok(next.timelineEvents[0].title.includes('Досье'));
+  });
+
+  test('country intel trade mission creates a real target order', () => {
+    const country = { key: 'Brazil', name: 'Бразилия', status: 'friendly' };
+    const selected = gameReducer(clone(initialGameState), { type: 'SELECT_COUNTRY', country });
+    const next = gameReducer(selected, { type: 'RUN_COUNTRY_INTEL_ACTION', id: 'trade-mission', country });
+    const order = next.orders.at(-1);
+
+    assert.equal(next.orders.length, selected.orders.length + 1);
+    assert.equal(order.target, 'Бразилия');
+    assert.equal(order.iconKey, 'anchor');
+    assert.ok(next.diplomacy.some((item) => item.name === 'Бразилия'));
   });
 
   test('engine blocks over-limit order creation', () => {

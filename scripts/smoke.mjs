@@ -135,6 +135,40 @@ try {
       pseudoText: flag ? getComputedStyle(flag, '::before').content + getComputedStyle(flag, '::after').content : '',
     };
   });
+
+  await inspectCountryIntel('Brazil');
+  const beforeCountryIntelAction = await page.evaluate(() => ({
+    goldText: [...document.querySelectorAll('.resource-list li')].find((node) =>
+      node.textContent?.includes('Золото'),
+    )?.textContent || '',
+    diplomacyNames: [...document.querySelectorAll('.diplomacy-panel li b')].map((node) =>
+      node.textContent?.trim(),
+    ),
+  }));
+  await page.getByRole('button', { name: 'Посол: Бразилия' }).click();
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('.diplomacy-panel li b')].some((node) => node.textContent?.includes('Бразилия')),
+  );
+  await page.getByRole('button', { name: 'Разведка: Бразилия' }).click();
+  await page.waitForTimeout(120);
+  const afterCountryIntelAction = await page.evaluate(() => ({
+    goldText: [...document.querySelectorAll('.resource-list li')].find((node) =>
+      node.textContent?.includes('Золото'),
+    )?.textContent || '',
+    diplomacyNames: [...document.querySelectorAll('.diplomacy-panel li b')].map((node) =>
+      node.textContent?.trim(),
+    ),
+    intelText: document.querySelector('.country-intel p')?.textContent?.trim() || '',
+    timelineTop: document.querySelector('.timeline-panel article h3')?.textContent?.trim() || '',
+  }));
+  const countryIntelActionDiagnostics = {
+    beforeCountryIntelAction,
+    afterCountryIntelAction,
+    diplomacyHasBrazil: afterCountryIntelAction.diplomacyNames.includes('Бразилия'),
+    goldChanged: beforeCountryIntelAction.goldText !== afterCountryIntelAction.goldText,
+    intelUpdated: afterCountryIntelAction.intelText.includes('Разведка'),
+  };
+
   await page.locator('.country-intel-close').click();
   const countryIntelClosed = (await page.locator('.country-intel').count()) === 0;
   await franceCountry.focus();
@@ -279,6 +313,7 @@ try {
     countryIntelFlagsWork,
     countryIntelStillUsesEmojiFallback,
     countryIntelShowsTextCode,
+    countryIntelActionDiagnostics,
     countryIntelClosed,
     chatTabDiagnostics,
     chatAdded: chatText.includes('React smoke message'),
@@ -308,6 +343,9 @@ try {
     countryIntelShowsTextCode.text ||
     countryIntelShowsTextCode.pseudoText.includes('DZ') ||
     countryIntelShowsTextCode.pseudoText.includes('BR') ||
+    !countryIntelActionDiagnostics.diplomacyHasBrazil ||
+    !countryIntelActionDiagnostics.goldChanged ||
+    !countryIntelActionDiagnostics.intelUpdated ||
     !countryIntelClosed ||
     !result.chatAdded ||
     chatTabDiagnostics.activeText !== 'Альянс' ||

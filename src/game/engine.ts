@@ -3,10 +3,12 @@ import { mergeWorldEvents, simulateWorldTurn } from './world';
 import type {
   ActionStatusKind,
   CompletedOrderReport,
+  CountryIntelActionId,
   DiplomacyRelation,
   EngineEffect,
   GameState,
   Letter,
+  NationProfile,
   Order,
   OrderDraft,
   OrderStatusClass,
@@ -14,6 +16,7 @@ import type {
   ResourceDelta,
   ResourceId,
   ResourceState,
+  SelectedCountry,
   TimelineEvent,
 } from './types';
 
@@ -74,6 +77,24 @@ export function describeResourceCost(resources: ResourceState[], cost: ResourceD
     .join(', ');
 }
 
+function clampStat(value: number) {
+  return Math.max(8, Math.min(96, Math.round(value)));
+}
+
+function hashCountryName(name: string) {
+  return [...name].reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) % 9973, 17);
+}
+
+function fallbackRelationForStatus(status: string) {
+  if (status === 'russia') return 200;
+  if (status === 'ally') return 115;
+  if (status === 'friendly') return 64;
+  if (status === 'neutral') return 0;
+  if (status === 'risk') return -34;
+  if (status === 'hostile') return -78;
+  return -6;
+}
+
 export function relationTone(score: number): DiplomacyRelation['tone'] {
   if (score >= 100) return 'ally';
   if (score >= 50) return 'friendly';
@@ -104,6 +125,75 @@ export function applyDiplomacyDelta(relations: DiplomacyRelation[], delta: Recor
       tone: relationTone(score),
     };
   });
+}
+
+function upsertDiplomacyTarget(relations: DiplomacyRelation[], country: SelectedCountry, delta = 0) {
+  const existing = relations.find((relation) => relation.name === country.name);
+  const baseScore = existing?.score ?? fallbackRelationForStatus(country.status);
+  const score = Math.max(-100, Math.min(200, baseScore + delta));
+  const nextRelation: DiplomacyRelation = {
+    flag: existing?.flag || country.key || 'neutral',
+    name: country.name,
+    score,
+    status: relationStatus(score),
+    tone: relationTone(score),
+  };
+
+  if (!existing) return [nextRelation, ...relations];
+
+  return relations.map((relation) => (relation.name === country.name ? { ...relation, ...nextRelation } : relation));
+}
+
+function buildFallbackNationProfile(country: SelectedCountry, relation: number): NationProfile {
+  const hash = hashCountryName(country.name);
+  const focusOptions: NationProfile['focus'][] = ['trade', 'military', 'industry', 'diplomacy', 'defense'];
+  const focus = focusOptions[hash % focusOptions.length];
+  const isSmall = country.status === 'common';
+
+  return {
+    id: country.key || country.name,
+    name: country.name,
+    flag: country.key || 'neutral',
+    focus,
+    economy: clampStat((isSmall ? 34 : 44) + (hash % 39)),
+    army: clampStat((isSmall ? 24 : 36) + ((hash >> 2) % 42)),
+    stability: clampStat(42 + ((hash >> 3) % 44)),
+    treasury: clampStat(30 + ((hash >> 4) % 45)),
+    grain: clampStat(34 + ((hash >> 5) % 46)),
+    relation,
+    threat: clampStat((relation < -50 ? 58 : relation < -20 ? 42 : 20) + (hash % 20)),
+    pressure: clampStat((relation < -50 ? 54 : relation < -20 ? 38 : 18) + ((hash >> 6) % 22)),
+    goals: [
+      focus === 'trade' ? 'Ищет выгодный торговый путь' : 'Оценивает соседей и угрозы',
+      focus === 'military' ? 'Укрепляет войска' : 'Сохраняет внутренний порядок',
+      relation < -40 ? 'Скрывает реальные резервы' : 'Готова к осторожным переговорам',
+    ],
+    lastAction: 'Открытых донесений пока мало: нужна дипломатия, торговля или разведка.',
+  };
+}
+
+function upsertNationTarget(
+  nations: NationProfile[],
+  country: SelectedCountry,
+  patch: Partial<NationProfile> & { lastAction: string },
+) {
+  const existing = nations.find((nation) => nation.name === country.name);
+  const relation = patch.relation ?? existing?.relation ?? fallbackRelationForStatus(country.status);
+  const base = existing || buildFallbackNationProfile(country, relation);
+  const nextNation: NationProfile = {
+    ...base,
+    ...patch,
+    id: base.id || country.key || country.name,
+    name: country.name,
+    flag: base.flag || country.key || 'neutral',
+    relation,
+    pressure: clampStat(patch.pressure ?? base.pressure),
+    threat: clampStat(patch.threat ?? base.threat),
+  };
+
+  if (!existing) return [nextNation, ...nations];
+
+  return nations.map((nation) => (nation.name === country.name ? nextNation : nation));
 }
 
 export function pushTimeline(events: TimelineEvent[], event: Omit<TimelineEvent, 'time'> & { time?: string }) {
@@ -197,6 +287,147 @@ export function cancelOrder(state: GameState, id: string): GameState {
     },
     'Приказ отменен, часть ресурсов возвращена',
   );
+}
+
+export function runCountryIntelAction(state: GameState, id: CountryIntelActionId, country: SelectedCountry): GameState {
+  const isOwnCountry = country.status === 'russia';
+  const existingRelation = state.diplomacy.find((relation) => relation.name === country.name);
+  const relation = existingRelation?.score ?? fallbackRelationForStatus(country.status);
+  const existingNation = state.nations.find((nation) => nation.name === country.name);
+  const baseNation = existingNation || buildFallbackNationProfile(country, relation);
+
+  if (id === 'send-envoy') {
+    const cost: ResourceDelta = { gold: isOwnCountry ? 90 : 220 };
+    if (!canPay(state.resources, cost)) {
+      return createNotice(state, `Не хватает ресурсов для посольства: ${describeResourceCost(state.resources, cost)}`, 'error');
+    }
+
+    const relationDelta = isOwnCountry ? 0 : relation < -60 ? 3 : 6;
+    const nextRelation = Math.max(-100, Math.min(200, relation + relationDelta));
+    return createNotice(
+      {
+        ...state,
+        resources: applyResourceDelta(state.resources, { gold: -(cost.gold || 0) }),
+        diplomacy: isOwnCountry ? state.diplomacy : upsertDiplomacyTarget(state.diplomacy, country, relationDelta),
+        nations: upsertNationTarget(state.nations, country, {
+          relation: nextRelation,
+          pressure: baseNation.pressure - (isOwnCountry ? 1 : 4),
+          threat: baseNation.threat - (relationDelta > 0 ? 2 : 0),
+          lastAction: isOwnCountry
+            ? 'Внутренний совет обновил повестку державы и снизил давление на центр.'
+            : `Российское посольство открыло осторожный канал с державой "${country.name}".`,
+        }),
+        letters: isOwnCountry
+          ? state.letters
+          : pushLetter(state.letters, {
+              tone: relation < -40 ? 'red' : 'gold',
+              from: country.name,
+              subject: relation < -40 ? 'Осторожный ответ на посольство' : 'Ответ на дипломатическую миссию',
+              time: 'только что',
+            }),
+        timelineEvents: pushTimeline(state.timelineEvents, {
+          icon: '◊',
+          tone: relation < -40 ? 'bronze' : 'green',
+          title: isOwnCountry ? 'Внутренний совет собран' : `Посольство направлено: ${country.name}`,
+          text: isOwnCountry
+            ? 'Совет сверил внутреннюю повестку, снизив управленческое давление на державу.'
+            : `Дипломаты потратили золото на миссию и улучшили отношения с целью "${country.name}" на ${relationDelta}.`,
+        }),
+      },
+      isOwnCountry ? 'Внутренний совет собран' : `Посольство отправлено: ${country.name}`,
+    );
+  }
+
+  if (id === 'gather-intel') {
+    const cost: ResourceDelta = { gold: 120 };
+    if (!canPay(state.resources, cost)) {
+      return createNotice(state, `Не хватает ресурсов для разведки: ${describeResourceCost(state.resources, cost)}`, 'error');
+    }
+
+    return createNotice(
+      {
+        ...state,
+        resources: applyResourceDelta(state.resources, { gold: -120 }),
+        diplomacy: isOwnCountry ? state.diplomacy : upsertDiplomacyTarget(state.diplomacy, country, 0),
+        nations: upsertNationTarget(state.nations, country, {
+          relation,
+          pressure: baseNation.pressure + (relation < -40 ? 2 : -2),
+          threat: baseNation.threat,
+          lastAction: `Разведка обновила досье по цели "${country.name}": фокус, давление и риски стали точнее.`,
+        }),
+        timelineEvents: pushTimeline(state.timelineEvents, {
+          icon: '◎',
+          tone: relation < -40 ? 'bronze' : 'blue',
+          title: `Досье обновлено: ${country.name}`,
+          text: `Канцелярия потратила золото на разведданные. Оценки по цели "${country.name}" стали надежнее для следующих решений.`,
+        }),
+      },
+      `Разведка обновила досье: ${country.name}`,
+    );
+  }
+
+  if (id === 'trade-mission') {
+    const preparedState = {
+      ...state,
+      diplomacy: isOwnCountry ? state.diplomacy : upsertDiplomacyTarget(state.diplomacy, country, 0),
+      nations: upsertNationTarget(state.nations, country, {
+        relation,
+        pressure: baseNation.pressure - (relation < -40 ? 0 : 2),
+        lastAction: `Торговый совет готовит маршрут к цели "${country.name}".`,
+      }),
+    };
+
+    return createStrategicOrder(preparedState, {
+      iconKey: 'anchor',
+      title: isOwnCountry ? 'Укрепить внутренние торговые линии' : `Открыть торговую миссию: ${country.name}`,
+      owner: 'Торговый совет',
+      target: country.name,
+      remainingTurns: relation < -40 ? 3 : 2,
+      totalTurns: relation < -40 ? 3 : 2,
+      cost: { gold: relation < -40 ? 520 : 360, grain: 180 },
+      reward: { gold: relation < -40 ? 950 : 1250, grain: 420 },
+      diplomacyDelta: isOwnCountry ? undefined : { [country.name]: relation < -40 ? 2 : 5 },
+      completeText: isOwnCountry
+        ? 'Внутренние торговые линии укреплены: сбор пошлин и движение зерна стали устойчивее.'
+        : `Торговая миссия к цели "${country.name}" принесла прибыль и укрепила дипломатический канал.`,
+      riskLevel: relation < -40 ? 'medium' : 'low',
+      successChance: relation < -40 ? 68 : 92,
+      failureCost: { gold: -180, grain: -120 },
+      failureDiplomacyDelta: isOwnCountry ? undefined : { [country.name]: relation < -40 ? -4 : -1 },
+      failureText: `Торговая миссия к цели "${country.name}" сорвалась: часть товаров потеряна, доверие к маршруту снизилось.`,
+    });
+  }
+
+  const preparedState = {
+    ...state,
+    diplomacy: isOwnCountry ? state.diplomacy : upsertDiplomacyTarget(state.diplomacy, country, 0),
+    nations: upsertNationTarget(state.nations, country, {
+      relation,
+      pressure: baseNation.pressure + (relation < -20 ? 4 : 1),
+      threat: baseNation.threat + (relation < -20 ? 5 : 2),
+      lastAction: `Военный совет подготовил ограниченную операцию по цели "${country.name}".`,
+    }),
+  };
+
+  return createStrategicOrder(preparedState, {
+    iconKey: relation < -20 ? 'swords' : 'shield',
+    title: isOwnCountry ? 'Подготовить резервную оборону державы' : `Подготовить ограниченную операцию: ${country.name}`,
+    owner: 'Генеральный штаб',
+    target: country.name,
+    remainingTurns: relation < -20 ? 3 : 2,
+    totalTurns: relation < -20 ? 3 : 2,
+    cost: { gold: 640, iron: 360, grain: 240 },
+    reward: { iron: 240 },
+    diplomacyDelta: isOwnCountry ? undefined : { [country.name]: relation < -20 ? -4 : -1 },
+    completeText: isOwnCountry
+      ? 'Резервная оборона державы развернута: армия получила снабжение и новые маршруты переброски.'
+      : `Ограниченная операция по цели "${country.name}" завершена. Штаб получил военное преимущество, но дипломатическое давление выросло.`,
+    riskLevel: relation < -20 ? 'high' : 'medium',
+    successChance: relation < -20 ? 58 : 78,
+    failureCost: { gold: -360, iron: -260, grain: -180, population: -0.1 },
+    failureDiplomacyDelta: isOwnCountry ? undefined : { [country.name]: relation < -20 ? -8 : -3 },
+    failureText: `Операция по цели "${country.name}" провалилась: снабжение потеряно, часть войска выбыла, политическое положение ухудшилось.`,
+  });
 }
 
 type ResolvedOrderOutcome = {
@@ -390,7 +621,27 @@ export function applyValidatedEffect(state: GameState, effect: EngineEffect): Ga
     ? { ...state, resources: applyResourceDelta(state.resources, effect.resourceDelta) }
     : state;
   const withDiplomacy = effect.diplomacyDelta
-    ? { ...withResources, diplomacy: applyDiplomacyDelta(withResources.diplomacy, effect.diplomacyDelta) }
+    ? Object.entries(effect.diplomacyDelta).reduce<GameState>((currentState, [countryName, delta]) => {
+        if (currentState.selectedCountry?.name === countryName) {
+          const diplomacy = upsertDiplomacyTarget(currentState.diplomacy, currentState.selectedCountry, delta);
+          const relation = diplomacy.find((item) => item.name === countryName)?.score ?? fallbackRelationForStatus(currentState.selectedCountry.status);
+          const baseNation = currentState.nations.find((nation) => nation.name === countryName) ||
+            buildFallbackNationProfile(currentState.selectedCountry, relation);
+
+          return {
+            ...currentState,
+            diplomacy,
+            nations: upsertNationTarget(currentState.nations, currentState.selectedCountry, {
+              relation,
+              pressure: baseNation.pressure + (delta < 0 ? Math.abs(delta) : -Math.max(1, delta)),
+              threat: baseNation.threat + (delta < 0 ? Math.ceil(Math.abs(delta) / 2) : -1),
+              lastAction: `Дипломатический канал с целью "${countryName}" обновлен через совет правителя.`,
+            }),
+          };
+        }
+
+        return { ...currentState, diplomacy: applyDiplomacyDelta(currentState.diplomacy, { [countryName]: delta }) };
+      }, withResources)
     : withResources;
   const withLetter = effect.letter ? { ...withDiplomacy, letters: pushLetter(withDiplomacy.letters, effect.letter) } : withDiplomacy;
   const withEvent = effect.eventTitle || effect.eventText

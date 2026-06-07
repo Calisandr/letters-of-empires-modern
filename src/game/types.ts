@@ -8,6 +8,8 @@ export type QuickActionId =
   | 'recruit-army'
   | 'diplomacy';
 
+export type CountryIntelActionId = 'send-envoy' | 'trade-mission' | 'gather-intel' | 'prepare-operation';
+
 export type DiplomacyTone = 'ally' | 'friendly' | 'neutral' | 'risk' | 'hostile';
 export type ResourceFormat = 'integer' | 'population';
 export type OrderStatusClass = 'moving' | 'progress' | 'cancelled' | 'completed' | 'failed';
@@ -197,5 +199,6 @@ export type GameAction =
   | { type: 'SELECT_COUNTRY'; country: SelectedCountry }
   | { type: 'SUBMIT_COUNCIL_MESSAGE'; text: string; time: string }
   | { type: 'RUN_QUICK_ACTION'; id: QuickActionId }
+  | { type: 'RUN_COUNTRY_INTEL_ACTION'; id: CountryIntelActionId; country: SelectedCountry }
   | { type: 'CANCEL_ORDER'; id: string }
   | { type: 'END_TURN' };

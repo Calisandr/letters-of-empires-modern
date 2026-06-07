@@ -50,6 +50,7 @@ import { gameReducer } from './game/reducer';
 import { loadGameState, saveGameState } from './game/storage';
 import type {
   ChatMessage,
+  CountryIntelActionId,
   DiplomacyRelation,
   Letter,
   NationProfile,
@@ -372,6 +373,13 @@ const quickActions: Array<{ id: QuickActionId; label: string; icon: LucideIcon; 
   { id: 'diplomacy', label: 'Дипломатия', icon: Handshake, toast: 'Дипломатические переговоры' },
 ];
 
+const countryIntelActions: Array<{ id: CountryIntelActionId; label: string; icon: LucideIcon; tone: string }> = [
+  { id: 'send-envoy', label: 'Посол', icon: Handshake, tone: 'diplomacy' },
+  { id: 'trade-mission', label: 'Торговля', icon: Anchor, tone: 'trade' },
+  { id: 'gather-intel', label: 'Разведка', icon: Search, tone: 'intel' },
+  { id: 'prepare-operation', label: 'Операция', icon: Swords, tone: 'military' },
+];
+
 const orderIcons: Record<OrderIconKey, LucideIcon> = {
   package: Package,
   swords: Swords,
@@ -449,11 +457,32 @@ function clampStat(value: number) {
 
 function getCountryFlagView(countryKey?: string, countryName?: string, fallbackFlag?: string) {
   const legacyCode = fallbackFlag ? codeByFlagClass[fallbackFlag] : undefined;
-  const code = countryFlagCodes[countryKey || ''] || countryFlagCodes[countryName || ''] || legacyCode;
+  const fallbackCode = fallbackFlag ? countryFlagCodes[fallbackFlag] : undefined;
+  const code = countryFlagCodes[countryKey || ''] || countryFlagCodes[countryName || ''] || fallbackCode || legacyCode;
   if (code) return { className: `flag-svg fi fi-${code.toLowerCase()}`, code };
   if (fallbackFlag && fallbackFlag !== 'neutral') return { className: fallbackFlag, code: '' };
 
   return { className: 'neutral', code: '' };
+}
+
+function CountryFlagMark({
+  countryKey,
+  countryName,
+  fallbackFlag,
+}: {
+  countryKey?: string;
+  countryName?: string;
+  fallbackFlag?: string;
+}) {
+  const flagView = getCountryFlagView(countryKey, countryName, fallbackFlag);
+
+  return (
+    <span
+      className={`flag ${flagView.className}`}
+      title={flagView.code ? `Флаг: ${flagView.code}` : undefined}
+      aria-hidden="true"
+    />
+  );
 }
 
 function fallbackRelation(status: string) {
@@ -562,16 +591,19 @@ function CountryIntelPanel({
   diplomacy,
   worldEvents,
   onClose,
+  onCountryAction,
 }: {
   selectedCountry: SelectedCountry | null;
   nations: NationProfile[];
   diplomacy: DiplomacyRelation[];
   worldEvents: WorldEvent[];
   onClose: () => void;
+  onCountryAction: (id: CountryIntelActionId, country: SelectedCountry) => void;
 }) {
+  const selected = selectedCountry || { key: 'Russia', name: playerCountry.name, status: 'russia' };
   const intel = getCountryIntel(selectedCountry, nations, diplomacy, worldEvents);
   const relationText = intel.relation > 0 ? `+${intel.relation}` : String(intel.relation);
-  const flagView = getCountryFlagView(selectedCountry?.key || intel.id, intel.name, intel.flag);
+  const flagView = getCountryFlagView(selected.key || intel.id, intel.name, intel.flag);
 
   return (
     <aside className="country-intel" aria-label="Разведка выбранной страны">
@@ -623,6 +655,27 @@ function CountryIntelPanel({
           <dd>{visibleStat(intel.army, intel.relation, selectedCountry?.status || 'russia', true)}</dd>
         </div>
       </dl>
+      <div className="country-intel-actions" aria-label={`Действия по стране: ${intel.name}`}>
+        {countryIntelActions.map((action) => {
+          const ActionIcon = action.icon;
+
+          return (
+            <button
+              key={action.id}
+              type="button"
+              className={`country-intel-action ${action.tone}`}
+              aria-label={`${action.label}: ${intel.name}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onCountryAction(action.id, selected);
+              }}
+            >
+              <ActionIcon aria-hidden="true" />
+              <span>{action.label}</span>
+            </button>
+          );
+        })}
+      </div>
       <p>{intel.relatedEvent?.text || intel.lastAction}</p>
       <small>{intel.isDetailed ? 'Досье обновляется каждый ход.' : 'Базовое досье: точность растет через дипломатию и разведку.'}</small>
     </aside>
@@ -1100,6 +1153,10 @@ function App() {
     runQuickAction(id);
   };
 
+  const handleCountryIntelAction = (id: CountryIntelActionId, country: SelectedCountry) => {
+    dispatchGame({ type: 'RUN_COUNTRY_INTEL_ACTION', id, country });
+  };
+
   const confirmPendingQuickAction = () => {
     if (!pendingQuickAction) return;
     runQuickAction(pendingQuickAction);
@@ -1218,6 +1275,7 @@ function App() {
                   diplomacy={diplomacy}
                   worldEvents={worldEvents}
                   onClose={() => setClosedIntelKey(activeIntelKey)}
+                  onCountryAction={handleCountryIntelAction}
                 />
               ) : null}
               <div className="map-title-label">Северный Ледовитый океан</div>
@@ -1916,7 +1974,7 @@ function RightPanel({
 
             return (
               <li key={item.name}>
-                <span className={`flag ${item.flag}`} />
+                <CountryFlagMark countryName={item.name} fallbackFlag={item.flag} />
                 <b>{item.name}</b>
                 <em className={item.tone}>{item.status}</em>
                 <strong>{item.score > 0 ? `+${item.score}` : item.score}</strong>

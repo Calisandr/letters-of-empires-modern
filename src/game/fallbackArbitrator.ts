@@ -178,6 +178,7 @@ export function validateEngineEffect(decision: AiArbitrationDecision, state: Gam
 
   if (effect.diplomacyDelta) {
     const knownCountries = new Set(state.diplomacy.map((relation) => relation.name));
+    if (state.selectedCountry) knownCountries.add(state.selectedCountry.name);
     for (const [country, value] of Object.entries(effect.diplomacyDelta)) {
       if (!knownCountries.has(country)) return { kind: 'blocked', reason: 'AI выбрал неизвестную дипломатическую цель.' };
       if (value < -12 || value > 8) return { kind: 'blocked', reason: 'AI вернул слишком сильный дипломатический эффект.' };
