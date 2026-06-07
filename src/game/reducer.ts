@@ -11,6 +11,7 @@ import {
   pushLetter,
   pushTimeline,
   dismissOperationPlan,
+  respondToLetter,
   runCountryIntelAction,
   runOperationPlan,
   runStrategicResponse,
@@ -210,6 +211,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
   if (action.type === 'RUN_STRATEGIC_RESPONSE') return runStrategicResponse(state, action.id);
   if (action.type === 'RUN_OPERATION_PLAN') return runOperationPlan(state, action.id);
   if (action.type === 'DISMISS_OPERATION_PLAN') return dismissOperationPlan(state, action.id);
+  if (action.type === 'RESPOND_TO_LETTER') return respondToLetter(state, action.letterId, action.responseId);
   if (action.type === 'CANCEL_ORDER') return cancelOrder(state, action.id);
   if (action.type === 'END_TURN') return endTurn(state);
 

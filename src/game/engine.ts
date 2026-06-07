@@ -8,6 +8,7 @@ import type {
   EngineEffect,
   GameState,
   Letter,
+  LetterResponseOption,
   NationDelta,
   NationProfile,
   Order,
@@ -117,6 +118,34 @@ function fallbackRelationForStatus(status: string) {
   return -6;
 }
 
+const diplomacyFlagByName: Record<string, string> = {
+  Аргентина: 'argentina',
+  Бразилия: 'brazil',
+  Великобритания: 'uk',
+  Германия: 'germany',
+  Индия: 'india',
+  Испания: 'spain',
+  Китай: 'china',
+  Россия: 'russia',
+  Турция: 'turkey',
+  Украина: 'ukraine',
+  Франция: 'france',
+  Япония: 'japan',
+};
+
+function countryKeyForDiplomacyName(name: string) {
+  return diplomacyFlagByName[name] || name.toLowerCase();
+}
+
+function statusKeyFromRelation(score: number) {
+  const tone = relationTone(score);
+  if (tone === 'ally') return 'ally';
+  if (tone === 'friendly') return 'friendly';
+  if (tone === 'risk') return 'risk';
+  if (tone === 'hostile') return 'hostile';
+  return 'neutral';
+}
+
 export function relationTone(score: number): DiplomacyRelation['tone'] {
   if (score >= 100) return 'ally';
   if (score >= 50) return 'friendly';
@@ -179,6 +208,23 @@ function applyNationDeltaToNations(nations: NationProfile[], delta: Record<strin
   });
 }
 
+function applyDiplomacyDeltaWithUpserts(relations: DiplomacyRelation[], delta: Record<string, number> = {}) {
+  return Object.entries(delta).reduce<DiplomacyRelation[]>((nextRelations, [name, change]) => {
+    const existing = nextRelations.find((relation) => relation.name === name);
+    const score = clampRelation((existing?.score ?? 0) + change);
+    const nextRelation: DiplomacyRelation = {
+      flag: existing?.flag || countryKeyForDiplomacyName(name),
+      name,
+      score,
+      status: relationStatus(score),
+      tone: relationTone(score),
+    };
+
+    if (!existing) return [nextRelation, ...nextRelations];
+    return nextRelations.map((relation) => (relation.name === name ? { ...relation, ...nextRelation } : relation));
+  }, relations);
+}
+
 function upsertDiplomacyTarget(relations: DiplomacyRelation[], country: SelectedCountry, delta = 0) {
   const existing = relations.find((relation) => relation.name === country.name);
   const baseScore = existing?.score ?? fallbackRelationForStatus(country.status);
@@ -222,6 +268,31 @@ function buildFallbackNationProfile(country: SelectedCountry, relation: number):
     ],
     lastAction: 'Открытых донесений пока мало: нужна дипломатия, торговля или разведка.',
   };
+}
+
+function applyNationDeltaWithUpserts(
+  nations: NationProfile[],
+  delta: Record<string, NationDelta> = {},
+  relations: DiplomacyRelation[],
+) {
+  const updated = applyNationDeltaToNations(nations, delta);
+
+  return Object.entries(delta).reduce<NationProfile[]>((nextNations, [name, nationDelta]) => {
+    if (nextNations.some((nation) => nation.name === name)) return nextNations;
+
+    const relation = relations.find((item) => item.name === name)?.score ?? 0;
+    const fallback = buildFallbackNationProfile(
+      {
+        key: countryKeyForDiplomacyName(name),
+        name,
+        status: statusKeyFromRelation(relation),
+      },
+      relation,
+    );
+    const [withDelta] = applyNationDeltaToNations([fallback], { [name]: nationDelta });
+
+    return [withDelta, ...nextNations];
+  }, updated);
 }
 
 function upsertNationTarget(
@@ -438,6 +509,132 @@ export function pushLetter(letters: Letter[], letter: Letter) {
   }
 
   return [letter, ...letters].slice(0, MAX_LETTERS);
+}
+
+export function getLetterRuntimeId(letter: Letter, index = 0) {
+  return letter.id || `legacy-letter-${index}-${letter.from}-${letter.subject}`;
+}
+
+function isInternalLetter(letter: Letter) {
+  return ['Военный совет', 'Совет', 'Совет империи', 'Канцелярия'].includes(letter.from);
+}
+
+function defaultLetterResponses(letter: Letter): LetterResponseOption[] {
+  if (isInternalLetter(letter)) {
+    return [
+      {
+        id: 'acknowledge',
+        label: 'Принять к сведению',
+        summary: 'Закрыть внутреннее донесение без изменения ресурсов и дипломатии.',
+        tone: 'neutral',
+        timelineTitle: 'Донесение принято',
+        timelineText: `Правитель принял к сведению письмо "${letter.subject}".`,
+      },
+    ];
+  }
+
+  const tense = letter.tone === 'red' || letter.tone === 'burgundy';
+
+  return [
+    {
+      id: 'cooperate',
+      label: tense ? 'Смягчить ответ' : 'Поддержать предложение',
+      summary: tense
+        ? `Потратить золото на осторожный ответ и снизить напряжение с державой "${letter.from}".`
+        : `Открыть рабочий канал с державой "${letter.from}" и улучшить отношения.`,
+      tone: 'support',
+      resourceDelta: tense ? { gold: -120 } : { gold: -80 },
+      diplomacyDelta: { [letter.from]: tense ? 3 : 5 },
+      nationDelta: { [letter.from]: { pressure: tense ? -3 : -4, threat: tense ? -1 : -2 } },
+      timelineTitle: `Ответ отправлен: ${letter.from}`,
+      timelineText: `Канцелярия поддержала письмо "${letter.subject}" и открыла рабочий канал с державой "${letter.from}".`,
+    },
+    {
+      id: 'cautious',
+      label: 'Запросить условия',
+      summary: 'Ответить осторожно без крупных обязательств: отношения немного растут, но вопрос остается открытым.',
+      tone: 'neutral',
+      diplomacyDelta: { [letter.from]: 2 },
+      nationDelta: { [letter.from]: { pressure: 1 } },
+      timelineTitle: `Условия запрошены: ${letter.from}`,
+      timelineText: `Россия запросила дополнительные условия по письму "${letter.subject}" от державы "${letter.from}".`,
+    },
+    {
+      id: 'refuse',
+      label: 'Отказать',
+      summary: 'Сохранить ресурсы, но ухудшить отношения и поднять давление у отправителя.',
+      tone: 'warning',
+      diplomacyDelta: { [letter.from]: tense ? -3 : -5 },
+      nationDelta: { [letter.from]: { pressure: 4, threat: tense ? 3 : 1 } },
+      timelineTitle: `Письмо отклонено: ${letter.from}`,
+      timelineText: `Канцелярия отказала по письму "${letter.subject}". Держава "${letter.from}" восприняла ответ холодно.`,
+    },
+  ];
+}
+
+export function getLetterResponseOptions(letter: Letter) {
+  return letter.responses?.length ? letter.responses : defaultLetterResponses(letter);
+}
+
+function resourceCostFromDelta(delta: ResourceDelta = {}) {
+  return Object.fromEntries(
+    Object.entries(delta)
+      .filter(([, value]) => value < 0)
+      .map(([key, value]) => [key, Math.abs(value)]),
+  ) as ResourceDelta;
+}
+
+export function respondToLetter(state: GameState, letterId: string, responseId: string): GameState {
+  const letterIndex = state.letters.findIndex((letter, index) => getLetterRuntimeId(letter, index) === letterId);
+  const letter = letterIndex >= 0 ? state.letters[letterIndex] : null;
+
+  if (!letter) return createNotice(state, 'Письмо не найдено', 'error');
+  if (letter.status === 'answered') return createNotice(state, 'На это письмо уже ответили', 'error');
+
+  const response = getLetterResponseOptions(letter).find((item) => item.id === responseId);
+  if (!response) return createNotice(state, 'Вариант ответа не найден', 'error');
+
+  const cost = resourceCostFromDelta(response.resourceDelta);
+  if (!canPay(state.resources, cost)) {
+    return createNotice(state, `Не хватает ресурсов для ответа: ${describeResourceCost(state.resources, cost)}`, 'error');
+  }
+
+  const diplomacy = applyDiplomacyDeltaWithUpserts(state.diplomacy, response.diplomacyDelta);
+  const nations = applyNationDeltaWithUpserts(state.nations, response.nationDelta, diplomacy).map((nation) => {
+    if (!response.nationDelta?.[nation.name]) return nation;
+    return {
+      ...nation,
+      lastAction: `Канцелярия ответила на письмо "${letter.subject}": ${response.label}.`,
+    };
+  });
+
+  return createNotice(
+    {
+      ...state,
+      resources: applyResourceDelta(state.resources, response.resourceDelta),
+      diplomacy,
+      nations,
+      letters: state.letters.map((item, index) =>
+        index === letterIndex
+          ? {
+              ...item,
+              id: getLetterRuntimeId(item, index),
+              status: 'answered',
+              answeredBy: response.label,
+              responses: getLetterResponseOptions(item),
+              time: 'решено',
+            }
+          : item,
+      ),
+      timelineEvents: pushTimeline(state.timelineEvents, {
+        icon: '✉',
+        tone: response.tone === 'danger' ? 'red' : response.tone === 'support' ? 'green' : 'bronze',
+        title: response.timelineTitle,
+        text: response.timelineText,
+      }),
+    },
+    `Ответ отправлен: ${letter.from}`,
+  );
 }
 
 export function createStrategicOrder(state: GameState, order: OrderDraft): GameState {

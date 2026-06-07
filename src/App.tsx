@@ -44,7 +44,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import worldMapSvg from './assets/world-map.svg?raw';
-import { oncePerTurnQuickActions } from './game/engine';
+import { getLetterResponseOptions, getLetterRuntimeId, oncePerTurnQuickActions } from './game/engine';
 import { formatClock, formatResourceTrend, formatResourceValue } from './game/formatters';
 import { playerCountry } from './game/initialState';
 import { buildMapSignals, filterMapSignalsForMode, type MapModeId, type MapSignal } from './game/mapIntel';
@@ -1750,6 +1750,7 @@ function App() {
           nations={nations}
           worldEvents={worldEvents}
           onComposeLetter={() => handleQuickAction('compose-letter')}
+          onRespondLetter={(letterId, responseId) => dispatchGame({ type: 'RESPOND_TO_LETTER', letterId, responseId })}
           showToast={showToast}
         />
       </div>
@@ -1886,7 +1887,7 @@ function UtilityPanel({
       action: `Активных приказов: ${orderCount}/5. Входящих писем: ${mailCount}.`,
     },
     Почта: {
-      text: `Во входящих сейчас ${mailCount} писем. Новые ответы приходят после дипломатических действий и завершения приказов.`,
+      text: `Во входящих сейчас ${mailCount} писем. Каждое важное письмо можно открыть и выбрать дипломатический ответ с последствиями.`,
       action: 'Кнопка "Написать" справа отправляет исходящее письмо через канцелярию.',
     },
     Уведомления: {
@@ -1911,7 +1912,7 @@ function UtilityPanel({
     },
     Письма: {
       text: `Канцелярия справа ведет входящую переписку. Входящих сейчас: ${mailCount}.`,
-      action: 'Исходящие письма идут в хронику, а входящие появляются как ответы мира.',
+      action: 'Откройте письмо справа, чтобы принять сделку, запросить условия или отказать с реальными последствиями.',
     },
     Приказы: {
       text: `Активных приказов: ${orderCount}/5. Создание приказа открывает подтверждение и проверку казны.`,
@@ -2373,6 +2374,7 @@ function RightPanel({
   nations,
   worldEvents,
   onComposeLetter,
+  onRespondLetter,
   showToast,
 }: {
   timeline: TimelineEvent[];
@@ -2381,9 +2383,29 @@ function RightPanel({
   nations: NationProfile[];
   worldEvents: WorldEvent[];
   onComposeLetter: () => void;
+  onRespondLetter: (letterId: string, responseId: string) => void;
   showToast: (message: string) => void;
 }) {
   const latestWorldEvent = worldEvents[0];
+  const [selectedLetterId, setSelectedLetterId] = useState<string | null>(null);
+  const selectedLetterEntry =
+    letters
+      .map((letter, index) => ({
+        letter,
+        index,
+        id: getLetterRuntimeId(letter, index),
+      }))
+      .find((entry) => entry.id === selectedLetterId) ||
+    (letters[0]
+      ? {
+          letter: letters[0],
+          index: 0,
+          id: getLetterRuntimeId(letters[0], 0),
+        }
+      : null);
+  const selectedLetter = selectedLetterEntry?.letter || null;
+  const selectedResponses = selectedLetter ? getLetterResponseOptions(selectedLetter) : [];
+  const selectedLetterAnswered = selectedLetter?.status === 'answered';
 
   return (
     <motion.aside
@@ -2430,16 +2452,66 @@ function RightPanel({
             Написать
           </button>
         </div>
-        {letters.map((letter, index) => (
-          <article key={`${letter.from}-${letter.subject}-${index}`}>
-            <span className={`letter-seal ${letter.tone}`}>✉</span>
-            <div>
-              <h3>{letter.from}</h3>
-              <p>Тема: {letter.subject}</p>
+        <div className="mail-list" aria-label="Список входящих писем">
+          {letters.map((letter, index) => {
+            const letterId = getLetterRuntimeId(letter, index);
+            const isSelected = selectedLetterEntry?.id === letterId;
+            const isAnswered = letter.status === 'answered';
+
+            return (
+              <article
+                key={letterId}
+                className={`mail-item${isSelected ? ' selected' : ''}${isAnswered ? ' answered' : ''}`}
+              >
+                <button
+                  type="button"
+                  className="mail-row-button"
+                  aria-pressed={isSelected}
+                  onClick={() => setSelectedLetterId(letterId)}
+                >
+                  <span className={`letter-seal ${letter.tone}`}>✉</span>
+                  <div>
+                    <h3>{letter.from}</h3>
+                    <p>Тема: {letter.subject}</p>
+                  </div>
+                  <time>{isAnswered ? 'решено' : letter.time}</time>
+                </button>
+              </article>
+            );
+          })}
+        </div>
+        {selectedLetter ? (
+          <section className={`letter-detail ${selectedLetterAnswered ? 'answered' : ''}`} aria-label={`Письмо: ${selectedLetter.subject}`}>
+            <header>
+              <CountryFlagMark
+                countryKey={countryKeyByLocalizedName[selectedLetter.from]}
+                countryName={selectedLetter.from}
+                fallbackFlag={countryKeyByLocalizedName[selectedLetter.from]}
+              />
+              <div>
+                <b>{selectedLetter.subject}</b>
+                <small>{selectedLetter.from}</small>
+              </div>
+              <em>{selectedLetterAnswered ? selectedLetter.answeredBy || 'решено' : 'ожидает ответа'}</em>
+            </header>
+            <p>{selectedLetter.body || `Канцелярия ждёт решения по письму "${selectedLetter.subject}".`}</p>
+            <div className="letter-response-list">
+              {selectedResponses.map((response) => (
+                <button
+                  key={response.id}
+                  type="button"
+                  className={`letter-response ${response.tone}`}
+                  disabled={selectedLetterAnswered}
+                  aria-label={`Ответить на письмо: ${response.label}`}
+                  onClick={() => selectedLetterEntry && onRespondLetter(selectedLetterEntry.id, response.id)}
+                >
+                  <span>{response.label}</span>
+                  <small>{response.summary}</small>
+                </button>
+              ))}
             </div>
-            <time>{letter.time}</time>
-          </article>
-        ))}
+          </section>
+        ) : null}
         <button className="show-all" type="button" onClick={() => showToast('Показать все письма')}>
           Показать все письма
         </button>

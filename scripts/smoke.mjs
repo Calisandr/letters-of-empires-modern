@@ -227,6 +227,22 @@ try {
       allianceSelected: alliance?.getAttribute('aria-selected') === 'true',
     };
   });
+  const letterResponseBefore = await page.evaluate(() => ({
+    hasDetail: Boolean(document.querySelector('.letter-detail')),
+    responseCount: document.querySelectorAll('.letter-response').length,
+    firstResponse: document.querySelector('.letter-response span')?.textContent?.trim() || '',
+  }));
+  await page.locator('.letter-response').first().click();
+  await page.waitForTimeout(120);
+  const letterResponseAfter = await page.evaluate(() => ({
+    answeredCount: document.querySelectorAll('.mail-item.answered').length,
+    selectedStatus: document.querySelector('.letter-detail em')?.textContent?.trim() || '',
+    timelineTop: document.querySelector('.timeline-panel article h3')?.textContent?.trim() || '',
+    timelineHasResponse: [...document.querySelectorAll('.timeline-panel article h3')].some((node) =>
+      node.textContent?.includes('Ответ отправлен') || node.textContent?.includes('торговый канал'),
+    ),
+    responseDisabled: Boolean(document.querySelector('.letter-response')?.disabled),
+  }));
 
   await page.locator('.order-card').first().locator('button').last().click();
   const cancelledStyle = await page.locator('.order-card').first().evaluate((node) => ({
@@ -416,6 +432,8 @@ try {
     countryIntelActionDiagnostics,
     countryIntelClosed,
     chatTabDiagnostics,
+    letterResponseBefore,
+    letterResponseAfter,
     chatAdded: chatText.includes('React smoke message'),
     cancelledStyle,
     dialogOpened,
@@ -459,6 +477,11 @@ try {
     !result.chatAdded ||
     chatTabDiagnostics.activeText !== 'Альянс' ||
     !chatTabDiagnostics.allianceSelected ||
+    !letterResponseBefore.hasDetail ||
+    letterResponseBefore.responseCount < 2 ||
+    letterResponseAfter.answeredCount < 1 ||
+    !letterResponseAfter.responseDisabled ||
+    !letterResponseAfter.timelineHasResponse ||
     !dialogOpened ||
     !orderCounterAfterDialog?.includes('(3/5)') ||
     !composeAction.composeButtonDisabled ||

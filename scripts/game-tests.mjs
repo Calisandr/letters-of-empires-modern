@@ -11,7 +11,9 @@ const clone = (value) => structuredClone(value);
 try {
   const { initialGameState } = await server.ssrLoadModule('/src/game/initialState.ts');
   const { gameReducer } = await server.ssrLoadModule('/src/game/reducer.ts');
-  const { applyValidatedEffect, createStrategicOrder, endTurn } = await server.ssrLoadModule('/src/game/engine.ts');
+  const { applyValidatedEffect, createStrategicOrder, endTurn, getLetterRuntimeId } = await server.ssrLoadModule(
+    '/src/game/engine.ts',
+  );
   const { buildMapSignals, filterMapSignalsForMode } = await server.ssrLoadModule('/src/game/mapIntel.ts');
   const { fallbackJudgeCouncilCommand, validateEngineEffect } = await server.ssrLoadModule(
     '/src/game/fallbackArbitrator.ts',
@@ -83,6 +85,30 @@ try {
 
     assert.equal(next.orders.length, state.orders.length);
     assert.ok(next.chatMessages.some((message) => message.faction === 'Совет'));
+  });
+
+  test('letter response applies diplomacy and marks the letter answered', () => {
+    const state = clone(initialGameState);
+    const letterId = getLetterRuntimeId(state.letters[0], 0);
+    const next = gameReducer(state, { type: 'RESPOND_TO_LETTER', letterId, responseId: 'accept-trade' });
+
+    assert.equal(next.letters[0].status, 'answered');
+    assert.equal(next.letters[0].answeredBy, 'Принять торговлю');
+    assert.ok(next.diplomacy.find((relation) => relation.name === 'Франция').score > 75);
+    assert.ok(next.resources.find((resource) => resource.id === 'gold').value < state.resources.find((resource) => resource.id === 'gold').value);
+    assert.ok(next.timelineEvents[0].title.includes('Французский торговый канал'));
+  });
+
+  test('letter response can create a new diplomacy and nation dossier target', () => {
+    const state = clone(initialGameState);
+    const letterIndex = state.letters.findIndex((letter) => letter.from === 'Аргентина');
+    const letterId = getLetterRuntimeId(state.letters[letterIndex], letterIndex);
+    const next = gameReducer(state, { type: 'RESPOND_TO_LETTER', letterId, responseId: 'resource-exchange' });
+
+    assert.ok(next.diplomacy.some((relation) => relation.name === 'Аргентина'));
+    assert.ok(next.nations.some((nation) => nation.name === 'Аргентина'));
+    assert.equal(next.letters[letterIndex].status, 'answered');
+    assert.ok(next.resources.find((resource) => resource.id === 'gold').value > state.resources.find((resource) => resource.id === 'gold').value);
   });
 
   test('diplomatic council command changes selected relation safely', () => {

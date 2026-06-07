@@ -115,10 +115,29 @@ export type TimelineEvent = {
 };
 
 export type Letter = {
+  id?: string;
   tone: string;
   from: string;
   subject: string;
   time: string;
+  body?: string;
+  status?: 'open' | 'answered';
+  answeredBy?: string;
+  responses?: LetterResponseOption[];
+};
+
+export type LetterResponseTone = 'support' | 'neutral' | 'warning' | 'danger';
+
+export type LetterResponseOption = {
+  id: string;
+  label: string;
+  summary: string;
+  tone: LetterResponseTone;
+  resourceDelta?: ResourceDelta;
+  diplomacyDelta?: Record<string, number>;
+  nationDelta?: Record<string, NationDelta>;
+  timelineTitle: string;
+  timelineText: string;
 };
 
 export type DiplomacyRelation = {
@@ -285,5 +304,6 @@ export type GameAction =
   | { type: 'RUN_STRATEGIC_RESPONSE'; id: string }
   | { type: 'RUN_OPERATION_PLAN'; id: string }
   | { type: 'DISMISS_OPERATION_PLAN'; id: string }
+  | { type: 'RESPOND_TO_LETTER'; letterId: string; responseId: string }
   | { type: 'CANCEL_ORDER'; id: string }
   | { type: 'END_TURN' };

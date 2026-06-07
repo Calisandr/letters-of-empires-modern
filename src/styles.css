@@ -1628,6 +1628,204 @@ input:focus-visible,
   background: rgba(97, 67, 28, .42);
 }
 
+.mail-list {
+  flex: 0 0 76px;
+  display: grid;
+  gap: 3px;
+  height: 76px;
+  min-height: 0;
+  max-height: 76px;
+  overflow: auto;
+  padding: 0 8px;
+  contain: layout paint;
+}
+
+.mail-panel .mail-item {
+  flex: 0 0 auto;
+  display: block;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid rgba(205, 162, 85, .12);
+  background: rgba(4, 11, 12, .32);
+  overflow: hidden;
+}
+
+.mail-panel .mail-item.selected {
+  border-color: rgba(244, 200, 105, .42);
+  background: rgba(65, 48, 23, .28);
+}
+
+.mail-panel .mail-item.answered {
+  opacity: .68;
+}
+
+.mail-row-button {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 7px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mail-row-button:hover,
+.mail-row-button:focus-visible {
+  background: rgba(205, 162, 85, .08);
+}
+
+.mail-row-button > div {
+  min-width: 0;
+}
+
+.mail-row-button h3,
+.mail-row-button p,
+.mail-row-button time {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mail-row-button p {
+  display: none;
+}
+
+.letter-detail {
+  flex: 1 1 auto;
+  display: grid;
+  gap: 6px;
+  margin: 7px 9px 0;
+  padding: 8px;
+  min-height: 0;
+  max-height: 138px;
+  overflow: auto;
+  border: 1px solid rgba(205, 162, 85, .2);
+  background: rgba(3, 9, 10, .5);
+}
+
+.letter-detail header {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 7px;
+}
+
+.letter-detail header .flag {
+  --flag-w: 25px;
+  --flag-h: 17px;
+}
+
+.letter-detail b,
+.letter-detail small,
+.letter-detail em,
+.letter-detail p {
+  min-width: 0;
+}
+
+.letter-detail b {
+  display: block;
+  overflow: hidden;
+  color: #f0cf78;
+  font: 700 12.4px/1.1 var(--serif);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.letter-detail header small,
+.letter-detail em {
+  color: rgba(166, 185, 162, .82);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.letter-detail em {
+  max-width: 88px;
+  overflow: hidden;
+  color: #d9bf77;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.letter-detail p {
+  margin: 0;
+  color: rgba(226, 219, 188, .9);
+  font-size: 10.8px;
+  line-height: 1.28;
+}
+
+.mail-panel .show-all {
+  flex-basis: 26px;
+  height: 26px;
+  margin-top: 5px;
+  margin-bottom: 7px;
+}
+
+.letter-response-list {
+  display: grid;
+  gap: 5px;
+  min-height: 0;
+}
+
+.letter-response {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-height: 38px;
+  padding: 6px 7px;
+  border: 1px solid rgba(205, 162, 85, .18);
+  background: rgba(8, 16, 15, .68);
+  color: rgba(226, 219, 188, .9);
+  text-align: left;
+  cursor: pointer;
+}
+
+.letter-response span,
+.letter-response small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.letter-response span {
+  color: #ffe08d;
+  font: 700 10.8px/1 var(--serif);
+}
+
+.letter-response small {
+  color: rgba(166, 185, 162, .84);
+  font-size: 9.8px;
+}
+
+.letter-response.support {
+  border-color: rgba(126, 189, 128, .3);
+  background: rgba(14, 35, 24, .42);
+}
+
+.letter-response.warning,
+.letter-response.danger {
+  border-color: rgba(219, 101, 88, .28);
+  background: rgba(41, 18, 16, .35);
+}
+
+.letter-response:hover,
+.letter-response:focus-visible {
+  border-color: rgba(246, 206, 116, .7);
+  background: rgba(92, 64, 31, .38);
+}
+
+.letter-response:disabled {
+  cursor: default;
+  opacity: .52;
+}
+
 .chat-input .emoji,
 .chat-input .send {
   flex: 0 0 auto;
@@ -1776,6 +1974,43 @@ input:focus-visible,
     align-self: start;
     padding-top: 1px;
     font-size: 10.6px;
+  }
+
+  .mail-list {
+    flex-basis: 74px;
+    height: 74px;
+    max-height: 74px;
+    padding-inline: 9px;
+  }
+
+  .mail-panel .mail-item {
+    flex: 0 0 auto;
+    display: block;
+    padding: 0;
+  }
+
+  .mail-row-button {
+    grid-template-columns: 27px minmax(0, 1fr) max-content;
+    min-height: 29px;
+    padding: 4px 7px;
+  }
+
+  .mail-row-button p {
+    -webkit-line-clamp: 1;
+  }
+
+  .letter-detail {
+    flex: 0 0 auto;
+    max-height: 140px;
+    overflow: auto;
+  }
+
+  .letter-detail p {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    font-size: 11px;
   }
 
   .show-all {
