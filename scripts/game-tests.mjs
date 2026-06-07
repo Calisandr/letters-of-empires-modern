@@ -12,6 +12,7 @@ try {
   const { initialGameState } = await server.ssrLoadModule('/src/game/initialState.ts');
   const { gameReducer } = await server.ssrLoadModule('/src/game/reducer.ts');
   const { applyValidatedEffect, createStrategicOrder, endTurn } = await server.ssrLoadModule('/src/game/engine.ts');
+  const { buildMapSignals, filterMapSignalsForMode } = await server.ssrLoadModule('/src/game/mapIntel.ts');
   const { fallbackJudgeCouncilCommand, validateEngineEffect } = await server.ssrLoadModule(
     '/src/game/fallbackArbitrator.ts',
   );
@@ -170,6 +171,45 @@ try {
     assert.equal(order.target, 'Бразилия');
     assert.equal(order.iconKey, 'anchor');
     assert.ok(next.diplomacy.some((item) => item.name === 'Бразилия'));
+  });
+
+  test('map intel highlights trade and strategy targets from game state', () => {
+    const countryKeys = {
+      Россия: 'Russia',
+      Индия: 'India',
+      Украина: 'Ukraine',
+      Бразилия: 'Brazil',
+    };
+    const signals = buildMapSignals(clone(initialGameState), countryKeys);
+    const tradeSignals = filterMapSignalsForMode(signals, 'trade');
+    const strategySignals = filterMapSignalsForMode(signals, 'strategy');
+    const india = tradeSignals.find((signal) => signal.countryKey === 'India');
+    const ukraine = strategySignals.find((signal) => signal.countryKey === 'Ukraine');
+
+    assert.ok(india);
+    assert.equal(india.marker, 'trade');
+    assert.ok(india.activeOrders > 0);
+    assert.ok(ukraine);
+    assert.ok(['military', 'threat'].includes(ukraine.marker));
+    assert.ok(ukraine.severity >= 70);
+  });
+
+  test('map intel includes newly created country trade target', () => {
+    const countryKeys = {
+      Россия: 'Russia',
+      Индия: 'India',
+      Украина: 'Ukraine',
+      Бразилия: 'Brazil',
+    };
+    const country = { key: 'Brazil', name: 'Бразилия', status: 'friendly' };
+    const selected = gameReducer(clone(initialGameState), { type: 'SELECT_COUNTRY', country });
+    const next = gameReducer(selected, { type: 'RUN_COUNTRY_INTEL_ACTION', id: 'trade-mission', country });
+    const signals = buildMapSignals(next, countryKeys);
+    const brazil = filterMapSignalsForMode(signals, 'trade').find((signal) => signal.countryKey === 'Brazil');
+
+    assert.ok(brazil);
+    assert.equal(brazil.marker, 'trade');
+    assert.ok(brazil.activeOrders > 0);
   });
 
   test('engine blocks over-limit order creation', () => {

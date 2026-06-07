@@ -442,8 +442,185 @@ input:focus-visible,
 }
 
 .map-zoom-layer {
+  position: absolute;
+  inset: 0;
   will-change: transform;
   transform-origin: center center;
+}
+
+.world-map-svg-frame {
+  position: absolute;
+  inset: 0;
+}
+
+.map-live-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.map-canvas[data-layer-intel="off"] .map-live-overlay {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.map-live-link-layer,
+.map-live-marker-layer {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.map-live-link-layer {
+  width: 100%;
+  height: 100%;
+}
+
+.map-live-link {
+  fill: none;
+  stroke: rgba(218, 178, 92, .52);
+  stroke-width: 1.05;
+  stroke-linecap: round;
+  stroke-dasharray: 3 7;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 3px rgba(226, 180, 86, .22));
+  opacity: .68;
+}
+
+.map-live-link.trade {
+  stroke: rgba(112, 202, 210, .68);
+}
+
+.map-live-link.military,
+.map-live-link.threat,
+.map-live-link.hostile {
+  stroke: rgba(222, 103, 82, .72);
+}
+
+.map-signal-marker {
+  display: inline-grid;
+  width: max-content;
+  max-width: 128px;
+  min-width: 92px;
+  height: 30px;
+  grid-template-columns: 23px minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  padding: 0 7px 0 4px;
+  border: 1px solid rgba(226, 183, 100, .35);
+  border-radius: 3px;
+  background:
+    linear-gradient(180deg, rgba(11, 22, 21, .9), rgba(4, 10, 11, .86)),
+    rgba(7, 13, 14, .9);
+  color: #ead7a7;
+  box-shadow:
+    0 6px 14px rgba(0, 0, 0, .32),
+    inset 0 0 12px rgba(226, 183, 100, .08);
+  font: 700 10px/1.05 var(--sans);
+  pointer-events: auto;
+  cursor: pointer;
+  transform: translateY(-1px);
+  transition:
+    border-color .16s ease,
+    background .16s ease,
+    color .16s ease,
+    transform .16s ease,
+    opacity .16s ease;
+}
+
+.map-signal-marker:hover,
+.map-signal-marker:focus-visible {
+  border-color: rgba(246, 212, 128, .72);
+  background:
+    linear-gradient(180deg, rgba(54, 41, 22, .94), rgba(8, 15, 14, .94)),
+    rgba(16, 26, 24, .96);
+  color: #ffe39a;
+  transform: translateY(-3px);
+}
+
+.signal-icon {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px solid rgba(226, 183, 100, .32);
+  border-radius: 50%;
+  background: rgba(4, 10, 11, .72);
+  color: #e3bf68;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.signal-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+  text-align: left;
+}
+
+.signal-copy b,
+.signal-copy small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signal-copy b {
+  color: inherit;
+  font: 700 10.5px/1.05 var(--serif);
+}
+
+.signal-copy small {
+  color: rgba(159, 178, 156, .82);
+  font-size: 8.6px;
+  font-weight: 600;
+}
+
+.map-signal-marker.trade {
+  border-color: rgba(101, 190, 198, .48);
+}
+
+.map-signal-marker.trade .signal-icon {
+  color: #8bd1d8;
+  border-color: rgba(101, 190, 198, .36);
+}
+
+.map-signal-marker.military,
+.map-signal-marker.threat,
+.map-signal-marker.hostile {
+  border-color: rgba(222, 103, 82, .5);
+}
+
+.map-signal-marker.military .signal-icon,
+.map-signal-marker.threat .signal-icon,
+.map-signal-marker.hostile .signal-icon {
+  color: #df7d68;
+  border-color: rgba(222, 103, 82, .38);
+}
+
+.map-signal-marker.ally,
+.map-signal-marker.friendly {
+  border-color: rgba(140, 197, 119, .44);
+}
+
+.map-signal-marker.ally .signal-icon,
+.map-signal-marker.friendly .signal-icon {
+  color: #98cf7f;
+  border-color: rgba(140, 197, 119, .34);
+}
+
+.map-live-overlay .map-signal-marker {
+  position: absolute;
+  transform: translate(-14px, -50%);
+}
+
+.map-live-overlay .map-signal-marker:hover,
+.map-live-overlay .map-signal-marker:focus-visible {
+  transform: translate(-14px, calc(-50% - 2px));
 }
 
 .map-menu {
@@ -554,6 +731,54 @@ input:focus-visible,
 .map-canvas[data-layer-routes="off"] .routes {
   opacity: 0;
   pointer-events: none;
+}
+
+.country.live-signal {
+  stroke-width: .88;
+}
+
+.country.live-trade {
+  stroke: rgba(119, 207, 215, .62);
+  filter: drop-shadow(0 0 3px rgba(104, 196, 204, .34));
+}
+
+.country.live-military,
+.country.live-threat,
+.country.live-hostile {
+  stroke: rgba(230, 116, 87, .78);
+  filter: drop-shadow(0 0 4px rgba(214, 82, 65, .48));
+}
+
+.country.live-diplomacy,
+.country.live-ally,
+.country.live-friendly {
+  stroke: rgba(157, 210, 124, .58);
+  filter: drop-shadow(0 0 3px rgba(119, 184, 103, .24));
+}
+
+.country.live-event {
+  stroke: rgba(236, 198, 111, .6);
+}
+
+.app-shell.trade-mode .country:not(.status-russia):not(.live-trade):not(.live-ally):not(.live-friendly) {
+  opacity: .34;
+}
+
+.app-shell.trade-mode .country.live-trade,
+.app-shell.trade-mode .country.live-ally,
+.app-shell.trade-mode .country.live-friendly {
+  opacity: 1;
+}
+
+.app-shell.strategy-mode .country:not(.status-russia):not(.live-military):not(.live-threat):not(.live-hostile):not(.live-risk) {
+  opacity: .48;
+}
+
+.app-shell.strategy-mode .country.live-military,
+.app-shell.strategy-mode .country.live-threat,
+.app-shell.strategy-mode .country.live-hostile,
+.app-shell.strategy-mode .country.live-risk {
+  opacity: 1;
 }
 
 .country:hover {

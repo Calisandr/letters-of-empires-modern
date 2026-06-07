@@ -57,6 +57,30 @@ try {
   await page.locator('#mapMode').click();
   await page.locator('.map-mode-menu button').nth(2).click();
   await page.waitForFunction(() => document.querySelector('.app-shell')?.classList.contains('strategy-mode'));
+  await page.waitForSelector('.map-signal-marker');
+  const liveMapDiagnostics = await page.evaluate(() => {
+    const markers = [...document.querySelectorAll('.map-signal-marker')];
+    const markerLabels = markers.map((node) => node.textContent?.replace(/\s+/g, ' ').trim() || '');
+    const ukraine = document.querySelector('.country[data-name="Ukraine"]');
+    const india = document.querySelector('.country[data-name="India"]');
+
+    return {
+      markerCount: markers.length,
+      linkCount: document.querySelectorAll('.map-live-link').length,
+      markerLabels,
+      hasUkraineMarker: markerLabels.some((label) => label.includes('Украина')),
+      hasIndiaSignal: Boolean(india?.classList.contains('live-trade')),
+      ukraineClass: ukraine?.getAttribute('class') || '',
+      indiaClass: india?.getAttribute('class') || '',
+    };
+  });
+  await page.locator('.map-signal-marker').filter({ hasText: 'Украина' }).click();
+  await page.waitForFunction(() =>
+    document.querySelector('.country[data-name="Ukraine"]')?.classList.contains('selected'),
+  );
+  const liveMarkerClickSelectedUkraine = await page
+    .locator('.country[data-name="Ukraine"]')
+    .evaluate((node) => node.classList.contains('selected'));
 
   await page.locator('#routeToggle').uncheck();
   const routesState = await page.locator('.app-shell').getAttribute('data-routes');
@@ -302,6 +326,8 @@ try {
     legacyScriptLoaded,
     legacyScriptResponse,
     countryCount,
+    liveMapDiagnostics,
+    liveMarkerClickSelectedUkraine,
     routesState,
     labelsLayerState,
     beforeZoom,
@@ -332,6 +358,12 @@ try {
     legacyScriptLoaded ||
     legacyScriptResponse.servesLegacyJs ||
     countryCount < 30 ||
+    liveMapDiagnostics.markerCount < 3 ||
+    liveMapDiagnostics.linkCount < 1 ||
+    !liveMapDiagnostics.hasUkraineMarker ||
+    !liveMapDiagnostics.hasIndiaSignal ||
+    !liveMapDiagnostics.ukraineClass.includes('live-') ||
+    !liveMarkerClickSelectedUkraine ||
     routesState !== 'off' ||
     !afterZoom.includes('1.12') ||
     !selectedRussia ||

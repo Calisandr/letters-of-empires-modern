@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
 } from 'react';
 import { motion } from 'motion/react';
 import {
@@ -46,6 +47,7 @@ import worldMapSvg from './assets/world-map.svg?raw';
 import { oncePerTurnQuickActions } from './game/engine';
 import { formatClock, formatResourceTrend, formatResourceValue } from './game/formatters';
 import { playerCountry } from './game/initialState';
+import { buildMapSignals, filterMapSignalsForMode, type MapModeId, type MapSignal } from './game/mapIntel';
 import { gameReducer } from './game/reducer';
 import { loadGameState, saveGameState } from './game/storage';
 import type {
@@ -72,6 +74,13 @@ type ToastState = {
 type MapLayerId = 'borders' | 'labels' | 'capitals' | 'ports' | 'regions' | 'routes' | 'intel';
 
 type MapLayersState = Record<MapLayerId, boolean>;
+
+type CountryAnchor = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
 
 const initialMapLayers: MapLayersState = {
   borders: true,
@@ -103,10 +112,10 @@ const navItems = [
   { label: 'Настройки', icon: CircleHelp },
 ];
 
-const mapModes = [
-  { title: 'Политическая карта', className: '' },
-  { title: 'Торговая карта', className: 'trade-mode' },
-  { title: 'Стратегическая карта', className: 'strategy-mode' },
+const mapModes: Array<{ id: MapModeId; title: string; className: string }> = [
+  { id: 'political', title: 'Политическая карта', className: '' },
+  { id: 'trade', title: 'Торговая карта', className: 'trade-mode' },
+  { id: 'strategy', title: 'Стратегическая карта', className: 'strategy-mode' },
 ];
 
 const statusText: Record<string, string> = {
@@ -169,6 +178,10 @@ const countryNames: Record<string, string> = {
   Tanzania: 'Танзания',
   'W. Sahara': 'Западная Сахара',
 };
+
+const countryKeyByLocalizedName = Object.fromEntries(
+  Object.entries(countryNames).map(([key, name]) => [name, key]),
+) as Record<string, string>;
 
 const countryFlagCodes: Record<string, string> = {
   Afghanistan: 'AF',
@@ -395,6 +408,26 @@ const miniWorldMapSvg = worldMapSvg
   .replace('class="world-svg"', 'class="world-svg mini-world-svg"')
   .replaceAll('class="country ', 'class="mini-country ');
 
+function escapeHtmlAttribute(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+function renderWorldMapSvg(selectedCountryKey?: string | null) {
+  return worldMapSvg.replace(
+    /<path class="country([^"]*)" data-name="([^"]+)" data-status="([^"]+)"/g,
+    (_match, classNames: string, countryKey: string, status: string) => {
+      const selectedClass = selectedCountryKey && countryKey === selectedCountryKey ? ' selected' : '';
+      const label = escapeHtmlAttribute(`Выбрать страну: ${countryNames[countryKey] || countryKey}`);
+
+      return `<path class="country${classNames}${selectedClass}" data-name="${countryKey}" data-status="${status}" role="button" tabindex="0" aria-label="${label}"`;
+    },
+  );
+}
+
 const getCountryElement = (target: EventTarget | null) => {
   if (!(target instanceof Element)) return null;
   return target.closest('.country') as SVGElement | null;
@@ -403,18 +436,25 @@ const getCountryElement = (target: EventTarget | null) => {
 const WorldMapLayer = memo(function WorldMapLayer({
   zoom,
   mapSvgRef,
+  selectedCountryKey,
+  children,
 }: {
   zoom: number;
   mapSvgRef: React.RefObject<HTMLDivElement | null>;
+  selectedCountryKey?: string | null;
+  children?: ReactNode;
 }) {
+  const renderedMapSvg = useMemo(() => renderWorldMapSvg(selectedCountryKey), [selectedCountryKey]);
+
   return (
     <div
       id="mapZoomLayer"
       className="map-zoom-layer"
-      ref={mapSvgRef}
       style={{ transform: `scale(${zoom.toFixed(2)})` }}
-      dangerouslySetInnerHTML={{ __html: worldMapSvg }}
-    />
+    >
+      <div className="world-map-svg-frame" ref={mapSvgRef} dangerouslySetInnerHTML={{ __html: renderedMapSvg }} />
+      {children}
+    </div>
   );
 });
 
@@ -429,6 +469,106 @@ const MiniMap = memo(function MiniMap({ zoom }: { zoom: number }) {
     </div>
   );
 });
+
+function formatMarkerName(name: string) {
+  if (name.length <= 12) return name;
+  const firstWord = name.split(/\s+/)[0];
+  return firstWord.length <= 12 ? firstWord : `${firstWord.slice(0, 11)}…`;
+}
+
+function signalIcon(marker: MapSignal['marker']) {
+  if (marker === 'capital') return '◆';
+  if (marker === 'trade') return '↔';
+  if (marker === 'military') return '⚔';
+  if (marker === 'threat') return '!';
+  if (marker === 'diplomacy') return '◇';
+  return '•';
+}
+
+function linkPath(from: CountryAnchor, to: CountryAnchor) {
+  const dx = to.x - from.x;
+  const controlLift = Math.max(22, Math.min(84, Math.abs(dx) * 0.14));
+  const c1x = from.x + dx * 0.34;
+  const c2x = from.x + dx * 0.66;
+  const c1y = Math.min(from.y, to.y) - controlLift;
+  const c2y = Math.min(from.y, to.y) - controlLift * 0.72;
+
+  return `M${from.x.toFixed(1)} ${from.y.toFixed(1)} C${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${to.x.toFixed(1)} ${to.y.toFixed(1)}`;
+}
+
+function MapLiveOverlay({
+  signals,
+  anchors,
+  mode,
+  onSelectCountry,
+}: {
+  signals: MapSignal[];
+  anchors: Record<string, CountryAnchor>;
+  mode: MapModeId;
+  onSelectCountry: (countryKey: string) => void;
+}) {
+  const visibleSignals = signals.filter((signal) => anchors[signal.countryKey]).slice(0, 14);
+  const origin = anchors.Russia || visibleSignals.map((signal) => anchors[signal.countryKey]).find(Boolean);
+  const linkedSignals = origin
+    ? visibleSignals
+        .filter((signal) => signal.countryKey !== 'Russia' && (signal.activeOrders > 0 || signal.hasEvent || signal.marker === 'trade' || signal.marker === 'military' || signal.marker === 'threat'))
+        .slice(0, 8)
+    : [];
+
+  return (
+    <div className="map-live-overlay" data-mode={mode} aria-label="Стратегическая обстановка на карте">
+      <svg className="map-live-link-layer" viewBox="0 0 1000 520" aria-hidden="true" focusable="false">
+        {origin ? (
+          <g className="map-live-links">
+            {linkedSignals.map((signal) => {
+              const anchor = anchors[signal.countryKey];
+
+              return (
+                <path
+                  key={`link-${signal.countryKey}`}
+                  className={`map-live-link ${signal.marker} ${signal.tone}`}
+                  d={linkPath(origin, anchor)}
+                />
+              );
+            })}
+          </g>
+        ) : null}
+      </svg>
+
+      <div className="map-live-marker-layer">
+        {visibleSignals.map((signal, index) => {
+          const anchor = anchors[signal.countryKey];
+          const markerStyle: CSSProperties = {
+            left: `${(anchor.x / 1000) * 100}%`,
+            top: `${(anchor.y / 520) * 100}%`,
+            zIndex: 40 - index,
+          };
+
+          return (
+            <button
+              key={signal.countryKey}
+              type="button"
+              className={`map-signal-marker ${signal.marker} ${signal.tone}`}
+              style={markerStyle}
+              title={`${signal.countryName}: ${signal.summary}`}
+              aria-label={`Открыть цель на карте: ${signal.countryName}. ${signal.shortStatus}. ${signal.summary}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onSelectCountry(signal.countryKey);
+              }}
+            >
+              <span className="signal-icon" aria-hidden="true">{signalIcon(signal.marker)}</span>
+              <span className="signal-copy">
+                <b>{formatMarkerName(signal.countryName)}</b>
+                <small>{signal.shortStatus}</small>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 const focusLabels: Record<NationProfile['focus'], string> = {
   trade: 'Торговля',
@@ -813,6 +953,7 @@ function App() {
   const [mapLayers, setMapLayers] = useState<MapLayersState>(initialMapLayers);
   const [activeMapMenu, setActiveMapMenu] = useState<'layers' | 'mode' | null>(null);
   const [mapModeIndex, setMapModeIndex] = useState(0);
+  const [countryAnchors, setCountryAnchors] = useState<Record<string, CountryAnchor>>({});
   const [closedIntelKey, setClosedIntelKey] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [chatInput, setChatInput] = useState('');
@@ -885,6 +1026,16 @@ function App() {
       Object.entries(mapLayers).map(([key, value]) => [`data-layer-${key}`, value ? 'on' : 'off']),
     ) as Record<`data-layer-${MapLayerId}`, string>;
   }, [mapLayers]);
+
+  const activeMapMode = mapModes[mapModeIndex];
+  const mapSignals = useMemo(() => buildMapSignals(gameState, countryKeyByLocalizedName), [gameState]);
+  const visibleMapSignals = useMemo(
+    () => filterMapSignalsForMode(mapSignals, activeMapMode.id),
+    [activeMapMode.id, mapSignals],
+  );
+  const mapSignalByKey = useMemo(() => {
+    return new Map(mapSignals.map((signal) => [signal.countryKey, signal]));
+  }, [mapSignals]);
 
   const activeIntelKey = gameState.selectedCountry?.key || 'Russia';
 
@@ -981,15 +1132,19 @@ function App() {
     const { country, clientX, clientY } = latest;
     const sourceName = country.dataset.name || '';
     const status = country.dataset.status || 'common';
+    const signal = mapSignalByKey.get(sourceName);
+    const tooltipKey = `${sourceName}:${signal?.shortStatus || status}:${signal?.severity || 0}`;
 
-    if (activeTooltipCountryRef.current !== sourceName) {
+    if (activeTooltipCountryRef.current !== tooltipKey) {
       const title = tooltipNode.querySelector('strong');
       const subtitle = tooltipNode.querySelector('small');
 
       if (title) title.textContent = countryNames[sourceName] || sourceName;
-      if (subtitle) subtitle.textContent = statusText[status] || statusText.common;
+      if (subtitle) subtitle.textContent = signal
+        ? `${statusText[status] || statusText.common} · ${signal.shortStatus}`
+        : statusText[status] || statusText.common;
 
-      activeTooltipCountryRef.current = sourceName;
+      activeTooltipCountryRef.current = tooltipKey;
     }
 
     const rect = mapCanvas.getBoundingClientRect();
@@ -1030,17 +1185,28 @@ function App() {
     }
   };
 
+  const applySelectedCountryClass = useCallback((countryKey: string) => {
+    const mapRoot = mapSvgRef.current;
+    if (!mapRoot) return null;
+
+    let selectedCountry: SVGElement | null = null;
+
+    [...mapRoot.querySelectorAll<SVGElement>('.country')].forEach((country) => {
+      const isSelected = Boolean(countryKey) && country.dataset.name === countryKey;
+      country.classList.toggle('selected', isSelected);
+      if (isSelected) selectedCountry = country;
+    });
+
+    selectedCountryRef.current = selectedCountry;
+    return selectedCountry;
+  }, []);
+
   const selectCountry = useCallback((country: SVGElement) => {
     const sourceName = country.dataset.name || '';
     const name = countryNames[sourceName] || sourceName;
     const status = country.dataset.status || 'common';
 
-    if (selectedCountryRef.current && selectedCountryRef.current !== country) {
-      selectedCountryRef.current.classList.remove('selected');
-    }
-
-    country.classList.add('selected');
-    selectedCountryRef.current = country;
+    applySelectedCountryClass(sourceName);
     setClosedIntelKey(null);
     setActiveMapMenu(null);
 
@@ -1052,7 +1218,9 @@ function App() {
         status,
       },
     });
-  }, []);
+
+    window.requestAnimationFrame(() => applySelectedCountryClass(sourceName));
+  }, [applySelectedCountryClass]);
 
   useEffect(() => {
     const mapRoot = mapSvgRef.current;
@@ -1069,6 +1237,23 @@ function App() {
     };
 
     const countries = [...mapRoot.querySelectorAll<SVGElement>('.country')];
+    const nextAnchors = countries.reduce<Record<string, CountryAnchor>>((anchors, country) => {
+      const sourceName = country.dataset.name || '';
+      const graphicsCountry = country as SVGGraphicsElement;
+      if (!sourceName || typeof graphicsCountry.getBBox !== 'function') return anchors;
+
+      const box = graphicsCountry.getBBox();
+      anchors[sourceName] = {
+        x: box.x + box.width / 2,
+        y: box.y + box.height / 2,
+        width: box.width,
+        height: box.height,
+      };
+      return anchors;
+    }, {});
+
+    setCountryAnchors(nextAnchors);
+
     countries.forEach((country) => {
       const sourceName = country.dataset.name || '';
       const name = countryNames[sourceName] || sourceName;
@@ -1083,7 +1268,64 @@ function App() {
         country.removeEventListener('keydown', handleCountryKeyDown);
       });
     };
-  }, [selectCountry, zoom]);
+  }, [gameState.selectedCountry?.key, selectCountry, zoom]);
+
+  useEffect(() => {
+    const mapRoot = mapSvgRef.current;
+    if (!mapRoot) return;
+
+    applySelectedCountryClass(gameState.selectedCountry?.key || '');
+  }, [applySelectedCountryClass, gameState.selectedCountry?.key, countryAnchors]);
+
+  useEffect(() => {
+    const mapRoot = mapSvgRef.current;
+    if (!mapRoot) return;
+
+    const liveClasses = [
+      'live-signal',
+      'live-capital',
+      'live-diplomacy',
+      'live-trade',
+      'live-military',
+      'live-threat',
+      'live-event',
+      'live-ally',
+      'live-friendly',
+      'live-risk',
+      'live-hostile',
+    ];
+    const visibleSignalKeys = new Set(visibleMapSignals.map((signal) => signal.countryKey));
+    const countries = [...mapRoot.querySelectorAll<SVGElement>('.country')];
+
+    countries.forEach((country) => {
+      const sourceName = country.dataset.name || '';
+      const signal = mapSignalByKey.get(sourceName);
+      country.classList.remove(...liveClasses);
+      delete country.dataset.liveTone;
+      delete country.dataset.liveMarker;
+      delete country.dataset.liveSeverity;
+
+      if (!signal || !visibleSignalKeys.has(sourceName)) return;
+
+      country.classList.add('live-signal', `live-${signal.marker}`);
+      if (signal.tone === 'ally' || signal.tone === 'friendly' || signal.tone === 'risk' || signal.tone === 'hostile') {
+        country.classList.add(`live-${signal.tone}`);
+      }
+      country.dataset.liveTone = signal.tone;
+      country.dataset.liveMarker = signal.marker;
+      country.dataset.liveSeverity = String(signal.severity);
+    });
+  }, [mapSignalByKey, visibleMapSignals, mapModeIndex]);
+
+  const selectCountryByKey = useCallback((countryKey: string) => {
+    const mapRoot = mapSvgRef.current;
+    if (!mapRoot) return;
+
+    const country = [...mapRoot.querySelectorAll<SVGElement>('.country')].find(
+      (item) => item.dataset.name === countryKey,
+    );
+    if (country) selectCountry(country);
+  }, [selectCountry]);
 
   const handleMapClick = (event: MouseEvent<HTMLDivElement>) => {
     const country = getCountryElement(event.target);
@@ -1267,7 +1509,14 @@ function App() {
               {...mapLayerAttributes}
             >
               <div className="ocean-glow" aria-hidden="true" />
-              <WorldMapLayer zoom={zoom} mapSvgRef={mapSvgRef} />
+              <WorldMapLayer zoom={zoom} mapSvgRef={mapSvgRef} selectedCountryKey={gameState.selectedCountry?.key}>
+                <MapLiveOverlay
+                  signals={visibleMapSignals}
+                  anchors={countryAnchors}
+                  mode={activeMapMode.id}
+                  onSelectCountry={selectCountryByKey}
+                />
+              </WorldMapLayer>
               {mapLayers.intel && closedIntelKey !== activeIntelKey ? (
                 <CountryIntelPanel
                   selectedCountry={gameState.selectedCountry}
