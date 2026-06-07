@@ -158,7 +158,53 @@ try {
     assert.ok(nation);
     assert.ok(nation.lastAction.includes('Разведка'));
     assert.equal(next.orders.length, selected.orders.length);
+    assert.ok(next.operationPlans.length > selected.operationPlans.length);
     assert.ok(next.timelineEvents[0].title.includes('Досье'));
+  });
+
+  test('country intel operation prepares a launchable operation plan', () => {
+    const country = { key: 'Ukraine', name: 'Украина', status: 'hostile' };
+    const selected = gameReducer(clone(initialGameState), { type: 'SELECT_COUNTRY', country });
+    const prepared = gameReducer(selected, { type: 'RUN_COUNTRY_INTEL_ACTION', id: 'prepare-operation', country });
+    const plan = prepared.operationPlans.find((item) => item.target === 'Украина');
+
+    assert.ok(plan);
+    assert.ok(['countermeasure', 'raid'].includes(plan.kind));
+    assert.equal(prepared.orders.length, selected.orders.length);
+
+    const launched = gameReducer(prepared, { type: 'RUN_OPERATION_PLAN', id: plan.id });
+    assert.equal(launched.orders.length, prepared.orders.length + 1);
+    assert.ok(!launched.operationPlans.some((item) => item.id === plan.id));
+    assert.equal(launched.orders.at(-1).target, 'Украина');
+  });
+
+  test('operation plan launch failure keeps the plan available', () => {
+    const country = { key: 'Ukraine', name: 'Украина', status: 'hostile' };
+    const prepared = gameReducer(clone(initialGameState), { type: 'RUN_COUNTRY_INTEL_ACTION', id: 'prepare-operation', country });
+    const plan = prepared.operationPlans.find((item) => item.target === 'Украина');
+    const drained = {
+      ...prepared,
+      resources: prepared.resources.map((resource) => ({ ...resource, value: 0 })),
+    };
+    const next = gameReducer(drained, { type: 'RUN_OPERATION_PLAN', id: plan.id });
+
+    assert.equal(next.lastNotice.kind, 'error');
+    assert.ok(next.operationPlans.some((item) => item.id === plan.id));
+    assert.equal(next.orders.length, drained.orders.length);
+  });
+
+  test('operation plans expire on later turns', () => {
+    const country = { key: 'France', name: 'Франция', status: 'friendly' };
+    const prepared = gameReducer(clone(initialGameState), { type: 'RUN_COUNTRY_INTEL_ACTION', id: 'gather-intel', country });
+    const plan = prepared.operationPlans[0];
+    const stale = {
+      ...prepared,
+      operationPlans: [{ ...plan, expiresTurn: prepared.turnNumber }],
+    };
+    const next = endTurn(stale);
+
+    assert.equal(next.operationPlans.length, 0);
+    assert.ok(next.timelineEvents.some((event) => event.title.includes('Оперативные планы')));
   });
 
   test('country intel trade mission creates a real target order', () => {

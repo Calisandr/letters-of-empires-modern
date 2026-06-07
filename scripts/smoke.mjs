@@ -175,6 +175,7 @@ try {
   );
   await page.getByRole('button', { name: 'Разведка: Бразилия' }).click();
   await page.waitForTimeout(120);
+  await page.waitForSelector('.operation-plan');
   const afterCountryIntelAction = await page.evaluate(() => ({
     goldText: [...document.querySelectorAll('.resource-list li')].find((node) =>
       node.textContent?.includes('Золото'),
@@ -185,9 +186,22 @@ try {
     intelText: document.querySelector('.country-intel-activity')?.textContent?.trim() || '',
     timelineTop: document.querySelector('.timeline-panel article h3')?.textContent?.trim() || '',
   }));
+  const operationPlanDiagnostics = await page.evaluate(() => {
+    const plans = [...document.querySelectorAll('.operation-plan')];
+    const first = plans[0];
+
+    return {
+      count: plans.length,
+      title: first?.querySelector('h3')?.textContent?.trim() || '',
+      hasRunButton: Boolean(first?.querySelector('.plan-run')?.textContent?.includes('Запустить')),
+      hasDismissButton: Boolean(first?.querySelector('.plan-dismiss')),
+      meta: first?.querySelector('small')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+    };
+  });
   const countryIntelActionDiagnostics = {
     beforeCountryIntelAction,
     afterCountryIntelAction,
+    operationPlanDiagnostics,
     diplomacyHasBrazil: afterCountryIntelAction.diplomacyNames.includes('Бразилия'),
     goldChanged: beforeCountryIntelAction.goldText !== afterCountryIntelAction.goldText,
     intelUpdated: afterCountryIntelAction.intelText.includes('Разведка'),
@@ -420,6 +434,9 @@ try {
     !countryIntelActionDiagnostics.diplomacyHasBrazil ||
     !countryIntelActionDiagnostics.goldChanged ||
     !countryIntelActionDiagnostics.intelUpdated ||
+    countryIntelActionDiagnostics.operationPlanDiagnostics.count < 1 ||
+    !countryIntelActionDiagnostics.operationPlanDiagnostics.hasRunButton ||
+    !countryIntelActionDiagnostics.operationPlanDiagnostics.hasDismissButton ||
     !countryIntelClosed ||
     !result.chatAdded ||
     chatTabDiagnostics.activeText !== 'Альянс' ||

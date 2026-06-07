@@ -1421,6 +1421,139 @@ input:focus-visible,
   grid-area: cancel;
 }
 
+.operation-plans {
+  display: grid;
+  gap: 6px;
+  margin: 2px 0 7px;
+  padding: 7px;
+  border: 1px solid rgba(205, 162, 85, .18);
+  background: rgba(6, 13, 14, .38);
+}
+
+.operation-plans header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.operation-plans header b {
+  color: #e8c66d;
+  font: 700 12px/1 var(--serif);
+  letter-spacing: .06em;
+}
+
+.operation-plans header small {
+  color: rgba(166, 185, 162, .82);
+  font-size: 10.5px;
+}
+
+.operation-plan-list {
+  display: grid;
+  gap: 5px;
+  max-height: 96px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.operation-plan {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 74px 22px;
+  gap: 5px 7px;
+  align-items: center;
+  min-height: 52px;
+  padding: 6px;
+  border: 1px solid rgba(205, 162, 85, .16);
+  background: rgba(3, 9, 10, .58);
+}
+
+.operation-plan.high,
+.operation-plan.critical {
+  border-color: rgba(219, 101, 88, .34);
+  background: rgba(37, 13, 13, .34);
+}
+
+.operation-plan.medium {
+  border-color: rgba(224, 173, 76, .28);
+}
+
+.operation-plan-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(205, 162, 85, .28);
+  color: #e4bd66;
+  background: rgba(80, 57, 25, .28);
+}
+
+.operation-plan-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.operation-plan div {
+  min-width: 0;
+}
+
+.operation-plan h3,
+.operation-plan p,
+.operation-plan small,
+.operation-plan em {
+  display: block;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.operation-plan h3 {
+  color: #f0cf78;
+  font: 700 12px/1.15 var(--serif);
+}
+
+.operation-plan p {
+  margin-top: 2px;
+  color: rgba(218, 209, 176, .86);
+  font-size: 10.5px;
+}
+
+.operation-plan small,
+.operation-plan em {
+  margin-top: 2px;
+  color: rgba(166, 185, 162, .8);
+  font-size: 9.5px;
+  font-style: normal;
+}
+
+.operation-plan button {
+  border: 1px solid rgba(205, 162, 85, .3);
+  background: rgba(9, 17, 16, .78);
+  color: #d9bf77;
+  cursor: pointer;
+}
+
+.operation-plan .plan-run {
+  min-height: 28px;
+  padding: 0 8px;
+  color: #ffe08d;
+  font: 700 10px/1 var(--serif);
+}
+
+.operation-plan .plan-dismiss {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 28px;
+}
+
+.operation-plan button:hover,
+.operation-plan button:focus-visible {
+  border-color: rgba(246, 206, 116, .72);
+  background: rgba(97, 67, 28, .42);
+}
+
 .chat-input .emoji,
 .chat-input .send {
   flex: 0 0 auto;

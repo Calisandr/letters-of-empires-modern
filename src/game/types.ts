@@ -66,6 +66,33 @@ export type Order = {
 
 export type OrderDraft = Omit<Order, 'id' | 'status' | 'statusClass' | 'due'>;
 
+export type OperationPlanKind = 'trade' | 'diplomacy' | 'countermeasure' | 'raid' | 'stability';
+
+export type OperationPlan = {
+  id: string;
+  kind: OperationPlanKind;
+  target: string;
+  title: string;
+  summary: string;
+  advisor: string;
+  iconKey: OrderIconKey;
+  owner: string;
+  durationTurns: number;
+  riskLevel: NonNullable<Order['riskLevel']>;
+  successChance: number;
+  createdTurn: number;
+  expiresTurn: number;
+  cost: ResourceDelta;
+  reward?: ResourceDelta;
+  diplomacyDelta?: Record<string, number>;
+  nationDelta?: Record<string, NationDelta>;
+  failureCost?: ResourceDelta;
+  failureDiplomacyDelta?: Record<string, number>;
+  failureNationDelta?: Record<string, NationDelta>;
+  completeText: string;
+  failureText: string;
+};
+
 export type TimelineEvent = {
   icon: string;
   tone: string;
@@ -192,6 +219,7 @@ export type GameState = {
   version: number;
   resources: ResourceState[];
   orders: Order[];
+  operationPlans: OperationPlan[];
   timelineEvents: TimelineEvent[];
   letters: Letter[];
   diplomacy: DiplomacyRelation[];
@@ -242,5 +270,7 @@ export type GameAction =
   | { type: 'RUN_QUICK_ACTION'; id: QuickActionId }
   | { type: 'RUN_COUNTRY_INTEL_ACTION'; id: CountryIntelActionId; country: SelectedCountry }
   | { type: 'RUN_STRATEGIC_RESPONSE'; id: string }
+  | { type: 'RUN_OPERATION_PLAN'; id: string }
+  | { type: 'DISMISS_OPERATION_PLAN'; id: string }
   | { type: 'CANCEL_ORDER'; id: string }
   | { type: 'END_TURN' };

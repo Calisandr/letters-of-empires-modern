@@ -56,6 +56,7 @@ import type {
   DiplomacyRelation,
   Letter,
   NationProfile,
+  OperationPlan,
   Order,
   OrderIconKey,
   QuickActionId,
@@ -789,6 +790,25 @@ function formatResourceDelta(delta: ResourceDelta) {
   return parts.length ? parts.join(', ') : 'без прямых изменений';
 }
 
+function formatResourceCost(delta: ResourceDelta) {
+  const parts = Object.entries(delta)
+    .filter(([, value]) => value)
+    .map(([key, value]) => {
+      const label = resourceDeltaLabels[key as keyof ResourceDelta] || key;
+      const formatted = key === 'population' ? Number(value).toFixed(1) : Math.round(Number(value)).toLocaleString('ru-RU');
+      return `${formatted} ${label}`;
+    });
+
+  return parts.length ? parts.join(', ') : 'без затрат';
+}
+
+function planRiskLabel(risk: OperationPlan['riskLevel']) {
+  if (risk === 'critical') return 'критический риск';
+  if (risk === 'high') return 'высокий риск';
+  if (risk === 'medium') return 'средний риск';
+  return 'низкий риск';
+}
+
 function CountryIntelPanel({
   selectedCountry,
   nations,
@@ -1081,6 +1101,7 @@ function App() {
   const {
     resources,
     orders,
+    operationPlans,
     timelineEvents,
     letters,
     diplomacy,
@@ -1528,6 +1549,14 @@ function App() {
     dispatchGame({ type: 'CANCEL_ORDER', id });
   };
 
+  const runOperationPlan = (id: string) => {
+    dispatchGame({ type: 'RUN_OPERATION_PLAN', id });
+  };
+
+  const dismissOperationPlan = (id: string) => {
+    dispatchGame({ type: 'DISMISS_OPERATION_PLAN', id });
+  };
+
   const handleEndTurn = () => {
     if (turnLockRef.current) return;
     turnLockRef.current = true;
@@ -1704,8 +1733,12 @@ function App() {
             />
             <OrdersPanel
               orders={orders}
+              operationPlans={operationPlans}
+              currentTurn={turnNumber}
               onCancel={cancelOrder}
               onCreateOrder={() => handleQuickAction('create-order')}
+              onRunPlan={runOperationPlan}
+              onDismissPlan={dismissOperationPlan}
               showToast={showToast}
             />
           </section>
@@ -2133,13 +2166,21 @@ function ChatPanel({
 
 function OrdersPanel({
   orders,
+  operationPlans,
+  currentTurn,
   onCancel,
   onCreateOrder,
+  onRunPlan,
+  onDismissPlan,
   showToast,
 }: {
   orders: Order[];
+  operationPlans: OperationPlan[];
+  currentTurn: number;
   onCancel: (id: string) => void;
   onCreateOrder: () => void;
+  onRunPlan: (id: string) => void;
+  onDismissPlan: (id: string) => void;
   showToast: (message: string) => void;
 }) {
   const activeOrderCount = orders.filter((order) => order.statusClass !== 'cancelled').length;
@@ -2156,6 +2197,52 @@ function OrdersPanel({
           Текущие приказы <span>({activeOrderCount}/5)</span>
         </h2>
       </div>
+      {operationPlans.length ? (
+        <section className="operation-plans" aria-label="Оперативные планы">
+          <header>
+            <b>Оперативные планы</b>
+            <small>{operationPlans.length}/4 подготовлено</small>
+          </header>
+          <div className="operation-plan-list">
+            {operationPlans.map((plan) => {
+              const Icon = orderIcons[plan.iconKey];
+              const expiresIn = Math.max(0, plan.expiresTurn - currentTurn);
+
+              return (
+                <article key={plan.id} className={`operation-plan ${plan.riskLevel}`}>
+                  <span className="operation-plan-icon">
+                    <Icon aria-hidden="true" />
+                  </span>
+                  <div>
+                    <h3>{plan.title}</h3>
+                    <p>{plan.summary}</p>
+                    <small>
+                      {plan.advisor} · шанс {plan.successChance}% · {planRiskLabel(plan.riskLevel)} · окно {expiresIn} ход.
+                    </small>
+                    <em>Стоимость: {formatResourceCost(plan.cost)}</em>
+                  </div>
+                  <button
+                    type="button"
+                    className="plan-run"
+                    aria-label={`Запустить план: ${plan.title}`}
+                    onClick={() => onRunPlan(plan.id)}
+                  >
+                    Запустить
+                  </button>
+                  <button
+                    type="button"
+                    className="plan-dismiss"
+                    aria-label={`Снять план: ${plan.title}`}
+                    onClick={() => onDismissPlan(plan.id)}
+                  >
+                    <X aria-hidden="true" />
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
       <div className="orders-list">
         {orders.map((order) => {
           const Icon = orderIcons[order.iconKey];

@@ -339,6 +339,7 @@ export const initialGameState: GameState = {
   version: GAME_STATE_VERSION,
   resources: initialResources,
   orders: initialOrders,
+  operationPlans: [],
   timelineEvents: initialTimeline,
   letters: initialLetters,
   diplomacy: initialDiplomacy,

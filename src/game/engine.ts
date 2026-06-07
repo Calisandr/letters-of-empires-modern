@@ -12,6 +12,7 @@ import type {
   NationProfile,
   Order,
   OrderDraft,
+  OperationPlan,
   OrderStatusClass,
   QuickActionId,
   ResourceDelta,
@@ -23,6 +24,7 @@ import type {
 } from './types';
 
 export const MAX_ACTIVE_ORDERS = 5;
+export const MAX_OPERATION_PLANS = 4;
 export const MAX_TIMELINE_EVENTS = 7;
 export const MAX_LETTERS = 5;
 export const MAX_CHAT_MESSAGES = 80;
@@ -245,6 +247,177 @@ function upsertNationTarget(
   return nations.map((nation) => (nation.name === country.name ? nextNation : nation));
 }
 
+function planKindLabel(kind: OperationPlan['kind']) {
+  if (kind === 'trade') return 'торговый план';
+  if (kind === 'diplomacy') return 'дипломатический план';
+  if (kind === 'countermeasure') return 'план контрмер';
+  if (kind === 'raid') return 'военный план';
+  return 'внутренний план';
+}
+
+function planId(turn: number, country: SelectedCountry, kind: OperationPlan['kind']) {
+  const key = (country.key || country.name).toLowerCase().replace(/[^a-zа-я0-9-]+/gi, '-');
+  return `plan-${turn}-${key}-${kind}`;
+}
+
+function upsertOperationPlan(plans: OperationPlan[], plan: OperationPlan) {
+  const withoutSameReadyPlan = plans.filter(
+    (item) => !(item.target === plan.target && item.kind === plan.kind),
+  );
+
+  return [plan, ...withoutSameReadyPlan]
+    .filter((item) => item.expiresTurn >= plan.createdTurn)
+    .slice(0, MAX_OPERATION_PLANS);
+}
+
+function operationPlanToOrder(plan: OperationPlan): OrderDraft {
+  return {
+    iconKey: plan.iconKey,
+    title: plan.title,
+    owner: plan.owner,
+    target: plan.target,
+    remainingTurns: plan.durationTurns,
+    totalTurns: plan.durationTurns,
+    cost: plan.cost,
+    reward: plan.reward,
+    diplomacyDelta: plan.diplomacyDelta,
+    nationDelta: plan.nationDelta,
+    completeText: plan.completeText,
+    riskLevel: plan.riskLevel,
+    successChance: plan.successChance,
+    failureCost: plan.failureCost,
+    failureDiplomacyDelta: plan.failureDiplomacyDelta,
+    failureNationDelta: plan.failureNationDelta,
+    failureText: plan.failureText,
+  };
+}
+
+function buildOperationPlan(
+  state: GameState,
+  country: SelectedCountry,
+  mode: 'recon' | 'operation' = 'recon',
+): OperationPlan {
+  const existingRelation = state.diplomacy.find((relation) => relation.name === country.name);
+  const relation = existingRelation?.score ?? fallbackRelationForStatus(country.status);
+  const nation = state.nations.find((item) => item.name === country.name);
+  const intent = nation?.currentIntent;
+  const hostile = relation <= -45 || intent?.type === 'military' || intent?.type === 'covert';
+  const tradeWindow = relation >= 45 && (nation?.focus === 'trade' || intent?.type === 'trade' || intent?.type === 'industry');
+  const isOwnCountry = country.status === 'russia';
+
+  if (isOwnCountry) {
+    return {
+      id: planId(state.turnNumber, country, 'stability'),
+      kind: 'stability',
+      target: country.name,
+      title: 'Стабилизировать внутренний контур',
+      summary: 'Совет готовит короткую внутреннюю операцию: снабжение, налоги и порядок должны выдержать следующий кризис.',
+      advisor: 'Внутренний совет',
+      iconKey: 'landmark',
+      owner: 'Внутренний совет',
+      durationTurns: 1,
+      riskLevel: 'low',
+      successChance: 96,
+      createdTurn: state.turnNumber,
+      expiresTurn: state.turnNumber + 2,
+      cost: { gold: 280, grain: 180 },
+      reward: { gold: 420, grain: 220 },
+      nationDelta: { Россия: { stability: 5, pressure: -6, threat: -2 } },
+      completeText: 'Внутренний контур стабилизирован: снабжение выровнено, управленческое давление снижено.',
+      failureCost: { gold: -90, grain: -60 },
+      failureNationDelta: { Россия: { pressure: 2 } },
+      failureText: 'Внутренний штаб не успел сверить снабжение: часть ресурсов ушла на срочные исправления.',
+    };
+  }
+
+  if (hostile || mode === 'operation') {
+    const critical = relation <= -70 || intent?.type === 'covert';
+
+    return {
+      id: planId(state.turnNumber, country, critical ? 'countermeasure' : 'raid'),
+      kind: critical ? 'countermeasure' : 'raid',
+      target: country.name,
+      title: critical ? `Сорвать давление: ${country.name}` : `Ограниченная операция: ${country.name}`,
+      summary: critical
+        ? `Разведка предлагает не атаковать в лоб, а вскрыть подготовку цели "${country.name}" и снизить угрозу до следующего хода.`
+        : `Штаб подготовил ограниченную операцию против цели "${country.name}" с понятной ценой, шансом успеха и последствиями провала.`,
+      advisor: 'Оперативный штаб',
+      iconKey: critical ? 'shield' : 'swords',
+      owner: 'Оперативный штаб',
+      durationTurns: critical ? 2 : 3,
+      riskLevel: critical ? 'high' : 'medium',
+      successChance: critical ? 68 : 76,
+      createdTurn: state.turnNumber,
+      expiresTurn: state.turnNumber + 2,
+      cost: critical ? { gold: 540, iron: 260, grain: 180 } : { gold: 620, iron: 360, grain: 240 },
+      reward: { iron: critical ? 180 : 260 },
+      diplomacyDelta: { [country.name]: critical ? -2 : -4 },
+      nationDelta: { [country.name]: { threat: critical ? -8 : -5, pressure: critical ? -7 : -3 } },
+      completeText: critical
+        ? `Контрмеры по цели "${country.name}" сорвали часть подготовки: угроза и давление снижены.`
+        : `Ограниченная операция по цели "${country.name}" дала военное преимущество, но дипломатическое давление выросло.`,
+      failureCost: critical ? { gold: -260, iron: -160, grain: -120 } : { gold: -360, iron: -240, grain: -180, population: -0.1 },
+      failureDiplomacyDelta: { [country.name]: critical ? -6 : -8 },
+      failureNationDelta: { [country.name]: { threat: critical ? 6 : 8, pressure: critical ? 6 : 7 }, Россия: { pressure: 3, stability: -1 } },
+      failureText: critical
+        ? `Контрмеры по цели "${country.name}" раскрыты слишком рано: противник усилил давление.`
+        : `Операция по цели "${country.name}" провалилась: снабжение потеряно, политическое положение ухудшилось.`,
+    };
+  }
+
+  if (tradeWindow) {
+    return {
+      id: planId(state.turnNumber, country, 'trade'),
+      kind: 'trade',
+      target: country.name,
+      title: `Торговый коридор: ${country.name}`,
+      summary: `Разведка подтвердила окно сделки с целью "${country.name}". План закрепит маршрут и даст прибыль через несколько ходов.`,
+      advisor: 'Торговый совет',
+      iconKey: 'anchor',
+      owner: 'Торговый совет',
+      durationTurns: 2,
+      riskLevel: relation >= 100 ? 'low' : 'medium',
+      successChance: relation >= 100 ? 94 : 84,
+      createdTurn: state.turnNumber,
+      expiresTurn: state.turnNumber + 3,
+      cost: { gold: 420, grain: 210 },
+      reward: { gold: 1500, grain: 620 },
+      diplomacyDelta: { [country.name]: relation >= 100 ? 5 : 3 },
+      nationDelta: { [country.name]: { economy: 3, pressure: -3, threat: -1 } },
+      completeText: `Торговый коридор с целью "${country.name}" закреплен: казна получила прибыль, отношения стали устойчивее.`,
+      failureCost: { gold: -180, grain: -100 },
+      failureDiplomacyDelta: { [country.name]: -2 },
+      failureNationDelta: { [country.name]: { pressure: 3 } },
+      failureText: `Торговый коридор с целью "${country.name}" сорвался: товары задержаны, доверие к маршруту снизилось.`,
+    };
+  }
+
+  return {
+    id: planId(state.turnNumber, country, 'diplomacy'),
+    kind: 'diplomacy',
+    target: country.name,
+    title: `Переговорная миссия: ${country.name}`,
+    summary: `Канцелярия подготовила безопасный дипломатический ход по цели "${country.name}" без резкого военного риска.`,
+    advisor: 'Канцелярия',
+    iconKey: 'mail',
+    owner: 'Канцелярия',
+    durationTurns: 1,
+    riskLevel: relation < -20 ? 'medium' : 'low',
+    successChance: relation < -20 ? 72 : 90,
+    createdTurn: state.turnNumber,
+    expiresTurn: state.turnNumber + 2,
+    cost: { gold: relation < -20 ? 260 : 180 },
+    reward: { gold: relation >= 50 ? 240 : 80 },
+    diplomacyDelta: { [country.name]: relation < -20 ? 4 : 6 },
+    nationDelta: { [country.name]: { pressure: -5, threat: -2 } },
+    completeText: `Переговорная миссия по цели "${country.name}" открыла рабочий канал и снизила давление.`,
+    failureCost: { gold: -90 },
+    failureDiplomacyDelta: { [country.name]: relation < -20 ? -3 : -1 },
+    failureNationDelta: { [country.name]: { pressure: 3 } },
+    failureText: `Переговорная миссия по цели "${country.name}" не дала результата: канцелярия потеряла время и часть золота.`,
+  };
+}
+
 export function pushTimeline(events: TimelineEvent[], event: Omit<TimelineEvent, 'time'> & { time?: string }) {
   const nextEvent = { ...event, time: event.time || 'только что' };
   const latest = events[0];
@@ -393,6 +566,8 @@ export function runCountryIntelAction(state: GameState, id: CountryIntelActionId
       return createNotice(state, `Не хватает ресурсов для разведки: ${describeResourceCost(state.resources, cost)}`, 'error');
     }
 
+    const operationPlan = buildOperationPlan(state, country, 'recon');
+
     return createNotice(
       {
         ...state,
@@ -402,16 +577,17 @@ export function runCountryIntelAction(state: GameState, id: CountryIntelActionId
           relation,
           pressure: baseNation.pressure + (relation < -40 ? 2 : -2),
           threat: baseNation.threat,
-          lastAction: `Разведка обновила досье по цели "${country.name}": фокус, давление и риски стали точнее.`,
+          lastAction: `Разведка обновила досье по цели "${country.name}" и подготовила ${planKindLabel(operationPlan.kind)}.`,
         }),
+        operationPlans: upsertOperationPlan(state.operationPlans, operationPlan),
         timelineEvents: pushTimeline(state.timelineEvents, {
           icon: '◎',
           tone: relation < -40 ? 'bronze' : 'blue',
           title: `Досье обновлено: ${country.name}`,
-          text: `Канцелярия потратила золото на разведданные. Оценки по цели "${country.name}" стали надежнее для следующих решений.`,
+          text: `Канцелярия потратила золото на разведданные. Оценки по цели "${country.name}" стали надежнее, штаб подготовил план "${operationPlan.title}".`,
         }),
       },
-      `Разведка обновила досье: ${country.name}`,
+      `Разведка подготовила план: ${country.name}`,
     );
   }
 
@@ -447,36 +623,34 @@ export function runCountryIntelAction(state: GameState, id: CountryIntelActionId
     });
   }
 
-  const preparedState = {
-    ...state,
-    diplomacy: isOwnCountry ? state.diplomacy : upsertDiplomacyTarget(state.diplomacy, country, 0),
-    nations: upsertNationTarget(state.nations, country, {
-      relation,
-      pressure: baseNation.pressure + (relation < -20 ? 4 : 1),
-      threat: baseNation.threat + (relation < -20 ? 5 : 2),
-      lastAction: `Военный совет подготовил ограниченную операцию по цели "${country.name}".`,
-    }),
-  };
+  const planningCost: ResourceDelta = { gold: isOwnCountry ? 120 : 180 };
+  if (!canPay(state.resources, planningCost)) {
+    return createNotice(state, `Не хватает ресурсов для подготовки операции: ${describeResourceCost(state.resources, planningCost)}`, 'error');
+  }
 
-  return createStrategicOrder(preparedState, {
-    iconKey: relation < -20 ? 'swords' : 'shield',
-    title: isOwnCountry ? 'Подготовить резервную оборону державы' : `Подготовить ограниченную операцию: ${country.name}`,
-    owner: 'Генеральный штаб',
-    target: country.name,
-    remainingTurns: relation < -20 ? 3 : 2,
-    totalTurns: relation < -20 ? 3 : 2,
-    cost: { gold: 640, iron: 360, grain: 240 },
-    reward: { iron: 240 },
-    diplomacyDelta: isOwnCountry ? undefined : { [country.name]: relation < -20 ? -4 : -1 },
-    completeText: isOwnCountry
-      ? 'Резервная оборона державы развернута: армия получила снабжение и новые маршруты переброски.'
-      : `Ограниченная операция по цели "${country.name}" завершена. Штаб получил военное преимущество, но дипломатическое давление выросло.`,
-    riskLevel: relation < -20 ? 'high' : 'medium',
-    successChance: relation < -20 ? 58 : 78,
-    failureCost: { gold: -360, iron: -260, grain: -180, population: -0.1 },
-    failureDiplomacyDelta: isOwnCountry ? undefined : { [country.name]: relation < -20 ? -8 : -3 },
-    failureText: `Операция по цели "${country.name}" провалилась: снабжение потеряно, часть войска выбыла, политическое положение ухудшилось.`,
-  });
+  const operationPlan = buildOperationPlan(state, country, 'operation');
+
+  return createNotice(
+    {
+      ...state,
+      resources: applyResourceDelta(state.resources, { gold: -(planningCost.gold || 0) }),
+      diplomacy: isOwnCountry ? state.diplomacy : upsertDiplomacyTarget(state.diplomacy, country, 0),
+      nations: upsertNationTarget(state.nations, country, {
+        relation,
+        pressure: baseNation.pressure + (relation < -20 ? 3 : 1),
+        threat: baseNation.threat + (relation < -20 ? 3 : 1),
+        lastAction: `Военный совет подготовил план "${operationPlan.title}".`,
+      }),
+      operationPlans: upsertOperationPlan(state.operationPlans, operationPlan),
+      timelineEvents: pushTimeline(state.timelineEvents, {
+        icon: '⚑',
+        tone: operationPlan.riskLevel === 'high' || operationPlan.riskLevel === 'critical' ? 'bronze' : 'blue',
+        title: `План готов: ${country.name}`,
+        text: `Штаб потратил золото на подготовку. План "${operationPlan.title}" можно запустить из панели приказов.`,
+      }),
+    },
+    `План операции готов: ${country.name}`,
+  );
 }
 
 function countryFromStrategicTarget(state: GameState, target: string): SelectedCountry {
@@ -714,6 +888,50 @@ export function runStrategicResponse(state: GameState, responseId: string): Game
   );
 }
 
+export function runOperationPlan(state: GameState, planIdToRun: string): GameState {
+  const plan = state.operationPlans.find((item) => item.id === planIdToRun);
+
+  if (!plan) return createNotice(state, 'Оперативный план не найден', 'error');
+
+  if (plan.expiresTurn < state.turnNumber) {
+    return createNotice(
+      {
+        ...state,
+        operationPlans: state.operationPlans.filter((item) => item.id !== planIdToRun),
+      },
+      'Оперативный план устарел',
+      'error',
+    );
+  }
+
+  const nextState = createStrategicOrder(state, operationPlanToOrder(plan));
+  if (nextState.lastNotice?.kind !== 'success') return nextState;
+
+  return {
+    ...nextState,
+    operationPlans: nextState.operationPlans.filter((item) => item.id !== planIdToRun),
+  };
+}
+
+export function dismissOperationPlan(state: GameState, planIdToDismiss: string): GameState {
+  const plan = state.operationPlans.find((item) => item.id === planIdToDismiss);
+  if (!plan) return createNotice(state, 'Оперативный план не найден', 'error');
+
+  return createNotice(
+    {
+      ...state,
+      operationPlans: state.operationPlans.filter((item) => item.id !== planIdToDismiss),
+      timelineEvents: pushTimeline(state.timelineEvents, {
+        icon: '×',
+        tone: 'bronze',
+        title: 'Оперативный план снят',
+        text: `Штаб снял план "${plan.title}", чтобы освободить внимание для других решений.`,
+      }),
+    },
+    'Оперативный план снят',
+  );
+}
+
 type ResolvedOrderOutcome = {
   report: CompletedOrderReport;
   event: TimelineEvent;
@@ -805,6 +1023,8 @@ function resolveCompletedOrder(order: Order, nextTurn: number): ResolvedOrderOut
 export function endTurn(state: GameState): GameState {
   const nextTurn = state.turnNumber + 1;
   const completedOrders: Order[] = [];
+  const activeOperationPlans = state.operationPlans.filter((plan) => plan.expiresTurn >= nextTurn);
+  const expiredOperationPlans = state.operationPlans.filter((plan) => plan.expiresTurn < nextTurn);
   const activeOrders = state.orders
     .filter((order) => order.statusClass !== 'cancelled')
     .map((order) => {
@@ -861,6 +1081,15 @@ export function endTurn(state: GameState): GameState {
       : 'Доход начислен, текущие приказы продвинулись, державы мира сделали ответные ходы.',
     time: 'только что',
   };
+  const expiredPlanEvent: TimelineEvent | null = expiredOperationPlans.length
+    ? {
+        icon: '⌛',
+        tone: 'bronze',
+        title: 'Оперативные планы устарели',
+        text: `Устарело планов: ${expiredOperationPlans.length}. Разведданные нужно обновлять перед запуском рискованных действий.`,
+        time: `Ход ${nextTurn}`,
+      }
+    : null;
   let nextLetters = state.letters;
   resolvedOrders.forEach((order) => {
     if (order.letter) nextLetters = pushLetter(nextLetters, order.letter);
@@ -882,6 +1111,7 @@ export function endTurn(state: GameState): GameState {
       ...state,
       turnNumber: nextTurn,
       orders: activeOrders,
+      operationPlans: activeOperationPlans,
       resources: applyResourceDelta(state.resources, totalResourceDelta),
       diplomacy: applyDiplomacyDelta(state.diplomacy, totalDiplomacyDelta),
       nations: world.nations,
@@ -892,7 +1122,13 @@ export function endTurn(state: GameState): GameState {
         resourceDelta: totalResourceDelta,
         diplomacyDelta: totalDiplomacyDelta,
       },
-      timelineEvents: [...completedEvents, ...worldTimelineEvents, turnEvent, ...state.timelineEvents].slice(0, MAX_TIMELINE_EVENTS),
+      timelineEvents: [
+        ...completedEvents,
+        ...worldTimelineEvents,
+        ...(expiredPlanEvent ? [expiredPlanEvent] : []),
+        turnEvent,
+        ...state.timelineEvents,
+      ].slice(0, MAX_TIMELINE_EVENTS),
       letters: nextLetters,
       chatMessages: [...state.chatMessages, ...world.chatMessages].slice(-MAX_CHAT_MESSAGES),
       quickActionTurns: {},
