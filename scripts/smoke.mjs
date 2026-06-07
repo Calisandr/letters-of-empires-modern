@@ -77,6 +77,31 @@ try {
     filter: getComputedStyle(node).filter,
   }));
 
+  const readRightPanelState = () =>
+    page.evaluate(() => ({
+      timelineTitles: [...document.querySelectorAll('.timeline-panel article h3')].map((node) =>
+        node.textContent?.trim(),
+      ),
+      letterSubjects: [...document.querySelectorAll('.mail-panel article p')].map((node) =>
+        node.textContent?.replace(/\s+/g, ' ').trim(),
+      ),
+      mailCount: document.querySelectorAll('.mail-panel article').length,
+    }));
+
+  const beforeComposeLetter = await readRightPanelState();
+  await page.locator('.quick-actions button').first().click();
+  await page.waitForTimeout(120);
+  const afterComposeLetter = await readRightPanelState();
+  const composeButtonDisabled = await page.locator('.quick-actions button').first().isDisabled();
+  const composeAction = {
+    beforeComposeLetter,
+    afterComposeLetter,
+    composeButtonDisabled,
+    inboxCountUnchanged: afterComposeLetter.mailCount === beforeComposeLetter.mailCount,
+    noOutgoingInInbox: !afterComposeLetter.letterSubjects.some((subject) => subject?.includes('Исходящее')),
+    sentTimelineCount: afterComposeLetter.timelineTitles.filter((title) => title === 'Письмо союзникам отправлено').length,
+  };
+
   const readGameState = () =>
     page.evaluate(() => ({
       resources: [...document.querySelectorAll('.resource-list li')].map((node) =>
@@ -94,10 +119,12 @@ try {
   await page.locator('.end-turn-button').click();
   await page.waitForTimeout(120);
   const afterEndTurn = await readGameState();
+  const composeButtonUnlockedAfterTurn = !(await page.locator('.quick-actions button').first().isDisabled());
   const gameCycle = {
     beforeGameAction,
     afterLandManagement,
     afterEndTurn,
+    composeButtonUnlockedAfterTurn,
     resourcesChangedAfterAction:
       beforeGameAction.resources.join('|') !== afterLandManagement.resources.join('|'),
     turnAdvanced: Number(afterEndTurn.turn) === Number(beforeGameAction.turn) + 1,
@@ -112,6 +139,19 @@ try {
     visibleCount: document.querySelectorAll('.toast.visible').length,
     text: document.querySelector('.toast')?.textContent || '',
   }));
+  const mailBadgeDiagnostics = await page.evaluate(() => {
+    const navMail = [...document.querySelectorAll('.nav-link')].find((node) =>
+      node.textContent?.includes('Письма'),
+    );
+    const topMail = document.querySelector('.top-actions button[aria-label="Почта"]');
+    const panelCount = document.querySelector('.mail-panel h2 span')?.textContent || '';
+
+    return {
+      navBadge: navMail?.querySelector('.pill')?.textContent || '',
+      topBadge: topMail?.querySelector('b')?.textContent || '',
+      panelCount,
+    };
+  });
 
   await page.screenshot({ path: screenshotPath, fullPage: true });
 
@@ -128,8 +168,10 @@ try {
     selectedRussia,
     chatAdded: chatText.includes('React smoke message'),
     cancelledStyle,
+    composeAction,
     gameCycle,
     toastDiagnostics,
+    mailBadgeDiagnostics,
     consoleErrors,
     screenshot: screenshotPath,
   };
@@ -142,11 +184,18 @@ try {
     !afterZoom.includes('1.12') ||
     !selectedRussia ||
     !result.chatAdded ||
+    !composeAction.composeButtonDisabled ||
+    !composeAction.inboxCountUnchanged ||
+    !composeAction.noOutgoingInInbox ||
+    composeAction.sentTimelineCount !== 1 ||
     !gameCycle.resourcesChangedAfterAction ||
     !gameCycle.turnAdvanced ||
     !gameCycle.resourcesChangedAfterTurn ||
+    !gameCycle.composeButtonUnlockedAfterTurn ||
     toastDiagnostics.count !== 1 ||
     toastDiagnostics.visibleCount !== 1 ||
+    mailBadgeDiagnostics.navBadge !== mailBadgeDiagnostics.panelCount ||
+    mailBadgeDiagnostics.topBadge !== mailBadgeDiagnostics.panelCount ||
     consoleErrors.length > 0;
 
   console.log(JSON.stringify(result, null, 2));

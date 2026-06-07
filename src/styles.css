@@ -63,6 +63,18 @@ button svg,
   background: rgba(138, 94, 42, .32);
 }
 
+.quick-actions button:disabled {
+  cursor: default;
+  opacity: .5;
+  filter: grayscale(.35);
+}
+
+.quick-actions button:disabled:hover {
+  border-color: rgba(205, 162, 85, .2);
+  background: rgba(10, 18, 18, .56);
+  color: rgba(232, 215, 168, .74);
+}
+
 .order-card .status.cancelled {
   color: #d05b52;
 }

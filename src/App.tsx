@@ -198,6 +198,8 @@ const quickActions: Array<{ id: QuickActionId; label: string; icon: LucideIcon; 
   { id: 'diplomacy', label: 'Дипломатия', icon: Handshake, toast: 'Дипломатические переговоры' },
 ];
 
+const oncePerTurnQuickActions = new Set<QuickActionId>(['compose-letter', 'manage-lands', 'diplomacy']);
+
 const initialChatMessages: ChatMessage[] = [
   {
     id: 1,
@@ -457,6 +459,7 @@ function App() {
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>(initialTimeline);
   const [letters, setLetters] = useState<Letter[]>(initialLetters);
   const [diplomacy, setDiplomacy] = useState<DiplomacyRelation[]>(initialDiplomacy);
+  const [quickActionTurns, setQuickActionTurns] = useState<Partial<Record<QuickActionId, number>>>({});
   const [turnNumber, setTurnNumber] = useState(123);
   const [secondsLeft, setSecondsLeft] = useState(18 * 3600 + 42 * 60 + 31);
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -673,11 +676,27 @@ function App() {
   };
 
   const pushTimeline = useCallback((event: Omit<TimelineEvent, 'time'> & { time?: string }) => {
-    setTimelineEvents((events) => [{ ...event, time: event.time || 'только что' }, ...events].slice(0, 5));
+    const nextEvent = { ...event, time: event.time || 'только что' };
+
+    setTimelineEvents((events) => {
+      const latest = events[0];
+      if (latest?.title === nextEvent.title && latest.text === nextEvent.text) {
+        return [{ ...latest, time: nextEvent.time }, ...events.slice(1)];
+      }
+
+      return [nextEvent, ...events].slice(0, 5);
+    });
   }, []);
 
   const pushLetter = useCallback((letter: Letter) => {
-    setLetters((items) => [letter, ...items].slice(0, 5));
+    setLetters((items) => {
+      const latest = items[0];
+      if (latest?.from === letter.from && latest.subject === letter.subject) {
+        return [{ ...latest, time: letter.time }, ...items.slice(1)];
+      }
+
+      return [letter, ...items].slice(0, 5);
+    });
   }, []);
 
   const createStrategicOrder = useCallback(
@@ -726,24 +745,35 @@ function App() {
   const handleQuickAction = useCallback(
     (id: QuickActionId) => {
       if (id === 'compose-letter') {
-        pushLetter({ tone: 'blue', from: 'Россия', subject: 'Исходящее письмо союзникам', time: 'только что' });
+        if (quickActionTurns[id] === turnNumber) {
+          showToast('Канцелярия уже отправила письмо в этом ходу');
+          return;
+        }
+
+        setQuickActionTurns((current) => ({ ...current, [id]: turnNumber }));
         pushTimeline({
           icon: '✉',
           tone: 'blue',
-          title: 'Письмо отправлено',
-          text: 'Канцелярия направила дипломатическое письмо союзникам.',
+          title: 'Письмо союзникам отправлено',
+          text: 'Канцелярия направила исходящее письмо союзникам. Ответ появится во входящих после дипломатического хода.',
         });
-        showToast('Письмо отправлено');
+        showToast('Письмо отправлено союзникам');
         return;
       }
 
       if (id === 'manage-lands') {
+        if (quickActionTurns[id] === turnNumber) {
+          showToast('Земли уже перераспределены в этом ходу');
+          return;
+        }
+
         const cost: ResourceDelta = { gold: 380, wood: 220, stone: 180 };
         if (!canPay(resources, cost)) {
           showToast(`Не хватает ресурсов: ${describeResourceCost(resources, cost)}`);
           return;
         }
 
+        setQuickActionTurns((current) => ({ ...current, [id]: turnNumber }));
         setResources((current) =>
           applyResourceDelta(current, { gold: -380, wood: -220, stone: -180 }).map((resource) => {
             if (resource.id === 'grain') return { ...resource, perTurn: resource.perTurn + 90 };
@@ -793,6 +823,12 @@ function App() {
       }
 
       if (id === 'diplomacy') {
+        if (quickActionTurns[id] === turnNumber) {
+          showToast('Дипломаты уже ведут переговоры в этом ходу');
+          return;
+        }
+
+        setQuickActionTurns((current) => ({ ...current, [id]: turnNumber }));
         setDiplomacy((relations) => applyDiplomacyDelta(relations, { Франция: 4, Турция: 2 }));
         pushLetter({ tone: 'gold', from: 'Франция', subject: 'Ответ на переговоры', time: 'только что' });
         pushTimeline({
@@ -817,7 +853,7 @@ function App() {
         completeText: 'Инфраструктура улучшена: логистика и сбор налогов стали эффективнее.',
       });
     },
-    [createStrategicOrder, pushLetter, pushTimeline, resources, showToast],
+    [createStrategicOrder, pushLetter, pushTimeline, quickActionTurns, resources, showToast, turnNumber],
   );
 
   const cancelOrder = (id: string) => {
@@ -927,11 +963,12 @@ function App() {
   return (
     <>
       <div className={appClassName} data-routes={routesVisible ? 'on' : 'off'}>
-        <Topbar activeNav={activeNav} onNavClick={handleNavClick} showToast={showToast} />
+        <Topbar activeNav={activeNav} mailCount={letters.length} onNavClick={handleNavClick} showToast={showToast} />
 
         <EmpirePanel
           clock={formatClock(secondsLeft)}
           resources={resources}
+          quickActionTurns={quickActionTurns}
           turnNumber={turnNumber}
           onEndTurn={handleEndTurn}
           onQuickAction={handleQuickAction}
@@ -1057,17 +1094,19 @@ function App() {
 
 function Topbar({
   activeNav,
+  mailCount,
   onNavClick,
   showToast,
 }: {
   activeNav: string;
+  mailCount: number;
   onNavClick: (label: string) => void;
   showToast: (message: string) => void;
 }) {
   const topActions = [
     { label: 'Поиск', icon: Search },
     { label: 'Корона', icon: Crown, className: 'crown' },
-    { label: 'Почта', icon: Mail, badge: 5 },
+    { label: 'Почта', icon: Mail, badge: mailCount },
     { label: 'Уведомления', icon: Bell },
     { label: 'Помощь', icon: CircleHelp },
   ];
@@ -1090,18 +1129,22 @@ function Topbar({
       </a>
 
       <nav className="primary-nav" aria-label="Главные разделы">
-        {navItems.map(({ label, badge, icon: Icon }) => (
-          <button
-            key={label}
-            className={`nav-link ${activeNav === label ? 'active' : ''}`}
-            type="button"
-            onClick={() => onNavClick(label)}
-          >
-            <Icon aria-hidden="true" size={14} />
-            {label}
-            {badge ? <span className="pill">{badge}</span> : null}
-          </button>
-        ))}
+        {navItems.map(({ label, badge, icon: Icon }) => {
+          const badgeValue = label === 'Письма' ? mailCount : badge;
+
+          return (
+            <button
+              key={label}
+              className={`nav-link ${activeNav === label ? 'active' : ''}`}
+              type="button"
+              onClick={() => onNavClick(label)}
+            >
+              <Icon aria-hidden="true" size={14} />
+              {label}
+              {badgeValue ? <span className="pill">{badgeValue}</span> : null}
+            </button>
+          );
+        })}
       </nav>
 
       <div className="top-actions" aria-label="Быстрые действия">
@@ -1133,12 +1176,14 @@ function Topbar({
 function EmpirePanel({
   clock,
   resources,
+  quickActionTurns,
   turnNumber,
   onEndTurn,
   onQuickAction,
 }: {
   clock: string;
   resources: ResourceState[];
+  quickActionTurns: Partial<Record<QuickActionId, number>>;
   turnNumber: number;
   onEndTurn: () => void;
   onQuickAction: (id: QuickActionId) => void;
@@ -1191,12 +1236,22 @@ function EmpirePanel({
         </div>
         <div className="section-title">Быстрые действия</div>
         <div className="quick-actions">
-          {quickActions.map(({ id, label, icon: Icon, toast }) => (
-            <button key={label} type="button" title={toast || label} onClick={() => onQuickAction(id)}>
-              <Icon aria-hidden="true" />
-              {label}
-            </button>
-          ))}
+          {quickActions.map(({ id, label, icon: Icon, toast }) => {
+            const isLocked = oncePerTurnQuickActions.has(id) && quickActionTurns[id] === turnNumber;
+
+            return (
+              <button
+                key={label}
+                type="button"
+                title={isLocked ? 'Действие уже выполнено в этом ходу' : toast || label}
+                onClick={() => onQuickAction(id)}
+                disabled={isLocked}
+              >
+                <Icon aria-hidden="true" />
+                {label}
+              </button>
+            );
+          })}
         </div>
       </section>
       <footer className="server-line">
