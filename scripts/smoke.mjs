@@ -90,19 +90,49 @@ try {
     label: node.getAttribute('aria-label'),
   }));
 
-  const greenlandCountry = page.locator('.country[data-name="Greenland"]');
-  await greenlandCountry.click();
-  await page.waitForFunction(() =>
-    document.querySelector('.country[data-name="Greenland"]')?.classList.contains('selected'),
+  const inspectCountryIntel = async (countryName) => {
+    const country = page.locator(`.country[data-name="${countryName}"]`);
+    await country.focus();
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(
+      (name) => document.querySelector(`.country[data-name="${name}"]`)?.classList.contains('selected'),
+      countryName,
+    );
+    return page.evaluate(() => {
+      const flag = document.querySelector('.country-intel .flag');
+      const flagStyle = flag ? getComputedStyle(flag) : null;
+      return {
+        title: document.querySelector('.country-intel strong')?.textContent?.trim() || '',
+        flagClass: flag?.className.toString() || '',
+        flagTitle: flag?.getAttribute('title') || '',
+        flagBackgroundImage: flagStyle?.backgroundImage || '',
+        visibleBeforeClose: Boolean(document.querySelector('.country-intel')),
+      };
+    });
+  };
+
+  const algeriaIntel = await inspectCountryIntel('Algeria');
+  const brazilIntel = await inspectCountryIntel('Brazil');
+  const greenlandIntel = await inspectCountryIntel('Greenland');
+  const countryIntelFlagDiagnostics = {
+    algeriaIntel,
+    brazilIntel,
+    greenlandIntel,
+  };
+  const countryIntelFlagsWork = [algeriaIntel, brazilIntel, greenlandIntel].every((intel) =>
+    intel.visibleBeforeClose &&
+    intel.flagClass.includes('flag-svg') &&
+    intel.flagClass.includes('fi-') &&
+    intel.flagBackgroundImage.includes('url('),
   );
-  const greenlandIntel = await page.evaluate(() => {
+  const countryIntelStillUsesEmojiFallback = [algeriaIntel, brazilIntel, greenlandIntel].some((intel) =>
+    intel.flagClass.includes('emoji-flag') || intel.flagBackgroundImage === 'none',
+  );
+  const countryIntelShowsTextCode = await page.evaluate(() => {
     const flag = document.querySelector('.country-intel .flag');
     return {
-      title: document.querySelector('.country-intel strong')?.textContent?.trim() || '',
-      flagClass: flag?.className.toString() || '',
-      flagData: flag?.getAttribute('data-flag') || '',
-      flagTitle: flag?.getAttribute('title') || '',
-      visibleBeforeClose: Boolean(document.querySelector('.country-intel')),
+      text: flag?.textContent?.trim() || '',
+      pseudoText: flag ? getComputedStyle(flag, '::before').content + getComputedStyle(flag, '::after').content : '',
     };
   });
   await page.locator('.country-intel-close').click();
@@ -245,7 +275,10 @@ try {
     tooltip,
     selectedRussia,
     keyboardSelectedFrance,
-    greenlandIntel,
+    countryIntelFlagDiagnostics,
+    countryIntelFlagsWork,
+    countryIntelStillUsesEmojiFallback,
+    countryIntelShowsTextCode,
     countryIntelClosed,
     chatTabDiagnostics,
     chatAdded: chatText.includes('React smoke message'),
@@ -270,9 +303,11 @@ try {
     !keyboardSelectedFrance.selected ||
     keyboardSelectedFrance.role !== 'button' ||
     !keyboardSelectedFrance.label?.includes('Франция') ||
-    !greenlandIntel.visibleBeforeClose ||
-    !greenlandIntel.flagClass.includes('emoji-flag') ||
-    !greenlandIntel.flagData ||
+    !countryIntelFlagsWork ||
+    countryIntelStillUsesEmojiFallback ||
+    countryIntelShowsTextCode.text ||
+    countryIntelShowsTextCode.pseudoText.includes('DZ') ||
+    countryIntelShowsTextCode.pseudoText.includes('BR') ||
     !countryIntelClosed ||
     !result.chatAdded ||
     chatTabDiagnostics.activeText !== 'Альянс' ||

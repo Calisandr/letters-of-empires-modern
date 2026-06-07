@@ -447,25 +447,13 @@ function clampStat(value: number) {
   return Math.max(8, Math.min(96, Math.round(value)));
 }
 
-function emojiFlagFromCountryCode(code?: string) {
-  const normalizedCode = code?.trim().toUpperCase();
-  if (!normalizedCode || !/^[A-Z]{2}$/.test(normalizedCode)) return '';
-
-  return [...normalizedCode]
-    .map((char) => String.fromCodePoint(127397 + char.charCodeAt(0)))
-    .join('');
-}
-
 function getCountryFlagView(countryKey?: string, countryName?: string, fallbackFlag?: string) {
   const legacyCode = fallbackFlag ? codeByFlagClass[fallbackFlag] : undefined;
   const code = countryFlagCodes[countryKey || ''] || countryFlagCodes[countryName || ''] || legacyCode;
-  const className = code ? flagClassByCode[code] : fallbackFlag && fallbackFlag !== 'neutral' ? fallbackFlag : '';
-  const emoji = className ? '' : emojiFlagFromCountryCode(code);
+  if (code) return { className: `flag-svg fi fi-${code.toLowerCase()}`, code };
+  if (fallbackFlag && fallbackFlag !== 'neutral') return { className: fallbackFlag, code: '' };
 
-  if (className) return { className, code, emoji: '' };
-  if (emoji) return { className: 'emoji-flag', code, emoji };
-
-  return { className: 'neutral', code: '', emoji: '' };
+  return { className: 'neutral', code: '' };
 }
 
 function fallbackRelation(status: string) {
@@ -590,7 +578,6 @@ function CountryIntelPanel({
       <header>
         <span
           className={`flag ${flagView.className}`}
-          data-flag={flagView.emoji || undefined}
           title={flagView.code ? `Флаг: ${flagView.code}` : undefined}
           aria-hidden="true"
         />
