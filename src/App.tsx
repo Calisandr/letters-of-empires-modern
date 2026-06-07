@@ -1,4 +1,4 @@
-import { FormEvent, MouseEvent, memo, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, MouseEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   Anchor,
@@ -331,6 +331,8 @@ function App() {
   const selectedCountryRef = useRef<SVGElement | null>(null);
   const activeTooltipCountryRef = useRef<string | null>(null);
   const tooltipFrameRef = useRef<number | null>(null);
+  const toastIdRef = useRef(0);
+  const lastToastRef = useRef<{ message: string; time: number } | null>(null);
   const latestTooltipRef = useRef<{
     country: SVGElement;
     clientX: number;
@@ -338,9 +340,18 @@ function App() {
   } | null>(null);
   const chatMessagesRef = useRef<HTMLDivElement | null>(null);
 
-  const showToast = (message: string) => {
-    setToast({ id: Date.now(), message });
-  };
+  const showToast = useCallback((message: string) => {
+    const now = window.performance.now();
+    const lastToast = lastToastRef.current;
+
+    if (lastToast?.message === message && now - lastToast.time < 650) {
+      return;
+    }
+
+    lastToastRef.current = { message, time: now };
+    toastIdRef.current += 1;
+    setToast({ id: toastIdRef.current, message });
+  }, []);
 
   const appClassName = useMemo(() => {
     return ['app-shell', mapModes[mapModeIndex].className].filter(Boolean).join(' ');
