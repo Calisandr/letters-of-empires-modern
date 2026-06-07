@@ -1,5 +1,5 @@
 import { FormEvent, MouseEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { motion } from 'motion/react';
 import {
   Anchor,
   Bell,
@@ -331,6 +331,7 @@ function App() {
   const selectedCountryRef = useRef<SVGElement | null>(null);
   const activeTooltipCountryRef = useRef<string | null>(null);
   const tooltipFrameRef = useRef<number | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
   const toastIdRef = useRef(0);
   const lastToastRef = useRef<{ message: string; time: number } | null>(null);
   const latestTooltipRef = useRef<{
@@ -344,13 +345,22 @@ function App() {
     const now = window.performance.now();
     const lastToast = lastToastRef.current;
 
-    if (lastToast?.message === message && now - lastToast.time < 650) {
-      return;
+    lastToastRef.current = { message, time: now };
+
+    if (lastToast?.message !== message || now - lastToast.time >= 650) {
+      toastIdRef.current += 1;
     }
 
-    lastToastRef.current = { message, time: now };
-    toastIdRef.current += 1;
     setToast({ id: toastIdRef.current, message });
+
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, 1700);
   }, []);
 
   const appClassName = useMemo(() => {
@@ -366,15 +376,12 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!toast) return;
-    const timer = window.setTimeout(() => setToast(null), 1700);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
-
-  useEffect(() => {
     return () => {
       if (tooltipFrameRef.current !== null) {
         window.cancelAnimationFrame(tooltipFrameRef.current);
+      }
+      if (toastTimerRef.current !== null) {
+        window.clearTimeout(toastTimerRef.current);
       }
     };
   }, []);
@@ -646,20 +653,19 @@ function App() {
         <RightPanel showToast={showToast} />
       </div>
 
-      <AnimatePresence>
-        {toast ? (
-          <motion.div
-            key={toast.id}
-            className="toast visible"
-            initial={{ opacity: 0, y: 14, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.98 }}
-            transition={{ duration: 0.18 }}
-          >
-            {toast.message}
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+      <motion.div
+        key="app-toast"
+        className={`toast ${toast ? 'visible' : ''}`}
+        animate={{
+          opacity: toast ? 1 : 0,
+          y: toast ? 0 : 14,
+          scale: toast ? 1 : 0.98,
+        }}
+        transition={{ duration: 0.16 }}
+        aria-live="polite"
+      >
+        {toast?.message}
+      </motion.div>
     </>
   );
 }
