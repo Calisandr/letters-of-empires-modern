@@ -12,6 +12,13 @@ button svg,
   pointer-events: none;
 }
 
+button:focus-visible,
+input:focus-visible,
+.country:focus-visible {
+  outline: 2px solid rgba(243, 202, 113, .82);
+  outline-offset: 2px;
+}
+
 .icon-button svg,
 .map-controls svg,
 .chat-input button svg,
@@ -73,6 +80,128 @@ button svg,
   border-color: rgba(205, 162, 85, .2);
   background: rgba(10, 18, 18, .56);
   color: rgba(232, 215, 168, .74);
+}
+
+.utility-panel {
+  position: fixed;
+  top: 60px;
+  left: 252px;
+  z-index: 55;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  gap: 12px;
+  width: min(520px, calc(100vw - 540px));
+  min-width: 360px;
+  padding: 12px 12px 11px;
+  background:
+    linear-gradient(180deg, rgba(13, 25, 23, .96), rgba(6, 13, 13, .94)),
+    #081211;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, .42);
+}
+
+.utility-panel strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #f1cf76;
+  font: 700 15px/1 var(--serif);
+  letter-spacing: .04em;
+}
+
+.utility-panel p {
+  margin: 0 0 4px;
+  color: rgba(226, 219, 188, .92);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.utility-panel small {
+  color: rgba(166, 185, 162, .9);
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
+.utility-panel button {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(205, 162, 85, .32);
+  background: rgba(8, 15, 14, .72);
+  color: #d7bd75;
+  cursor: pointer;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, .58);
+  backdrop-filter: blur(3px);
+}
+
+.action-dialog {
+  width: min(440px, calc(100vw - 40px));
+  padding: 14px;
+  color: #d6c79d;
+  background:
+    linear-gradient(180deg, rgba(14, 27, 25, .98), rgba(6, 12, 12, .98)),
+    #091211;
+  box-shadow: 0 18px 54px rgba(0, 0, 0, .54);
+}
+
+.action-dialog .panel-heading {
+  margin-bottom: 12px;
+}
+
+.action-dialog p {
+  margin: 0 0 12px;
+  color: rgba(219, 209, 174, .9);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.action-dialog dl {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 7px 12px;
+  margin: 0 0 14px;
+  padding: 12px;
+  border: 1px solid rgba(205, 162, 85, .2);
+  background: rgba(4, 10, 10, .42);
+}
+
+.action-dialog dt {
+  color: rgba(190, 181, 148, .72);
+  font-size: 12px;
+}
+
+.action-dialog dd {
+  margin: 0;
+  color: #efd17e;
+  font-size: 12.5px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.dialog-actions button {
+  min-height: 32px;
+  padding: 0 13px;
+  border: 1px solid rgba(205, 162, 85, .32);
+  background: rgba(12, 19, 18, .72);
+  color: #d7c28a;
+  font: 700 12px/1 var(--serif);
+  cursor: pointer;
+}
+
+.dialog-actions .primary {
+  border-color: rgba(242, 190, 86, .62);
+  background: rgba(128, 86, 35, .4);
+  color: #ffe08d;
 }
 
 .order-card .status.cancelled {

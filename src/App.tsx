@@ -1,4 +1,4 @@
-import { FormEvent, MouseEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, KeyboardEvent, MouseEvent, memo, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   Anchor,
@@ -31,71 +31,24 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import worldMapSvg from './assets/world-map.svg?raw';
+import { oncePerTurnQuickActions } from './game/engine';
+import { formatClock, formatResourceTrend, formatResourceValue } from './game/formatters';
+import { playerCountry } from './game/initialState';
+import { gameReducer } from './game/reducer';
+import { loadGameState, saveGameState } from './game/storage';
+import type {
+  ChatMessage,
+  DiplomacyRelation,
+  Letter,
+  Order,
+  OrderIconKey,
+  QuickActionId,
+  ResourceState,
+  TimelineEvent,
+} from './game/types';
 
 type ToastState = {
   message: string;
-};
-
-type ChatMessage = {
-  id: number;
-  time: string;
-  faction: string;
-  flag: string;
-  text: string;
-};
-
-type ResourceId = 'gold' | 'wood' | 'stone' | 'iron' | 'grain' | 'population';
-type QuickActionId = 'compose-letter' | 'create-order' | 'manage-lands' | 'trade-routes' | 'recruit-army' | 'diplomacy';
-type DiplomacyTone = 'ally' | 'friendly' | 'neutral' | 'risk' | 'hostile';
-
-type ResourceState = {
-  id: ResourceId;
-  label: string;
-  value: number;
-  perTurn: number;
-  format: 'integer' | 'population';
-};
-
-type ResourceDelta = Partial<Record<ResourceId, number>>;
-
-type Order = {
-  id: string;
-  icon: LucideIcon;
-  title: string;
-  owner: string;
-  target: string;
-  status: string;
-  statusClass: string;
-  due: string;
-  remainingTurns: number;
-  totalTurns: number;
-  cost?: ResourceDelta;
-  reward?: ResourceDelta;
-  diplomacyDelta?: Record<string, number>;
-  completeText: string;
-};
-
-type TimelineEvent = {
-  icon: string;
-  tone: string;
-  title: string;
-  text: string;
-  time: string;
-};
-
-type Letter = {
-  tone: string;
-  from: string;
-  subject: string;
-  time: string;
-};
-
-type DiplomacyRelation = {
-  flag: string;
-  name: string;
-  status: string;
-  tone: DiplomacyTone;
-  score: number;
 };
 
 const navItems = [
@@ -175,20 +128,6 @@ const countryNames: Record<string, string> = {
   'W. Sahara': 'Западная Сахара',
 };
 
-const playerCountry = {
-  name: 'Россия',
-  flag: 'russia',
-};
-
-const initialResources: ResourceState[] = [
-  { id: 'gold', label: 'Золото', value: 12540, perTurn: 1250, format: 'integer' },
-  { id: 'wood', label: 'Дерево', value: 8760, perTurn: 720, format: 'integer' },
-  { id: 'stone', label: 'Камень', value: 6410, perTurn: 610, format: 'integer' },
-  { id: 'iron', label: 'Железо', value: 7230, perTurn: 560, format: 'integer' },
-  { id: 'grain', label: 'Зерно', value: 9850, perTurn: 1100, format: 'integer' },
-  { id: 'population', label: 'Население', value: 146.2, perTurn: 0.8, format: 'population' },
-];
-
 const quickActions: Array<{ id: QuickActionId; label: string; icon: LucideIcon; toast?: string }> = [
   { id: 'compose-letter', label: 'Написать письмо', icon: Mail },
   { id: 'create-order', label: 'Создать приказ', icon: Flag },
@@ -198,231 +137,15 @@ const quickActions: Array<{ id: QuickActionId; label: string; icon: LucideIcon; 
   { id: 'diplomacy', label: 'Дипломатия', icon: Handshake, toast: 'Дипломатические переговоры' },
 ];
 
-const oncePerTurnQuickActions = new Set<QuickActionId>(['compose-letter', 'manage-lands', 'diplomacy']);
-
-const initialChatMessages: ChatMessage[] = [
-  {
-    id: 1,
-    time: '12:45',
-    flag: 'france',
-    faction: 'Франция',
-    text: 'Кто заинтересован в совместной торговле редкими ресурсами?',
-  },
-  {
-    id: 2,
-    time: '12:45',
-    flag: 'turkey',
-    faction: 'Турция',
-    text: 'Мы открыты к переговорам по новому маршруту через Черное море.',
-  },
-  {
-    id: 3,
-    time: '12:46',
-    flag: 'russia',
-    faction: 'Россия',
-    text: 'Нужно обсудить долгосрочные поставки железа и зерна.',
-  },
-  {
-    id: 4,
-    time: '12:47',
-    flag: 'india',
-    faction: 'Индия',
-    text: 'Внимание всем! На наши земли совершено нападение пиратов.',
-  },
-  {
-    id: 5,
-    time: '12:47',
-    flag: 'germany',
-    faction: 'Германия',
-    text: 'Предлагаю заключить пакт о ненападении между нашими странами.',
-  },
-];
-
-const initialOrders: Order[] = [
-  {
-    id: 'trade-india',
-    icon: Package,
-    title: 'Отправить торговый караван в Индию',
-    owner: 'Торговый совет',
-    target: 'Дели',
-    status: 'В пути',
-    statusClass: 'moving',
-    due: '2 дня',
-    remainingTurns: 2,
-    totalTurns: 2,
-    cost: { gold: 420, grain: 260 },
-    reward: { gold: 1500, grain: 650 },
-    diplomacyDelta: { Индия: 8 },
-    completeText: 'Караван достиг Дели: казна получила прибыль, а отношения с Индией укрепились.',
-  },
-  {
-    id: 'ukraine-border',
-    icon: Swords,
-    title: 'Укрепить границу с Украиной',
-    owner: 'Генерал армии',
-    target: 'Харьков',
-    status: 'В работе',
-    statusClass: 'progress',
-    due: '3 дня',
-    remainingTurns: 3,
-    totalTurns: 3,
-    cost: { gold: 650, iron: 360, grain: 220 },
-    reward: { iron: 180 },
-    diplomacyDelta: { Украина: -4 },
-    completeText: 'Граница усилена: снабжение укреплено, но напряжение с Украиной выросло.',
-  },
-  {
-    id: 'kuzbass-mines',
-    icon: Pickaxe,
-    title: 'Развивать шахты в Кузбассе',
-    owner: 'Совет по развитию',
-    target: 'Кузбасс',
-    status: 'В работе',
-    statusClass: 'progress',
-    due: '5 дней',
-    remainingTurns: 5,
-    totalTurns: 5,
-    cost: { gold: 900, wood: 520, stone: 400 },
-    reward: { iron: 1900, stone: 850 },
-    completeText: 'Шахты Кузбасса расширены: добыча железа и камня заметно выросла.',
-  },
-];
-
-const initialTimeline: TimelineEvent[] = [
-  {
-    icon: '⚑',
-    tone: 'blue',
-    title: 'Новый торговый договор',
-    text: 'Франция и Испания подписали торговый договор.',
-    time: '10 мин. назад',
-  },
-  {
-    icon: '✦',
-    tone: 'red',
-    title: 'Военный альянс создан',
-    text: 'Германия и Швейцария создали военный альянс.',
-    time: '45 мин. назад',
-  },
-  {
-    icon: '⚔',
-    tone: 'red',
-    title: 'Восстание подавлено',
-    text: 'В провинции Синьцзян восстание было подавлено.',
-    time: '2 часа назад',
-  },
-  {
-    icon: '♜',
-    tone: 'green',
-    title: 'Новый правитель',
-    text: 'В Аргентине новый правитель: Король Матиас I.',
-    time: '3 часа назад',
-  },
-  {
-    icon: '◎',
-    tone: 'bronze',
-    title: 'Торговый путь установлен',
-    text: 'Турция и Индия установили новый торговый путь.',
-    time: '5 часов назад',
-  },
-];
-
-const initialLetters: Letter[] = [
-  { tone: 'neutral', from: 'Франция', subject: 'Торговое предложение', time: '5 мин. назад' },
-  { tone: 'red', from: 'Турция', subject: 'Дипломатический запрос', time: '32 мин. назад' },
-  { tone: 'burgundy', from: 'Германия', subject: 'Военный союз', time: '1 час назад' },
-  { tone: 'gold', from: 'Китай', subject: 'Граница и торговля', time: '2 часа назад' },
-  { tone: 'blue', from: 'Аргентина', subject: 'Обмен ресурсами', time: '3 часа назад' },
-];
-
-const initialDiplomacy: DiplomacyRelation[] = [
-  { flag: 'china', name: 'Китай', status: 'Союзники', tone: 'ally', score: 165 },
-  { flag: 'india', name: 'Индия', status: 'Союзники', tone: 'ally', score: 120 },
-  { flag: 'france', name: 'Франция', status: 'Дружественные', tone: 'friendly', score: 75 },
-  { flag: 'turkey', name: 'Турция', status: 'Нейтральные', tone: 'neutral', score: 10 },
-  { flag: 'germany', name: 'Германия', status: 'Нейтральные', tone: 'neutral', score: 5 },
-  { flag: 'japan', name: 'Япония', status: 'Риск конфликта', tone: 'risk', score: -25 },
-  { flag: 'ukraine', name: 'Украина', status: 'Враждебные', tone: 'hostile', score: -80 },
-];
-
-const formatClock = (value: number) => {
-  const h = String(Math.floor(value / 3600)).padStart(2, '0');
-  const m = String(Math.floor((value % 3600) / 60)).padStart(2, '0');
-  const s = String(value % 60).padStart(2, '0');
-  return `${h}:${m}:${s}`;
+const orderIcons: Record<OrderIconKey, LucideIcon> = {
+  package: Package,
+  swords: Swords,
+  pickaxe: Pickaxe,
+  anchor: Anchor,
+  shield: Shield,
+  landmark: Landmark,
+  mail: Mail,
 };
-
-function formatOrderDue(turns: number) {
-  if (turns <= 0) return 'готово';
-  if (turns === 1) return '1 день';
-  if (turns < 5) return `${turns} дня`;
-  return `${turns} дней`;
-}
-
-function formatResourceValue(resource: ResourceState) {
-  if (resource.format === 'population') return `${resource.value.toFixed(1)}M`;
-  return Math.round(resource.value).toLocaleString('ru-RU');
-}
-
-function formatResourceTrend(resource: ResourceState) {
-  const sign = resource.perTurn >= 0 ? '+' : '';
-  if (resource.format === 'population') return `${sign}${resource.perTurn.toFixed(1)}%`;
-  return `${sign}${Math.round(resource.perTurn).toLocaleString('ru-RU')}/ход`;
-}
-
-function applyResourceDelta(resources: ResourceState[], delta: ResourceDelta = {}) {
-  return resources.map((resource) => {
-    const change = delta[resource.id] ?? 0;
-    if (!change) return resource;
-
-    return {
-      ...resource,
-      value: Math.max(0, Number((resource.value + change).toFixed(resource.format === 'population' ? 1 : 0))),
-    };
-  });
-}
-
-function canPay(resources: ResourceState[], cost: ResourceDelta = {}) {
-  return resources.every((resource) => (cost[resource.id] ?? 0) <= resource.value);
-}
-
-function describeResourceCost(resources: ResourceState[], cost: ResourceDelta = {}) {
-  return resources
-    .filter((resource) => cost[resource.id])
-    .map((resource) => `${resource.label}: ${Math.round(cost[resource.id] ?? 0).toLocaleString('ru-RU')}`)
-    .join(', ');
-}
-
-function relationTone(score: number): DiplomacyTone {
-  if (score >= 100) return 'ally';
-  if (score >= 50) return 'friendly';
-  if (score > -20) return 'neutral';
-  if (score > -60) return 'risk';
-  return 'hostile';
-}
-
-function relationStatus(score: number) {
-  const tone = relationTone(score);
-  if (tone === 'ally') return 'Союзники';
-  if (tone === 'friendly') return 'Дружественные';
-  if (tone === 'neutral') return 'Нейтральные';
-  if (tone === 'risk') return 'Риск конфликта';
-  return 'Враждебные';
-}
-
-function applyDiplomacyDelta(relations: DiplomacyRelation[], delta: Record<string, number> = {}) {
-  return relations.map((relation) => {
-    const change = delta[relation.name] ?? 0;
-    if (!change) return relation;
-
-    const score = Math.max(-100, Math.min(200, relation.score + change));
-    return {
-      ...relation,
-      score,
-      status: relationStatus(score),
-      tone: relationTone(score),
-    };
-  });
-}
 
 const getCountryElement = (target: EventTarget | null) => {
   if (!(target instanceof Element)) return null;
@@ -448,21 +171,27 @@ const WorldMapLayer = memo(function WorldMapLayer({
 });
 
 function App() {
+  const [gameState, dispatchGame] = useReducer(gameReducer, undefined, loadGameState);
   const [activeNav, setActiveNav] = useState('Карта мира');
   const [routesVisible, setRoutesVisible] = useState(true);
   const [mapModeIndex, setMapModeIndex] = useState(0);
   const [zoom, setZoom] = useState(1);
-  const [chatMessages, setChatMessages] = useState(initialChatMessages);
   const [chatInput, setChatInput] = useState('');
-  const [resources, setResources] = useState<ResourceState[]>(initialResources);
-  const [orders, setOrders] = useState<Order[]>(initialOrders);
-  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>(initialTimeline);
-  const [letters, setLetters] = useState<Letter[]>(initialLetters);
-  const [diplomacy, setDiplomacy] = useState<DiplomacyRelation[]>(initialDiplomacy);
-  const [quickActionTurns, setQuickActionTurns] = useState<Partial<Record<QuickActionId, number>>>({});
-  const [turnNumber, setTurnNumber] = useState(123);
+  const [activeChatTab, setActiveChatTab] = useState('Мировой чат');
+  const [activeUtilityPanel, setActiveUtilityPanel] = useState<string | null>(null);
+  const [pendingQuickAction, setPendingQuickAction] = useState<QuickActionId | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(18 * 3600 + 42 * 60 + 31);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const {
+    resources,
+    orders,
+    timelineEvents,
+    letters,
+    diplomacy,
+    chatMessages,
+    quickActionTurns,
+    turnNumber,
+  } = gameState;
 
   const mapSectionRef = useRef<HTMLElement | null>(null);
   const mapCanvasRef = useRef<HTMLDivElement | null>(null);
@@ -479,7 +208,7 @@ function App() {
     clientY: number;
   } | null>(null);
   const chatMessagesRef = useRef<HTMLDivElement | null>(null);
-  const actionIdRef = useRef(0);
+  const turnLockRef = useRef(false);
 
   const showToast = useCallback((message: string) => {
     const now = window.performance.now();
@@ -507,6 +236,14 @@ function App() {
   }, [mapModeIndex]);
 
   useEffect(() => {
+    saveGameState(gameState);
+  }, [gameState]);
+
+  useEffect(() => {
+    if (gameState.lastNotice) showToast(gameState.lastNotice.message);
+  }, [gameState.lastNotice, showToast]);
+
+  useEffect(() => {
     const timer = window.setInterval(() => {
       setSecondsLeft((current) => Math.max(0, current - 1));
     }, 1000);
@@ -532,7 +269,13 @@ function App() {
 
   const handleNavClick = (label: string) => {
     setActiveNav(label);
-    showToast(`Раздел "${label}" выбран`);
+    setActiveUtilityPanel(label);
+    showToast(`Раздел "${label}" открыт`);
+  };
+
+  const openUtilityPanel = (label: string) => {
+    setActiveUtilityPanel(label);
+    showToast(`${label}: панель открыта`);
   };
 
   const handleMapModeClick = () => {
@@ -614,12 +357,10 @@ function App() {
     }
   };
 
-  const handleMapClick = (event: MouseEvent<HTMLDivElement>) => {
-    const country = getCountryElement(event.target);
-    if (!country) return;
-
+  const selectCountry = useCallback((country: SVGElement) => {
     const sourceName = country.dataset.name || '';
     const name = countryNames[sourceName] || sourceName;
+    const status = country.dataset.status || 'common';
 
     if (selectedCountryRef.current && selectedCountryRef.current !== country) {
       selectedCountryRef.current.classList.remove('selected');
@@ -628,7 +369,62 @@ function App() {
     country.classList.add('selected');
     selectedCountryRef.current = country;
 
-    showToast(`Выбрана страна: ${name}`);
+    dispatchGame({
+      type: 'SELECT_COUNTRY',
+      country: {
+        key: sourceName,
+        name,
+        status,
+      },
+    });
+  }, []);
+
+  useEffect(() => {
+    const mapRoot = mapSvgRef.current;
+    if (!mapRoot) return;
+
+    const handleCountryKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+
+      const country = getCountryElement(event.target);
+      if (!country) return;
+
+      event.preventDefault();
+      selectCountry(country);
+    };
+
+    const countries = [...mapRoot.querySelectorAll<SVGElement>('.country')];
+    countries.forEach((country) => {
+      const sourceName = country.dataset.name || '';
+      const name = countryNames[sourceName] || sourceName;
+      country.setAttribute('role', 'button');
+      country.setAttribute('tabindex', '0');
+      country.setAttribute('aria-label', `Выбрать страну: ${name}`);
+      country.addEventListener('keydown', handleCountryKeyDown);
+    });
+
+    return () => {
+      countries.forEach((country) => {
+        country.removeEventListener('keydown', handleCountryKeyDown);
+      });
+    };
+  }, [selectCountry, zoom]);
+
+  const handleMapClick = (event: MouseEvent<HTMLDivElement>) => {
+    const country = getCountryElement(event.target);
+    if (!country) return;
+
+    selectCountry(country);
+  };
+
+  const handleMapKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+
+    const country = getCountryElement(event.target);
+    if (!country) return;
+
+    event.preventDefault();
+    selectCountry(country);
   };
 
   const handleMapLeave = () => {
@@ -655,315 +451,73 @@ function App() {
   const submitChat = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const text = chatInput.trim();
-    if (!text) return;
+    if (!text) {
+      showToast('Введите сообщение совету');
+      return;
+    }
 
     const time = new Intl.DateTimeFormat('ru-RU', {
       hour: '2-digit',
       minute: '2-digit',
     }).format(new Date());
 
-    setChatMessages((messages) => [
-      ...messages,
-      {
-        id: Date.now(),
-        time,
-        flag: 'russia',
-        faction: 'Россия',
-        text,
-      },
-    ]);
+    dispatchGame({ type: 'SUBMIT_COUNCIL_MESSAGE', text, time });
     setChatInput('');
   };
 
-  const pushTimeline = useCallback((event: Omit<TimelineEvent, 'time'> & { time?: string }) => {
-    const nextEvent = { ...event, time: event.time || 'только что' };
+  const runQuickAction = (id: QuickActionId) => {
+    dispatchGame({ type: 'RUN_QUICK_ACTION', id });
+  };
 
-    setTimelineEvents((events) => {
-      const latest = events[0];
-      if (latest?.title === nextEvent.title && latest.text === nextEvent.text) {
-        return [{ ...latest, time: nextEvent.time }, ...events.slice(1)];
-      }
+  const handleQuickAction = (id: QuickActionId) => {
+    if (id === 'create-order') {
+      setPendingQuickAction(id);
+      return;
+    }
 
-      return [nextEvent, ...events].slice(0, 5);
-    });
-  }, []);
+    runQuickAction(id);
+  };
 
-  const pushLetter = useCallback((letter: Letter) => {
-    setLetters((items) => {
-      const latest = items[0];
-      if (latest?.from === letter.from && latest.subject === letter.subject) {
-        return [{ ...latest, time: letter.time }, ...items.slice(1)];
-      }
-
-      return [letter, ...items].slice(0, 5);
-    });
-  }, []);
-
-  const createStrategicOrder = useCallback(
-    (order: Omit<Order, 'id' | 'status' | 'statusClass' | 'due'>) => {
-      const activeOrderCount = orders.filter((item) => item.statusClass !== 'cancelled').length;
-
-      if (activeOrderCount >= 5) {
-        showToast('Лимит приказов заполнен');
-        return false;
-      }
-
-      if (!canPay(resources, order.cost)) {
-        showToast(`Не хватает ресурсов: ${describeResourceCost(resources, order.cost)}`);
-        return false;
-      }
-
-      actionIdRef.current += 1;
-      setResources((current) => {
-        const costDelta = Object.fromEntries(
-          Object.entries(order.cost || {}).map(([key, value]) => [key, -value]),
-        ) as ResourceDelta;
-        return applyResourceDelta(current, costDelta);
-      });
-      setOrders((current) => [
-        ...current,
-        {
-          ...order,
-          id: `player-order-${Date.now()}-${actionIdRef.current}`,
-          status: order.remainingTurns <= 1 ? 'В работе' : 'В пути',
-          statusClass: order.remainingTurns <= 1 ? 'progress' : 'moving',
-          due: formatOrderDue(order.remainingTurns),
-        },
-      ]);
-      pushTimeline({
-        icon: '⚑',
-        tone: 'blue',
-        title: 'Новый приказ принят',
-        text: order.title,
-      });
-      showToast('Приказ принят к исполнению');
-      return true;
-    },
-    [orders, pushTimeline, resources, showToast],
-  );
-
-  const handleQuickAction = useCallback(
-    (id: QuickActionId) => {
-      if (id === 'compose-letter') {
-        if (quickActionTurns[id] === turnNumber) {
-          showToast('Канцелярия уже отправила письмо в этом ходу');
-          return;
-        }
-
-        setQuickActionTurns((current) => ({ ...current, [id]: turnNumber }));
-        pushTimeline({
-          icon: '✉',
-          tone: 'blue',
-          title: 'Письмо союзникам отправлено',
-          text: 'Канцелярия направила исходящее письмо союзникам. Ответ появится во входящих после дипломатического хода.',
-        });
-        showToast('Письмо отправлено союзникам');
-        return;
-      }
-
-      if (id === 'manage-lands') {
-        if (quickActionTurns[id] === turnNumber) {
-          showToast('Земли уже перераспределены в этом ходу');
-          return;
-        }
-
-        const cost: ResourceDelta = { gold: 380, wood: 220, stone: 180 };
-        if (!canPay(resources, cost)) {
-          showToast(`Не хватает ресурсов: ${describeResourceCost(resources, cost)}`);
-          return;
-        }
-
-        setQuickActionTurns((current) => ({ ...current, [id]: turnNumber }));
-        setResources((current) =>
-          applyResourceDelta(current, { gold: -380, wood: -220, stone: -180 }).map((resource) => {
-            if (resource.id === 'grain') return { ...resource, perTurn: resource.perTurn + 90 };
-            if (resource.id === 'gold') return { ...resource, perTurn: resource.perTurn + 45 };
-            return resource;
-          }),
-        );
-        pushTimeline({
-          icon: '♜',
-          tone: 'green',
-          title: 'Земли упорядочены',
-          text: 'Новые управленцы повысили доход золота и зерна за ход.',
-        });
-        showToast('Доходы земель выросли');
-        return;
-      }
-
-      if (id === 'trade-routes') {
-        createStrategicOrder({
-          icon: Anchor,
-          title: 'Расширить торговый маршрут в Индию',
-          owner: 'Торговый совет',
-          target: 'Индия',
-          remainingTurns: 2,
-          totalTurns: 2,
-          cost: { gold: 360, grain: 180 },
-          reward: { gold: 1250, grain: 480 },
-          diplomacyDelta: { Индия: 5 },
-          completeText: 'Новый торговый маршрут увеличил доход и укрепил отношения с Индией.',
-        });
-        return;
-      }
-
-      if (id === 'recruit-army') {
-        createStrategicOrder({
-          icon: Shield,
-          title: 'Сформировать новую полевую армию',
-          owner: 'Генеральный штаб',
-          target: 'Москва',
-          remainingTurns: 3,
-          totalTurns: 3,
-          cost: { gold: 820, iron: 520, grain: 360, population: 0.2 },
-          reward: { iron: 160 },
-          completeText: 'Новая полевая армия готова к переброске и усилила безопасность державы.',
-        });
-        return;
-      }
-
-      if (id === 'diplomacy') {
-        if (quickActionTurns[id] === turnNumber) {
-          showToast('Дипломаты уже ведут переговоры в этом ходу');
-          return;
-        }
-
-        setQuickActionTurns((current) => ({ ...current, [id]: turnNumber }));
-        setDiplomacy((relations) => applyDiplomacyDelta(relations, { Франция: 4, Турция: 2 }));
-        pushLetter({ tone: 'gold', from: 'Франция', subject: 'Ответ на переговоры', time: 'только что' });
-        pushTimeline({
-          icon: '◎',
-          tone: 'green',
-          title: 'Дипломаты начали переговоры',
-          text: 'Франция и Турция получили новые предложения о сотрудничестве.',
-        });
-        showToast('Дипломатия улучшена');
-        return;
-      }
-
-      createStrategicOrder({
-        icon: Landmark,
-        title: 'Развить инфраструктуру центральных земель',
-        owner: 'Совет по развитию',
-        target: 'Москва',
-        remainingTurns: 2,
-        totalTurns: 2,
-        cost: { gold: 520, wood: 260, stone: 220 },
-        reward: { stone: 620, gold: 260 },
-        completeText: 'Инфраструктура улучшена: логистика и сбор налогов стали эффективнее.',
-      });
-    },
-    [createStrategicOrder, pushLetter, pushTimeline, quickActionTurns, resources, showToast, turnNumber],
-  );
+  const confirmPendingQuickAction = () => {
+    if (!pendingQuickAction) return;
+    runQuickAction(pendingQuickAction);
+    setPendingQuickAction(null);
+  };
 
   const cancelOrder = (id: string) => {
-    const order = orders.find((item) => item.id === id);
-    if (!order || order.statusClass === 'cancelled') return;
-
-    const refund = Object.fromEntries(
-      Object.entries(order.cost || {}).map(([key, value]) => [key, Math.round(value * 0.45)]),
-    ) as ResourceDelta;
-
-    setOrders((current) =>
-      current.map((item) =>
-        item.id === id
-          ? { ...item, status: 'Отменен', statusClass: 'cancelled', due: 'снят', remainingTurns: 0 }
-          : item,
-      ),
-    );
-    setResources((current) => applyResourceDelta(current, refund));
-    pushTimeline({
-      icon: '×',
-      tone: 'red',
-      title: 'Приказ отменен',
-      text: `${order.title}. Часть ресурсов возвращена в казну.`,
-    });
-    showToast('Приказ отменен, часть ресурсов возвращена');
+    dispatchGame({ type: 'CANCEL_ORDER', id });
   };
 
   const handleEndTurn = () => {
-    const nextTurn = turnNumber + 1;
-    const completedOrders: Order[] = [];
-    const activeOrders = orders
-      .filter((order) => order.statusClass !== 'cancelled')
-      .map((order) => {
-        const remainingTurns = Math.max(0, order.remainingTurns - 1);
-        if (remainingTurns <= 0) {
-          completedOrders.push(order);
-          return null;
-        }
-
-        return {
-          ...order,
-          remainingTurns,
-          status: remainingTurns <= 1 ? 'В работе' : order.status,
-          statusClass: remainingTurns <= 1 ? 'progress' : order.statusClass,
-          due: formatOrderDue(remainingTurns),
-        };
-      })
-      .filter(Boolean) as Order[];
-
-    const incomeDelta = resources.reduce<ResourceDelta>((delta, resource) => {
-      delta[resource.id] = resource.perTurn;
-      return delta;
-    }, {});
-
-    const rewardDelta = completedOrders.reduce<ResourceDelta>((delta, order) => {
-      Object.entries(order.reward || {}).forEach(([key, value]) => {
-        const resourceKey = key as ResourceId;
-        delta[resourceKey] = (delta[resourceKey] || 0) + value;
-      });
-      return delta;
-    }, incomeDelta);
-
-    const relationDelta = completedOrders.reduce<Record<string, number>>((delta, order) => {
-      Object.entries(order.diplomacyDelta || {}).forEach(([name, value]) => {
-        delta[name] = (delta[name] || 0) + value;
-      });
-      return delta;
-    }, {});
-
-    setTurnNumber(nextTurn);
+    if (turnLockRef.current) return;
+    turnLockRef.current = true;
+    dispatchGame({ type: 'END_TURN' });
     setSecondsLeft(18 * 3600 + 42 * 60 + 31);
-    setOrders(activeOrders);
-    setResources((current) => applyResourceDelta(current, rewardDelta));
-    setDiplomacy((relations) => applyDiplomacyDelta(relations, relationDelta));
-    setTimelineEvents((events) => [
-      ...completedOrders.map<TimelineEvent>((order) => ({
-        icon: '✓',
-        tone: order.diplomacyDelta?.Украина ? 'bronze' : 'green',
-        title: 'Приказ выполнен',
-        text: order.completeText,
-        time: `Ход ${nextTurn}`,
-      })),
-      {
-        icon: '⌛',
-        tone: 'blue',
-        title: `Ход ${nextTurn} начался`,
-        text: completedOrders.length
-          ? `Завершено приказов: ${completedOrders.length}. Доход державы начислен.`
-          : 'Доход державы начислен, текущие приказы продвинулись.',
-        time: 'только что',
-      },
-      ...events,
-    ].slice(0, 5));
 
-    if (completedOrders.length) {
-      pushLetter({
-        tone: 'neutral',
-        from: 'Совет империи',
-        subject: `Отчет за ход ${nextTurn}`,
-        time: 'только что',
-      });
-    }
-
-    showToast(`Ход ${nextTurn} начался`);
+    window.setTimeout(() => {
+      turnLockRef.current = false;
+    }, 420);
   };
 
   return (
     <>
       <div className={appClassName} data-routes={routesVisible ? 'on' : 'off'}>
-        <Topbar activeNav={activeNav} mailCount={letters.length} onNavClick={handleNavClick} showToast={showToast} />
+        <Topbar
+          activeNav={activeNav}
+          mailCount={letters.length}
+          onNavClick={handleNavClick}
+          onUtilityAction={openUtilityPanel}
+        />
+
+        {activeUtilityPanel ? (
+          <UtilityPanel
+            title={activeUtilityPanel}
+            mailCount={letters.length}
+            orderCount={orders.filter((order) => order.statusClass !== 'cancelled').length}
+            selectedCountryName={gameState.selectedCountry?.name || 'Россия'}
+            onClose={() => setActiveUtilityPanel(null)}
+          />
+        ) : null}
 
         <EmpirePanel
           clock={formatClock(secondsLeft)}
@@ -1008,6 +562,7 @@ function App() {
               onMouseMove={handleMapPointerMove}
               onMouseLeave={handleMapLeave}
               onClick={handleMapClick}
+              onKeyDown={handleMapKeyDown}
             >
               <div className="ocean-glow" aria-hidden="true" />
               <WorldMapLayer zoom={zoom} mapSvgRef={mapSvgRef} />
@@ -1060,7 +615,12 @@ function App() {
             <ChatPanel
               messages={chatMessages}
               input={chatInput}
+              activeTab={activeChatTab}
               onInputChange={setChatInput}
+              onTabChange={(tab) => {
+                setActiveChatTab(tab);
+                showToast(`Канал "${tab}" открыт`);
+              }}
               onSubmit={submitChat}
               messagesRef={chatMessagesRef}
             />
@@ -1077,9 +637,18 @@ function App() {
           timeline={timelineEvents}
           letters={letters}
           diplomacy={diplomacy}
+          onComposeLetter={() => handleQuickAction('compose-letter')}
           showToast={showToast}
         />
       </div>
+
+      {pendingQuickAction ? (
+        <PendingActionDialog
+          selectedCountryName={gameState.selectedCountry?.name || 'Москва'}
+          onCancel={() => setPendingQuickAction(null)}
+          onConfirm={confirmPendingQuickAction}
+        />
+      ) : null}
 
       <div
         className={`toast ${toast ? 'visible' : ''}`}
@@ -1096,12 +665,12 @@ function Topbar({
   activeNav,
   mailCount,
   onNavClick,
-  showToast,
+  onUtilityAction,
 }: {
   activeNav: string;
   mailCount: number;
   onNavClick: (label: string) => void;
-  showToast: (message: string) => void;
+  onUtilityAction: (label: string) => void;
 }) {
   const topActions = [
     { label: 'Поиск', icon: Search },
@@ -1137,6 +706,7 @@ function Topbar({
               key={label}
               className={`nav-link ${activeNav === label ? 'active' : ''}`}
               type="button"
+              aria-current={activeNav === label ? 'page' : undefined}
               onClick={() => onNavClick(label)}
             >
               <Icon aria-hidden="true" size={14} />
@@ -1154,13 +724,13 @@ function Topbar({
             className={`icon-button ${className || ''} ${badge ? 'has-badge' : ''}`}
             type="button"
             aria-label={label}
-            onClick={() => showToast(label)}
+            onClick={() => onUtilityAction(label)}
           >
             <Icon aria-hidden="true" />
             {badge ? <b>{badge}</b> : null}
           </button>
         ))}
-        <button className="profile-chip" type="button" aria-label="Профиль правителя" onClick={() => showToast('Профиль правителя')}>
+        <button className="profile-chip" type="button" aria-label="Профиль правителя" onClick={() => onUtilityAction('Профиль правителя')}>
           <span className="avatar-slot profile-avatar" aria-hidden="true" />
           <span className="profile-text">
             <strong>Родерик Правитель</strong>
@@ -1170,6 +740,92 @@ function Topbar({
         </button>
       </div>
     </motion.header>
+  );
+}
+
+function UtilityPanel({
+  title,
+  mailCount,
+  orderCount,
+  selectedCountryName,
+  onClose,
+}: {
+  title: string;
+  mailCount: number;
+  orderCount: number;
+  selectedCountryName: string;
+  onClose: () => void;
+}) {
+  const panelCopy: Record<string, { text: string; action: string }> = {
+    Поиск: {
+      text: `Поиск будет работать по странам, письмам и приказам. Сейчас выбрана цель: ${selectedCountryName}.`,
+      action: 'Введите запрос в чат совета, если хотите сразу создать приказ по найденной цели.',
+    },
+    Корона: {
+      text: 'Корона показывает власть правителя, текущую державу и состояние партии.',
+      action: `Активных приказов: ${orderCount}/5. Входящих писем: ${mailCount}.`,
+    },
+    Почта: {
+      text: `Во входящих сейчас ${mailCount} писем. Новые ответы приходят после дипломатических действий и завершения приказов.`,
+      action: 'Кнопка "Написать" справа отправляет исходящее письмо через GameState.',
+    },
+    Уведомления: {
+      text: 'Здесь собираются важные игровые изменения: завершение хода, результаты приказов, дипломатические ответы.',
+      action: 'Последние события уже отражаются в хронике мира справа.',
+    },
+    Помощь: {
+      text: 'Совет понимает обычные сообщения и игровые команды: построить, развить, отправить, укрепить, начать переговоры.',
+      action: 'Абсурдные команды блокируются fallback-арбитром и не ломают баланс.',
+    },
+    'Профиль правителя': {
+      text: `Правитель России управляет партией через приказы, письма, дипломатию и выбранную цель на карте: ${selectedCountryName}.`,
+      action: 'Состояние партии сохраняется автоматически после игровых действий.',
+    },
+    Настройки: {
+      text: 'Автосохранение партии включено. Карта, ходы, приказы, письма и ресурсы сохраняются в браузере.',
+      action: 'Расширенные настройки графики и мобильный режим лучше вынести в следующий этап.',
+    },
+    'Карта мира': {
+      text: `Карта выбирает цель для приказов и дипломатии. Текущая цель: ${selectedCountryName}.`,
+      action: 'Страны можно выбирать мышью или клавиатурой через Enter.',
+    },
+    Письма: {
+      text: `Панель писем справа связана с GameState. Входящих сейчас: ${mailCount}.`,
+      action: 'Исходящие письма идут в хронику, а входящие появляются как ответы мира.',
+    },
+    Приказы: {
+      text: `Активных приказов: ${orderCount}/5. Создание приказа теперь открывает подтверждение и проверку движка.`,
+      action: 'Сроки приказов двигаются при завершении хода.',
+    },
+    Хроника: {
+      text: 'Хроника показывает важные игровые последствия: письма, приказы, управление землями и начало нового хода.',
+      action: 'Повторяющиеся события не спамят верх списка.',
+    },
+    Договоры: {
+      text: 'Договоры будут расти из дипломатических действий и отношений стран.',
+      action: 'Сейчас дипломатия уже меняет отношения и может создавать письма-ответы.',
+    },
+    Фракции: {
+      text: 'Фракции опираются на список стран, флаги и дипломатический статус справа.',
+      action: 'Следующий слой: отдельные цели и поведение стран.',
+    },
+  };
+  const content = panelCopy[title] || {
+    text: 'Этот раздел подключен к интерфейсу и готов к расширению.',
+    action: 'Следующий шаг: заменить справочный слой полноценным экраном.',
+  };
+
+  return (
+    <section className="utility-panel framed-panel" aria-live="polite">
+      <div>
+        <strong>{title}</strong>
+        <p>{content.text}</p>
+        <small>{content.action}</small>
+      </div>
+      <button type="button" aria-label={`Закрыть панель: ${title}`} onClick={onClose}>
+        <X aria-hidden="true" />
+      </button>
+    </section>
   );
 }
 
@@ -1297,16 +953,22 @@ function MapLegend() {
 function ChatPanel({
   messages,
   input,
+  activeTab,
   onInputChange,
+  onTabChange,
   onSubmit,
   messagesRef,
 }: {
   messages: ChatMessage[];
   input: string;
+  activeTab: string;
   onInputChange: (value: string) => void;
+  onTabChange: (tab: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   messagesRef: React.RefObject<HTMLDivElement | null>;
 }) {
+  const tabs = ['Мировой чат', 'Мировой', 'Альянс', 'Фракция', 'Личные'];
+
   return (
     <motion.section
       className="chat-panel framed-panel"
@@ -1314,10 +976,17 @@ function ChatPanel({
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.08, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
     >
-      <div className="chat-tabs">
+      <div className="chat-tabs" role="tablist" aria-label="Каналы чата">
         <b>Чат империй</b>
-        {['Мировой чат', 'Мировой', 'Альянс', 'Фракция', 'Личные'].map((tab, index) => (
-          <button key={tab} type="button" className={index === 0 ? 'active' : ''}>
+        {tabs.map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab}
+            className={activeTab === tab ? 'active' : ''}
+            onClick={() => onTabChange(tab)}
+          >
             {tab}
           </button>
         ))}
@@ -1336,11 +1005,12 @@ function ChatPanel({
         <input
           id="chatInput"
           type="text"
+          aria-label="Сообщение совету"
           placeholder="Введите сообщение..."
           value={input}
           onChange={(event) => onInputChange(event.currentTarget.value)}
         />
-        <button className="emoji" type="button" aria-label="Эмодзи">
+        <button className="emoji" type="button" aria-label="Добавить эмодзи" onClick={() => onInputChange(`${input} ☺`.trimStart())}>
           <Smile aria-hidden="true" />
         </button>
         <button className="send" type="submit" aria-label="Отправить">
@@ -1378,7 +1048,7 @@ function OrdersPanel({
       </div>
       <div className="orders-list">
         {orders.map((order) => {
-          const Icon = order.icon;
+          const Icon = orderIcons[order.iconKey];
           const isCancelled = order.statusClass === 'cancelled';
 
           return (
@@ -1405,11 +1075,18 @@ function OrdersPanel({
               <button
                 type="button"
                 title="Посмотреть"
+                aria-label={`Посмотреть приказ: ${order.title}`}
                 onClick={() => showToast(`${order.title}: ${order.completeText}`)}
               >
                 <Eye aria-hidden="true" />
               </button>
-              <button type="button" title="Отменить" onClick={() => onCancel(order.id)} disabled={isCancelled}>
+              <button
+                type="button"
+                title="Отменить"
+                aria-label={`Отменить приказ: ${order.title}`}
+                onClick={() => onCancel(order.id)}
+                disabled={isCancelled}
+              >
                 <X aria-hidden="true" />
               </button>
             </article>
@@ -1424,15 +1101,60 @@ function OrdersPanel({
   );
 }
 
+function PendingActionDialog({
+  selectedCountryName,
+  onCancel,
+  onConfirm,
+}: {
+  selectedCountryName: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="action-dialog framed-panel" role="dialog" aria-modal="true" aria-labelledby="orderDialogTitle">
+        <div className="panel-heading">
+          <h2 id="orderDialogTitle">Новый приказ</h2>
+          <button type="button" aria-label="Закрыть создание приказа" onClick={onCancel}>
+            <X aria-hidden="true" />
+          </button>
+        </div>
+        <p>
+          Совет подготовит инфраструктурный приказ для цели: <b>{selectedCountryName}</b>. Стоимость будет списана сразу,
+          результат появится в хронике после завершения хода.
+        </p>
+        <dl>
+          <dt>Тип</dt>
+          <dd>Развитие земель</dd>
+          <dt>Срок</dt>
+          <dd>2 дня</dd>
+          <dt>Проверка</dt>
+          <dd>Ресурсы и лимит приказов проверит движок</dd>
+        </dl>
+        <div className="dialog-actions">
+          <button type="button" onClick={onCancel}>
+            Отмена
+          </button>
+          <button type="button" className="primary" onClick={onConfirm}>
+            Подтвердить приказ
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function RightPanel({
   timeline,
   letters,
   diplomacy,
+  onComposeLetter,
   showToast,
 }: {
   timeline: TimelineEvent[];
   letters: Letter[];
   diplomacy: DiplomacyRelation[];
+  onComposeLetter: () => void;
   showToast: (message: string) => void;
 }) {
   return (
@@ -1466,7 +1188,7 @@ function RightPanel({
           <h2>
             Входящие письма <span>{letters.length}</span>
           </h2>
-          <button type="button" aria-label="Написать письмо" onClick={() => showToast('Написать письмо')}>
+          <button type="button" aria-label="Написать письмо" onClick={onComposeLetter}>
             Написать
           </button>
         </div>

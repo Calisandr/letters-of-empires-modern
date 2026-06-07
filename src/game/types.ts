@@ -1,0 +1,144 @@
+export type ResourceId = 'gold' | 'wood' | 'stone' | 'iron' | 'grain' | 'population';
+
+export type QuickActionId =
+  | 'compose-letter'
+  | 'create-order'
+  | 'manage-lands'
+  | 'trade-routes'
+  | 'recruit-army'
+  | 'diplomacy';
+
+export type DiplomacyTone = 'ally' | 'friendly' | 'neutral' | 'risk' | 'hostile';
+export type ResourceFormat = 'integer' | 'population';
+export type OrderStatusClass = 'moving' | 'progress' | 'cancelled' | 'completed' | 'failed';
+export type OrderIconKey = 'package' | 'swords' | 'pickaxe' | 'anchor' | 'shield' | 'landmark' | 'mail';
+export type ActionStatusKind = 'idle' | 'loading' | 'success' | 'error';
+
+export type ResourceState = {
+  id: ResourceId;
+  label: string;
+  value: number;
+  perTurn: number;
+  format: ResourceFormat;
+};
+
+export type ResourceDelta = Partial<Record<ResourceId, number>>;
+
+export type Order = {
+  id: string;
+  iconKey: OrderIconKey;
+  title: string;
+  owner: string;
+  target: string;
+  status: string;
+  statusClass: OrderStatusClass;
+  due: string;
+  remainingTurns: number;
+  totalTurns: number;
+  cost?: ResourceDelta;
+  reward?: ResourceDelta;
+  diplomacyDelta?: Record<string, number>;
+  completeText: string;
+  riskLevel?: 'low' | 'medium' | 'high' | 'critical';
+};
+
+export type OrderDraft = Omit<Order, 'id' | 'status' | 'statusClass' | 'due'>;
+
+export type TimelineEvent = {
+  icon: string;
+  tone: string;
+  title: string;
+  text: string;
+  time: string;
+};
+
+export type Letter = {
+  tone: string;
+  from: string;
+  subject: string;
+  time: string;
+};
+
+export type DiplomacyRelation = {
+  flag: string;
+  name: string;
+  status: string;
+  tone: DiplomacyTone;
+  score: number;
+};
+
+export type ChatMessage = {
+  id: string;
+  time: string;
+  faction: string;
+  flag: string;
+  text: string;
+};
+
+export type SelectedCountry = {
+  key: string;
+  name: string;
+  status: string;
+};
+
+export type GameNotice = {
+  id: number;
+  message: string;
+  kind: ActionStatusKind;
+};
+
+export type ActionStatus = {
+  kind: ActionStatusKind;
+  message: string;
+};
+
+export type GameState = {
+  version: number;
+  resources: ResourceState[];
+  orders: Order[];
+  timelineEvents: TimelineEvent[];
+  letters: Letter[];
+  diplomacy: DiplomacyRelation[];
+  chatMessages: ChatMessage[];
+  quickActionTurns: Partial<Record<QuickActionId, number>>;
+  turnNumber: number;
+  selectedCountry: SelectedCountry | null;
+  nextActionId: number;
+  lastNotice: GameNotice | null;
+  actionStatus: ActionStatus;
+};
+
+export type AiActionJudgement =
+  | 'impossible'
+  | 'possible_safe'
+  | 'possible_risky'
+  | 'possible_reckless'
+  | 'partial_success'
+  | 'failure_with_consequences';
+
+export type EngineEffect = {
+  kind: 'blocked' | 'event-only' | 'create-order' | 'resource-delta' | 'diplomacy-delta';
+  reason?: string;
+  eventTitle?: string;
+  eventText?: string;
+  order?: OrderDraft;
+  resourceDelta?: ResourceDelta;
+  diplomacyDelta?: Record<string, number>;
+  letter?: Letter;
+};
+
+export type AiArbitrationDecision = {
+  feasibility: 'blocked' | 'attemptable';
+  judgement: AiActionJudgement;
+  riskLevel: 'low' | 'medium' | 'high' | 'critical';
+  reasoningSummary: string;
+  playerFacingResult: string;
+  engineEffect: EngineEffect;
+};
+
+export type GameAction =
+  | { type: 'SELECT_COUNTRY'; country: SelectedCountry }
+  | { type: 'SUBMIT_COUNCIL_MESSAGE'; text: string; time: string }
+  | { type: 'RUN_QUICK_ACTION'; id: QuickActionId }
+  | { type: 'CANCEL_ORDER'; id: string }
+  | { type: 'END_TURN' };

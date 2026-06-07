@@ -13,6 +13,13 @@ const page = await browser.newPage({
 });
 const consoleErrors = [];
 
+await page.addInitScript(() => {
+  if (!window.sessionStorage.getItem('letters-of-empires:smoke-ready')) {
+    window.localStorage.removeItem('letters-of-empires:game:v1');
+    window.sessionStorage.setItem('letters-of-empires:smoke-ready', '1');
+  }
+});
+
 page.on('console', (message) => {
   if (message.type() === 'error') consoleErrors.push(message.text());
 });
@@ -66,16 +73,44 @@ try {
   const selectedRussia = await page
     .locator('.country[data-name="Russia"]')
     .evaluate((node) => node.classList.contains('selected'));
+  const franceCountry = page.locator('.country[data-name="France"]');
+  await franceCountry.focus();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() =>
+    document.querySelector('.country[data-name="France"]')?.classList.contains('selected'),
+  );
+  const keyboardSelectedFrance = await franceCountry.evaluate((node) => ({
+    selected: node.classList.contains('selected'),
+    role: node.getAttribute('role'),
+    label: node.getAttribute('aria-label'),
+  }));
 
   await page.locator('#chatInput').fill('React smoke message');
   await page.locator('.chat-input .send').click();
   const chatText = await page.locator('.chat-messages').innerText();
+  await page.locator('.chat-tabs button').filter({ hasText: 'Альянс' }).click();
+  const chatTabDiagnostics = await page.evaluate(() => {
+    const active = document.querySelector('.chat-tabs button.active');
+    const alliance = [...document.querySelectorAll('.chat-tabs button')].find((button) =>
+      button.textContent?.includes('Альянс'),
+    );
+    return {
+      activeText: active?.textContent?.trim() || '',
+      allianceSelected: alliance?.getAttribute('aria-selected') === 'true',
+    };
+  });
 
   await page.locator('.order-card').first().locator('button').last().click();
   const cancelledStyle = await page.locator('.order-card').first().evaluate((node) => ({
     opacity: getComputedStyle(node).opacity,
     filter: getComputedStyle(node).filter,
   }));
+  await page.locator('.create-order').click();
+  await page.waitForSelector('[role="dialog"]');
+  const dialogOpened = await page.locator('[role="dialog"]').isVisible();
+  await page.locator('[role="dialog"]').getByRole('button', { name: 'Подтвердить приказ' }).click();
+  await page.waitForTimeout(120);
+  const orderCounterAfterDialog = await page.locator('.orders-panel .panel-heading h2 span').textContent();
 
   const readRightPanelState = () =>
     page.evaluate(() => ({
@@ -116,15 +151,31 @@ try {
   await page.locator('.quick-actions button').nth(2).click();
   await page.waitForTimeout(120);
   const afterLandManagement = await readGameState();
-  await page.locator('.end-turn-button').click();
+  await page.locator('.end-turn-button').dblclick();
   await page.waitForTimeout(120);
   const afterEndTurn = await readGameState();
   const composeButtonUnlockedAfterTurn = !(await page.locator('.quick-actions button').first().isDisabled());
+  const savedTurnAfterReload = await (async () => {
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.app-shell');
+    return page.locator('.turn-info strong').first().textContent();
+  })();
+  const buttonNameDiagnostics = await page.evaluate(() => {
+    const unnamed = [...document.querySelectorAll('button')].filter((button) => {
+      const label = button.getAttribute('aria-label') || button.getAttribute('title') || button.textContent || '';
+      return !label.trim();
+    });
+    return {
+      unnamedCount: unnamed.length,
+      unnamedClasses: unnamed.map((button) => button.className.toString()),
+    };
+  });
   const gameCycle = {
     beforeGameAction,
     afterLandManagement,
     afterEndTurn,
     composeButtonUnlockedAfterTurn,
+    savedTurnAfterReload,
     resourcesChangedAfterAction:
       beforeGameAction.resources.join('|') !== afterLandManagement.resources.join('|'),
     turnAdvanced: Number(afterEndTurn.turn) === Number(beforeGameAction.turn) + 1,
@@ -166,8 +217,12 @@ try {
     afterZoom,
     tooltip,
     selectedRussia,
+    keyboardSelectedFrance,
+    chatTabDiagnostics,
     chatAdded: chatText.includes('React smoke message'),
     cancelledStyle,
+    dialogOpened,
+    orderCounterAfterDialog,
     composeAction,
     gameCycle,
     toastDiagnostics,
@@ -183,7 +238,14 @@ try {
     routesState !== 'off' ||
     !afterZoom.includes('1.12') ||
     !selectedRussia ||
+    !keyboardSelectedFrance.selected ||
+    keyboardSelectedFrance.role !== 'button' ||
+    !keyboardSelectedFrance.label?.includes('Франция') ||
     !result.chatAdded ||
+    chatTabDiagnostics.activeText !== 'Альянс' ||
+    !chatTabDiagnostics.allianceSelected ||
+    !dialogOpened ||
+    !orderCounterAfterDialog?.includes('(3/5)') ||
     !composeAction.composeButtonDisabled ||
     !composeAction.inboxCountUnchanged ||
     !composeAction.noOutgoingInInbox ||
@@ -192,10 +254,12 @@ try {
     !gameCycle.turnAdvanced ||
     !gameCycle.resourcesChangedAfterTurn ||
     !gameCycle.composeButtonUnlockedAfterTurn ||
+    gameCycle.savedTurnAfterReload !== gameCycle.afterEndTurn.turn ||
     toastDiagnostics.count !== 1 ||
     toastDiagnostics.visibleCount !== 1 ||
     mailBadgeDiagnostics.navBadge !== mailBadgeDiagnostics.panelCount ||
     mailBadgeDiagnostics.topBadge !== mailBadgeDiagnostics.panelCount ||
+    buttonNameDiagnostics.unnamedCount !== 0 ||
     consoleErrors.length > 0;
 
   console.log(JSON.stringify(result, null, 2));
