@@ -44,6 +44,20 @@ type ChatMessage = {
   text: string;
 };
 
+type ResourceId = 'gold' | 'wood' | 'stone' | 'iron' | 'grain' | 'population';
+type QuickActionId = 'compose-letter' | 'create-order' | 'manage-lands' | 'trade-routes' | 'recruit-army' | 'diplomacy';
+type DiplomacyTone = 'ally' | 'friendly' | 'neutral' | 'risk' | 'hostile';
+
+type ResourceState = {
+  id: ResourceId;
+  label: string;
+  value: number;
+  perTurn: number;
+  format: 'integer' | 'population';
+};
+
+type ResourceDelta = Partial<Record<ResourceId, number>>;
+
 type Order = {
   id: string;
   icon: LucideIcon;
@@ -53,6 +67,35 @@ type Order = {
   status: string;
   statusClass: string;
   due: string;
+  remainingTurns: number;
+  totalTurns: number;
+  cost?: ResourceDelta;
+  reward?: ResourceDelta;
+  diplomacyDelta?: Record<string, number>;
+  completeText: string;
+};
+
+type TimelineEvent = {
+  icon: string;
+  tone: string;
+  title: string;
+  text: string;
+  time: string;
+};
+
+type Letter = {
+  tone: string;
+  from: string;
+  subject: string;
+  time: string;
+};
+
+type DiplomacyRelation = {
+  flag: string;
+  name: string;
+  status: string;
+  tone: DiplomacyTone;
+  score: number;
 };
 
 const navItems = [
@@ -137,22 +180,22 @@ const playerCountry = {
   flag: 'russia',
 };
 
-const resources = [
-  { label: 'Золото', value: '12 540', trend: '+1 250/ход' },
-  { label: 'Дерево', value: '8 760', trend: '+720/ход' },
-  { label: 'Камень', value: '6 410', trend: '+610/ход' },
-  { label: 'Железо', value: '7 230', trend: '+560/ход' },
-  { label: 'Зерно', value: '9 850', trend: '+1 100/ход' },
-  { label: 'Население', value: '146.2M', trend: '+0.8%' },
+const initialResources: ResourceState[] = [
+  { id: 'gold', label: 'Золото', value: 12540, perTurn: 1250, format: 'integer' },
+  { id: 'wood', label: 'Дерево', value: 8760, perTurn: 720, format: 'integer' },
+  { id: 'stone', label: 'Камень', value: 6410, perTurn: 610, format: 'integer' },
+  { id: 'iron', label: 'Железо', value: 7230, perTurn: 560, format: 'integer' },
+  { id: 'grain', label: 'Зерно', value: 9850, perTurn: 1100, format: 'integer' },
+  { id: 'population', label: 'Население', value: 146.2, perTurn: 0.8, format: 'population' },
 ];
 
-const quickActions: Array<{ label: string; icon: LucideIcon; toast?: string }> = [
-  { label: 'Написать письмо', icon: Mail },
-  { label: 'Создать приказ', icon: Flag },
-  { label: 'Управление землями', icon: Landmark },
-  { label: 'Торговые маршруты', icon: Anchor },
-  { label: 'Набор войск', icon: Shield },
-  { label: 'Дипломатия', icon: Handshake, toast: 'Дипломатические переговоры' },
+const quickActions: Array<{ id: QuickActionId; label: string; icon: LucideIcon; toast?: string }> = [
+  { id: 'compose-letter', label: 'Написать письмо', icon: Mail },
+  { id: 'create-order', label: 'Создать приказ', icon: Flag },
+  { id: 'manage-lands', label: 'Управление землями', icon: Landmark },
+  { id: 'trade-routes', label: 'Торговые маршруты', icon: Anchor },
+  { id: 'recruit-army', label: 'Набор войск', icon: Shield },
+  { id: 'diplomacy', label: 'Дипломатия', icon: Handshake, toast: 'Дипломатические переговоры' },
 ];
 
 const initialChatMessages: ChatMessage[] = [
@@ -193,7 +236,7 @@ const initialChatMessages: ChatMessage[] = [
   },
 ];
 
-const orders: Order[] = [
+const initialOrders: Order[] = [
   {
     id: 'trade-india',
     icon: Package,
@@ -203,6 +246,12 @@ const orders: Order[] = [
     status: 'В пути',
     statusClass: 'moving',
     due: '2 дня',
+    remainingTurns: 2,
+    totalTurns: 2,
+    cost: { gold: 420, grain: 260 },
+    reward: { gold: 1500, grain: 650 },
+    diplomacyDelta: { Индия: 8 },
+    completeText: 'Караван достиг Дели: казна получила прибыль, а отношения с Индией укрепились.',
   },
   {
     id: 'ukraine-border',
@@ -213,6 +262,12 @@ const orders: Order[] = [
     status: 'В работе',
     statusClass: 'progress',
     due: '3 дня',
+    remainingTurns: 3,
+    totalTurns: 3,
+    cost: { gold: 650, iron: 360, grain: 220 },
+    reward: { iron: 180 },
+    diplomacyDelta: { Украина: -4 },
+    completeText: 'Граница усилена: снабжение укреплено, но напряжение с Украиной выросло.',
   },
   {
     id: 'kuzbass-mines',
@@ -223,10 +278,15 @@ const orders: Order[] = [
     status: 'В работе',
     statusClass: 'progress',
     due: '5 дней',
+    remainingTurns: 5,
+    totalTurns: 5,
+    cost: { gold: 900, wood: 520, stone: 400 },
+    reward: { iron: 1900, stone: 850 },
+    completeText: 'Шахты Кузбасса расширены: добыча железа и камня заметно выросла.',
   },
 ];
 
-const timeline = [
+const initialTimeline: TimelineEvent[] = [
   {
     icon: '⚑',
     tone: 'blue',
@@ -264,7 +324,7 @@ const timeline = [
   },
 ];
 
-const letters = [
+const initialLetters: Letter[] = [
   { tone: 'neutral', from: 'Франция', subject: 'Торговое предложение', time: '5 мин. назад' },
   { tone: 'red', from: 'Турция', subject: 'Дипломатический запрос', time: '32 мин. назад' },
   { tone: 'burgundy', from: 'Германия', subject: 'Военный союз', time: '1 час назад' },
@@ -272,14 +332,14 @@ const letters = [
   { tone: 'blue', from: 'Аргентина', subject: 'Обмен ресурсами', time: '3 часа назад' },
 ];
 
-const diplomacy = [
-  { flag: 'china', name: 'Китай', status: 'Союзники', tone: 'ally', score: '+165' },
-  { flag: 'india', name: 'Индия', status: 'Союзники', tone: 'ally', score: '+120' },
-  { flag: 'france', name: 'Франция', status: 'Дружественные', tone: 'friendly', score: '+75' },
-  { flag: 'turkey', name: 'Турция', status: 'Нейтральные', tone: 'neutral', score: '+10' },
-  { flag: 'germany', name: 'Германия', status: 'Нейтральные', tone: 'neutral', score: '+5' },
-  { flag: 'japan', name: 'Япония', status: 'Риск конфликта', tone: 'risk', score: '-25' },
-  { flag: 'ukraine', name: 'Украина', status: 'Враждебные', tone: 'hostile', score: '-80' },
+const initialDiplomacy: DiplomacyRelation[] = [
+  { flag: 'china', name: 'Китай', status: 'Союзники', tone: 'ally', score: 165 },
+  { flag: 'india', name: 'Индия', status: 'Союзники', tone: 'ally', score: 120 },
+  { flag: 'france', name: 'Франция', status: 'Дружественные', tone: 'friendly', score: 75 },
+  { flag: 'turkey', name: 'Турция', status: 'Нейтральные', tone: 'neutral', score: 10 },
+  { flag: 'germany', name: 'Германия', status: 'Нейтральные', tone: 'neutral', score: 5 },
+  { flag: 'japan', name: 'Япония', status: 'Риск конфликта', tone: 'risk', score: -25 },
+  { flag: 'ukraine', name: 'Украина', status: 'Враждебные', tone: 'hostile', score: -80 },
 ];
 
 const formatClock = (value: number) => {
@@ -288,6 +348,79 @@ const formatClock = (value: number) => {
   const s = String(value % 60).padStart(2, '0');
   return `${h}:${m}:${s}`;
 };
+
+function formatOrderDue(turns: number) {
+  if (turns <= 0) return 'готово';
+  if (turns === 1) return '1 день';
+  if (turns < 5) return `${turns} дня`;
+  return `${turns} дней`;
+}
+
+function formatResourceValue(resource: ResourceState) {
+  if (resource.format === 'population') return `${resource.value.toFixed(1)}M`;
+  return Math.round(resource.value).toLocaleString('ru-RU');
+}
+
+function formatResourceTrend(resource: ResourceState) {
+  const sign = resource.perTurn >= 0 ? '+' : '';
+  if (resource.format === 'population') return `${sign}${resource.perTurn.toFixed(1)}%`;
+  return `${sign}${Math.round(resource.perTurn).toLocaleString('ru-RU')}/ход`;
+}
+
+function applyResourceDelta(resources: ResourceState[], delta: ResourceDelta = {}) {
+  return resources.map((resource) => {
+    const change = delta[resource.id] ?? 0;
+    if (!change) return resource;
+
+    return {
+      ...resource,
+      value: Math.max(0, Number((resource.value + change).toFixed(resource.format === 'population' ? 1 : 0))),
+    };
+  });
+}
+
+function canPay(resources: ResourceState[], cost: ResourceDelta = {}) {
+  return resources.every((resource) => (cost[resource.id] ?? 0) <= resource.value);
+}
+
+function describeResourceCost(resources: ResourceState[], cost: ResourceDelta = {}) {
+  return resources
+    .filter((resource) => cost[resource.id])
+    .map((resource) => `${resource.label}: ${Math.round(cost[resource.id] ?? 0).toLocaleString('ru-RU')}`)
+    .join(', ');
+}
+
+function relationTone(score: number): DiplomacyTone {
+  if (score >= 100) return 'ally';
+  if (score >= 50) return 'friendly';
+  if (score > -20) return 'neutral';
+  if (score > -60) return 'risk';
+  return 'hostile';
+}
+
+function relationStatus(score: number) {
+  const tone = relationTone(score);
+  if (tone === 'ally') return 'Союзники';
+  if (tone === 'friendly') return 'Дружественные';
+  if (tone === 'neutral') return 'Нейтральные';
+  if (tone === 'risk') return 'Риск конфликта';
+  return 'Враждебные';
+}
+
+function applyDiplomacyDelta(relations: DiplomacyRelation[], delta: Record<string, number> = {}) {
+  return relations.map((relation) => {
+    const change = delta[relation.name] ?? 0;
+    if (!change) return relation;
+
+    const score = Math.max(-100, Math.min(200, relation.score + change));
+    return {
+      ...relation,
+      score,
+      status: relationStatus(score),
+      tone: relationTone(score),
+    };
+  });
+}
 
 const getCountryElement = (target: EventTarget | null) => {
   if (!(target instanceof Element)) return null;
@@ -319,7 +452,12 @@ function App() {
   const [zoom, setZoom] = useState(1);
   const [chatMessages, setChatMessages] = useState(initialChatMessages);
   const [chatInput, setChatInput] = useState('');
-  const [cancelledOrders, setCancelledOrders] = useState<Set<string>>(() => new Set());
+  const [resources, setResources] = useState<ResourceState[]>(initialResources);
+  const [orders, setOrders] = useState<Order[]>(initialOrders);
+  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>(initialTimeline);
+  const [letters, setLetters] = useState<Letter[]>(initialLetters);
+  const [diplomacy, setDiplomacy] = useState<DiplomacyRelation[]>(initialDiplomacy);
+  const [turnNumber, setTurnNumber] = useState(123);
   const [secondsLeft, setSecondsLeft] = useState(18 * 3600 + 42 * 60 + 31);
   const [toast, setToast] = useState<ToastState | null>(null);
 
@@ -338,6 +476,7 @@ function App() {
     clientY: number;
   } | null>(null);
   const chatMessagesRef = useRef<HTMLDivElement | null>(null);
+  const actionIdRef = useRef(0);
 
   const showToast = useCallback((message: string) => {
     const now = window.performance.now();
@@ -533,13 +672,256 @@ function App() {
     setChatInput('');
   };
 
+  const pushTimeline = useCallback((event: Omit<TimelineEvent, 'time'> & { time?: string }) => {
+    setTimelineEvents((events) => [{ ...event, time: event.time || 'только что' }, ...events].slice(0, 5));
+  }, []);
+
+  const pushLetter = useCallback((letter: Letter) => {
+    setLetters((items) => [letter, ...items].slice(0, 5));
+  }, []);
+
+  const createStrategicOrder = useCallback(
+    (order: Omit<Order, 'id' | 'status' | 'statusClass' | 'due'>) => {
+      const activeOrderCount = orders.filter((item) => item.statusClass !== 'cancelled').length;
+
+      if (activeOrderCount >= 5) {
+        showToast('Лимит приказов заполнен');
+        return false;
+      }
+
+      if (!canPay(resources, order.cost)) {
+        showToast(`Не хватает ресурсов: ${describeResourceCost(resources, order.cost)}`);
+        return false;
+      }
+
+      actionIdRef.current += 1;
+      setResources((current) => {
+        const costDelta = Object.fromEntries(
+          Object.entries(order.cost || {}).map(([key, value]) => [key, -value]),
+        ) as ResourceDelta;
+        return applyResourceDelta(current, costDelta);
+      });
+      setOrders((current) => [
+        ...current,
+        {
+          ...order,
+          id: `player-order-${Date.now()}-${actionIdRef.current}`,
+          status: order.remainingTurns <= 1 ? 'В работе' : 'В пути',
+          statusClass: order.remainingTurns <= 1 ? 'progress' : 'moving',
+          due: formatOrderDue(order.remainingTurns),
+        },
+      ]);
+      pushTimeline({
+        icon: '⚑',
+        tone: 'blue',
+        title: 'Новый приказ принят',
+        text: order.title,
+      });
+      showToast('Приказ принят к исполнению');
+      return true;
+    },
+    [orders, pushTimeline, resources, showToast],
+  );
+
+  const handleQuickAction = useCallback(
+    (id: QuickActionId) => {
+      if (id === 'compose-letter') {
+        pushLetter({ tone: 'blue', from: 'Россия', subject: 'Исходящее письмо союзникам', time: 'только что' });
+        pushTimeline({
+          icon: '✉',
+          tone: 'blue',
+          title: 'Письмо отправлено',
+          text: 'Канцелярия направила дипломатическое письмо союзникам.',
+        });
+        showToast('Письмо отправлено');
+        return;
+      }
+
+      if (id === 'manage-lands') {
+        const cost: ResourceDelta = { gold: 380, wood: 220, stone: 180 };
+        if (!canPay(resources, cost)) {
+          showToast(`Не хватает ресурсов: ${describeResourceCost(resources, cost)}`);
+          return;
+        }
+
+        setResources((current) =>
+          applyResourceDelta(current, { gold: -380, wood: -220, stone: -180 }).map((resource) => {
+            if (resource.id === 'grain') return { ...resource, perTurn: resource.perTurn + 90 };
+            if (resource.id === 'gold') return { ...resource, perTurn: resource.perTurn + 45 };
+            return resource;
+          }),
+        );
+        pushTimeline({
+          icon: '♜',
+          tone: 'green',
+          title: 'Земли упорядочены',
+          text: 'Новые управленцы повысили доход золота и зерна за ход.',
+        });
+        showToast('Доходы земель выросли');
+        return;
+      }
+
+      if (id === 'trade-routes') {
+        createStrategicOrder({
+          icon: Anchor,
+          title: 'Расширить торговый маршрут в Индию',
+          owner: 'Торговый совет',
+          target: 'Индия',
+          remainingTurns: 2,
+          totalTurns: 2,
+          cost: { gold: 360, grain: 180 },
+          reward: { gold: 1250, grain: 480 },
+          diplomacyDelta: { Индия: 5 },
+          completeText: 'Новый торговый маршрут увеличил доход и укрепил отношения с Индией.',
+        });
+        return;
+      }
+
+      if (id === 'recruit-army') {
+        createStrategicOrder({
+          icon: Shield,
+          title: 'Сформировать новую полевую армию',
+          owner: 'Генеральный штаб',
+          target: 'Москва',
+          remainingTurns: 3,
+          totalTurns: 3,
+          cost: { gold: 820, iron: 520, grain: 360, population: 0.2 },
+          reward: { iron: 160 },
+          completeText: 'Новая полевая армия готова к переброске и усилила безопасность державы.',
+        });
+        return;
+      }
+
+      if (id === 'diplomacy') {
+        setDiplomacy((relations) => applyDiplomacyDelta(relations, { Франция: 4, Турция: 2 }));
+        pushLetter({ tone: 'gold', from: 'Франция', subject: 'Ответ на переговоры', time: 'только что' });
+        pushTimeline({
+          icon: '◎',
+          tone: 'green',
+          title: 'Дипломаты начали переговоры',
+          text: 'Франция и Турция получили новые предложения о сотрудничестве.',
+        });
+        showToast('Дипломатия улучшена');
+        return;
+      }
+
+      createStrategicOrder({
+        icon: Landmark,
+        title: 'Развить инфраструктуру центральных земель',
+        owner: 'Совет по развитию',
+        target: 'Москва',
+        remainingTurns: 2,
+        totalTurns: 2,
+        cost: { gold: 520, wood: 260, stone: 220 },
+        reward: { stone: 620, gold: 260 },
+        completeText: 'Инфраструктура улучшена: логистика и сбор налогов стали эффективнее.',
+      });
+    },
+    [createStrategicOrder, pushLetter, pushTimeline, resources, showToast],
+  );
+
   const cancelOrder = (id: string) => {
-    setCancelledOrders((current) => {
-      const next = new Set(current);
-      next.add(id);
-      return next;
+    const order = orders.find((item) => item.id === id);
+    if (!order || order.statusClass === 'cancelled') return;
+
+    const refund = Object.fromEntries(
+      Object.entries(order.cost || {}).map(([key, value]) => [key, Math.round(value * 0.45)]),
+    ) as ResourceDelta;
+
+    setOrders((current) =>
+      current.map((item) =>
+        item.id === id
+          ? { ...item, status: 'Отменен', statusClass: 'cancelled', due: 'снят', remainingTurns: 0 }
+          : item,
+      ),
+    );
+    setResources((current) => applyResourceDelta(current, refund));
+    pushTimeline({
+      icon: '×',
+      tone: 'red',
+      title: 'Приказ отменен',
+      text: `${order.title}. Часть ресурсов возвращена в казну.`,
     });
-    showToast('Приказ помечен к отмене');
+    showToast('Приказ отменен, часть ресурсов возвращена');
+  };
+
+  const handleEndTurn = () => {
+    const nextTurn = turnNumber + 1;
+    const completedOrders: Order[] = [];
+    const activeOrders = orders
+      .filter((order) => order.statusClass !== 'cancelled')
+      .map((order) => {
+        const remainingTurns = Math.max(0, order.remainingTurns - 1);
+        if (remainingTurns <= 0) {
+          completedOrders.push(order);
+          return null;
+        }
+
+        return {
+          ...order,
+          remainingTurns,
+          status: remainingTurns <= 1 ? 'В работе' : order.status,
+          statusClass: remainingTurns <= 1 ? 'progress' : order.statusClass,
+          due: formatOrderDue(remainingTurns),
+        };
+      })
+      .filter(Boolean) as Order[];
+
+    const incomeDelta = resources.reduce<ResourceDelta>((delta, resource) => {
+      delta[resource.id] = resource.perTurn;
+      return delta;
+    }, {});
+
+    const rewardDelta = completedOrders.reduce<ResourceDelta>((delta, order) => {
+      Object.entries(order.reward || {}).forEach(([key, value]) => {
+        const resourceKey = key as ResourceId;
+        delta[resourceKey] = (delta[resourceKey] || 0) + value;
+      });
+      return delta;
+    }, incomeDelta);
+
+    const relationDelta = completedOrders.reduce<Record<string, number>>((delta, order) => {
+      Object.entries(order.diplomacyDelta || {}).forEach(([name, value]) => {
+        delta[name] = (delta[name] || 0) + value;
+      });
+      return delta;
+    }, {});
+
+    setTurnNumber(nextTurn);
+    setSecondsLeft(18 * 3600 + 42 * 60 + 31);
+    setOrders(activeOrders);
+    setResources((current) => applyResourceDelta(current, rewardDelta));
+    setDiplomacy((relations) => applyDiplomacyDelta(relations, relationDelta));
+    setTimelineEvents((events) => [
+      ...completedOrders.map<TimelineEvent>((order) => ({
+        icon: '✓',
+        tone: order.diplomacyDelta?.Украина ? 'bronze' : 'green',
+        title: 'Приказ выполнен',
+        text: order.completeText,
+        time: `Ход ${nextTurn}`,
+      })),
+      {
+        icon: '⌛',
+        tone: 'blue',
+        title: `Ход ${nextTurn} начался`,
+        text: completedOrders.length
+          ? `Завершено приказов: ${completedOrders.length}. Доход державы начислен.`
+          : 'Доход державы начислен, текущие приказы продвинулись.',
+        time: 'только что',
+      },
+      ...events,
+    ].slice(0, 5));
+
+    if (completedOrders.length) {
+      pushLetter({
+        tone: 'neutral',
+        from: 'Совет империи',
+        subject: `Отчет за ход ${nextTurn}`,
+        time: 'только что',
+      });
+    }
+
+    showToast(`Ход ${nextTurn} начался`);
   };
 
   return (
@@ -547,7 +929,13 @@ function App() {
       <div className={appClassName} data-routes={routesVisible ? 'on' : 'off'}>
         <Topbar activeNav={activeNav} onNavClick={handleNavClick} showToast={showToast} />
 
-        <EmpirePanel clock={formatClock(secondsLeft)} showToast={showToast} />
+        <EmpirePanel
+          clock={formatClock(secondsLeft)}
+          resources={resources}
+          turnNumber={turnNumber}
+          onEndTurn={handleEndTurn}
+          onQuickAction={handleQuickAction}
+        />
 
         <main className="main-area">
           <motion.section
@@ -640,14 +1028,20 @@ function App() {
               messagesRef={chatMessagesRef}
             />
             <OrdersPanel
-              cancelledOrders={cancelledOrders}
+              orders={orders}
               onCancel={cancelOrder}
+              onCreateOrder={() => handleQuickAction('create-order')}
               showToast={showToast}
             />
           </section>
         </main>
 
-        <RightPanel showToast={showToast} />
+        <RightPanel
+          timeline={timelineEvents}
+          letters={letters}
+          diplomacy={diplomacy}
+          showToast={showToast}
+        />
       </div>
 
       <div
@@ -738,10 +1132,16 @@ function Topbar({
 
 function EmpirePanel({
   clock,
-  showToast,
+  resources,
+  turnNumber,
+  onEndTurn,
+  onQuickAction,
 }: {
   clock: string;
-  showToast: (message: string) => void;
+  resources: ResourceState[];
+  turnNumber: number;
+  onEndTurn: () => void;
+  onQuickAction: (id: QuickActionId) => void;
 }) {
   return (
     <motion.aside
@@ -771,26 +1171,28 @@ function EmpirePanel({
           {resources.map((resource) => (
             <li key={resource.label}>
               <span>{resource.label}</span>
-              <b>{resource.value}</b>
-              <em>{resource.trend}</em>
+              <b>{formatResourceValue(resource)}</b>
+              <em>{formatResourceTrend(resource)}</em>
             </li>
           ))}
         </ul>
         <div className="turn-info">
           <div>
             <small>Текущий ход</small>
-            <strong>123</strong>
+            <strong>{turnNumber}</strong>
           </div>
           <div>
             <small>До конца хода</small>
             <strong id="turnClock">{clock}</strong>
           </div>
-          <span className="hourglass">⌛</span>
+          <button className="end-turn-button" type="button" onClick={onEndTurn}>
+            Завершить ход
+          </button>
         </div>
         <div className="section-title">Быстрые действия</div>
         <div className="quick-actions">
-          {quickActions.map(({ label, icon: Icon, toast }) => (
-            <button key={label} type="button" title={toast} onClick={() => showToast(toast || label)}>
+          {quickActions.map(({ id, label, icon: Icon, toast }) => (
+            <button key={label} type="button" title={toast || label} onClick={() => onQuickAction(id)}>
               <Icon aria-hidden="true" />
               {label}
             </button>
@@ -895,14 +1297,18 @@ function ChatPanel({
 }
 
 function OrdersPanel({
-  cancelledOrders,
+  orders,
   onCancel,
+  onCreateOrder,
   showToast,
 }: {
-  cancelledOrders: Set<string>;
+  orders: Order[];
   onCancel: (id: string) => void;
+  onCreateOrder: () => void;
   showToast: (message: string) => void;
 }) {
+  const activeOrderCount = orders.filter((order) => order.statusClass !== 'cancelled').length;
+
   return (
     <motion.section
       className="orders-panel framed-panel"
@@ -912,13 +1318,13 @@ function OrdersPanel({
     >
       <div className="panel-heading">
         <h2>
-          Текущие приказы <span>(3/5)</span>
+          Текущие приказы <span>({activeOrderCount}/5)</span>
         </h2>
       </div>
       <div className="orders-list">
         {orders.map((order) => {
           const Icon = order.icon;
-          const isCancelled = cancelledOrders.has(order.id);
+          const isCancelled = order.statusClass === 'cancelled';
 
           return (
             <article
@@ -941,17 +1347,21 @@ function OrdersPanel({
                 <dt>Срок</dt>
                 <dd>{order.due}</dd>
               </dl>
-              <button type="button" title="Посмотреть" onClick={() => showToast(order.title)}>
+              <button
+                type="button"
+                title="Посмотреть"
+                onClick={() => showToast(`${order.title}: ${order.completeText}`)}
+              >
                 <Eye aria-hidden="true" />
               </button>
-              <button type="button" title="Отменить" onClick={() => onCancel(order.id)}>
+              <button type="button" title="Отменить" onClick={() => onCancel(order.id)} disabled={isCancelled}>
                 <X aria-hidden="true" />
               </button>
             </article>
           );
         })}
       </div>
-      <button className="create-order" type="button" onClick={() => showToast('Создать приказ')}>
+      <button className="create-order" type="button" onClick={onCreateOrder}>
         <Plus aria-hidden="true" />
         Создать приказ
       </button>
@@ -959,7 +1369,17 @@ function OrdersPanel({
   );
 }
 
-function RightPanel({ showToast }: { showToast: (message: string) => void }) {
+function RightPanel({
+  timeline,
+  letters,
+  diplomacy,
+  showToast,
+}: {
+  timeline: TimelineEvent[];
+  letters: Letter[];
+  diplomacy: DiplomacyRelation[];
+  showToast: (message: string) => void;
+}) {
   return (
     <motion.aside
       className="side-panel right-panel"
@@ -974,8 +1394,8 @@ function RightPanel({ showToast }: { showToast: (message: string) => void }) {
             Смотреть все
           </button>
         </div>
-        {timeline.map((event) => (
-          <article key={event.title}>
+        {timeline.map((event, index) => (
+          <article key={`${event.title}-${event.time}-${index}`}>
             <span className={`event-icon ${event.tone}`}>{event.icon}</span>
             <div>
               <h3>{event.title}</h3>
@@ -989,14 +1409,14 @@ function RightPanel({ showToast }: { showToast: (message: string) => void }) {
       <section className="mail-panel framed-panel compact">
         <div className="panel-heading">
           <h2>
-            Входящие письма <span>5</span>
+            Входящие письма <span>{letters.length}</span>
           </h2>
           <button type="button" aria-label="Написать письмо" onClick={() => showToast('Написать письмо')}>
             Написать
           </button>
         </div>
-        {letters.map((letter) => (
-          <article key={`${letter.from}-${letter.subject}`}>
+        {letters.map((letter, index) => (
+          <article key={`${letter.from}-${letter.subject}-${index}`}>
             <span className={`letter-seal ${letter.tone}`}>✉</span>
             <div>
               <h3>{letter.from}</h3>
@@ -1023,7 +1443,7 @@ function RightPanel({ showToast }: { showToast: (message: string) => void }) {
               <span className={`flag ${item.flag}`} />
               <b>{item.name}</b>
               <em className={item.tone}>{item.status}</em>
-              <strong>{item.score}</strong>
+              <strong>{item.score > 0 ? `+${item.score}` : item.score}</strong>
             </li>
           ))}
         </ul>

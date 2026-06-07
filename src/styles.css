@@ -39,6 +39,39 @@ button svg,
   justify-content: flex-start;
 }
 
+.turn-info {
+  grid-template-columns: minmax(58px, .55fr) minmax(82px, .8fr);
+  gap: 7px 9px;
+  margin: 8px 0 3px;
+  padding-block: 7px;
+}
+
+.end-turn-button {
+  grid-column: 1 / -1;
+  min-height: 28px;
+  border: 1px solid rgba(226, 183, 100, .38);
+  border-radius: 2px;
+  background: rgba(93, 67, 32, .26);
+  color: #e5c67b;
+  font: 600 11.5px/1 var(--serif);
+  letter-spacing: .04em;
+  cursor: pointer;
+}
+
+.end-turn-button:hover {
+  border-color: rgba(226, 183, 100, .66);
+  background: rgba(138, 94, 42, .32);
+}
+
+.order-card .status.cancelled {
+  color: #d05b52;
+}
+
+.order-card button:disabled {
+  cursor: default;
+  opacity: .35;
+}
+
 .topbar {
   grid-template-columns: 238px minmax(690px, 1fr) auto;
 }
@@ -210,19 +243,20 @@ button svg,
 
 .empire-card h1 {
   padding-right: 0;
+  margin-bottom: 8px;
   text-align: center;
 }
 
 .state-flag {
   display: grid;
   place-items: center;
-  height: 104px;
-  margin: 0 0 10px;
+  height: 96px;
+  margin: -2px 0 6px;
 }
 
 .state-flag .flag {
-  --flag-w: 150px;
-  --flag-h: 92px;
+  --flag-w: 144px;
+  --flag-h: 86px;
   border-radius: 6px;
   border-color: rgba(245, 221, 162, .74);
   box-shadow:
@@ -277,6 +311,7 @@ button svg,
 
 .resource-list li {
   grid-template-columns: minmax(62px, 1fr) 50px 64px;
+  padding-block: 1px;
 }
 
 .resource-list span,
@@ -388,6 +423,7 @@ button svg,
   .resource-list li {
     grid-template-columns: minmax(60px, 1fr) 52px 72px;
     gap: 4px;
+    padding-block: 1px;
     font-size: 12.5px;
   }
 
@@ -651,7 +687,7 @@ button svg,
   }
 
   .quick-actions button {
-    min-height: 31px;
+    min-height: 28px;
     font-size: 12px;
   }
 }

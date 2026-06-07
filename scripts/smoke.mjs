@@ -77,6 +77,34 @@ try {
     filter: getComputedStyle(node).filter,
   }));
 
+  const readGameState = () =>
+    page.evaluate(() => ({
+      resources: [...document.querySelectorAll('.resource-list li')].map((node) =>
+        node.textContent?.replace(/\s+/g, ' ').trim(),
+      ),
+      turn: document.querySelector('.turn-info strong')?.textContent || '',
+      timelineTop: document.querySelector('.timeline-panel article h3')?.textContent || '',
+      orderCounter: document.querySelector('.orders-panel .panel-heading h2 span')?.textContent || '',
+    }));
+
+  const beforeGameAction = await readGameState();
+  await page.locator('.quick-actions button').nth(2).click();
+  await page.waitForTimeout(120);
+  const afterLandManagement = await readGameState();
+  await page.locator('.end-turn-button').click();
+  await page.waitForTimeout(120);
+  const afterEndTurn = await readGameState();
+  const gameCycle = {
+    beforeGameAction,
+    afterLandManagement,
+    afterEndTurn,
+    resourcesChangedAfterAction:
+      beforeGameAction.resources.join('|') !== afterLandManagement.resources.join('|'),
+    turnAdvanced: Number(afterEndTurn.turn) === Number(beforeGameAction.turn) + 1,
+    resourcesChangedAfterTurn:
+      afterLandManagement.resources.join('|') !== afterEndTurn.resources.join('|'),
+  };
+
   await page.locator('.nav-link').last().dblclick();
   await page.waitForTimeout(90);
   const toastDiagnostics = await page.evaluate(() => ({
@@ -100,6 +128,7 @@ try {
     selectedRussia,
     chatAdded: chatText.includes('React smoke message'),
     cancelledStyle,
+    gameCycle,
     toastDiagnostics,
     consoleErrors,
     screenshot: screenshotPath,
@@ -113,6 +142,9 @@ try {
     !afterZoom.includes('1.12') ||
     !selectedRussia ||
     !result.chatAdded ||
+    !gameCycle.resourcesChangedAfterAction ||
+    !gameCycle.turnAdvanced ||
+    !gameCycle.resourcesChangedAfterTurn ||
     toastDiagnostics.count !== 1 ||
     toastDiagnostics.visibleCount !== 1 ||
     consoleErrors.length > 0;
