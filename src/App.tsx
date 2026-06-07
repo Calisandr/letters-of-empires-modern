@@ -133,6 +133,11 @@ const countryNames: Record<string, string> = {
   'W. Sahara': 'Западная Сахара',
 };
 
+const playerCountry = {
+  name: 'Россия',
+  flag: 'russia',
+};
+
 const resources = [
   { label: 'Золото', value: '12 540', trend: '+1 250/ход' },
   { label: 'Дерево', value: '8 760', trend: '+720/ход' },
@@ -738,18 +743,9 @@ function EmpirePanel({
       transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
     >
       <section className="empire-card framed-panel">
-        <h1>Россия</h1>
-        <div className="player-country-flag" aria-label="Флаг России">
-          <span className="flag russia" />
-        </div>
-        <div className="state-emblem" aria-hidden="true">
-          <svg viewBox="0 0 130 122">
-            <path className="wing left" d="M62 39C43 23 26 27 12 38c15 2 27 7 37 17-15-8-28-9-40-5 15 6 27 13 35 26-13-8-24-11-34-9 9 10 21 17 37 21-12 1-22 0-31-3 11 12 26 18 46 18z" />
-            <path className="wing right" d="M68 39c19-16 36-12 50-1-15 2-27 7-37 17 15-8 28-9 40-5-15 6-27 13-35 26 13-8 24-11 34-9-9 10-21 17-37 21 12 1 22 0 31-3-11 12-26 18-46 18z" />
-            <path className="crown" d="M45 24l8-14 12 12 12-12 8 14-8 9H53z" />
-            <path className="body" d="M48 43h34v43c0 13-8 23-17 29-9-6-17-16-17-29z" />
-            <path className="shield" d="M57 56h16v30c0 6-4 11-8 14-4-3-8-8-8-14z" />
-          </svg>
+        <h1>{playerCountry.name}</h1>
+        <div className="state-flag" aria-label={`Флаг страны: ${playerCountry.name}`}>
+          <span className={`flag ${playerCountry.flag}`} />
         </div>
         <div className="ruler-block">
           <span className="avatar-slot ruler-avatar" aria-hidden="true" />

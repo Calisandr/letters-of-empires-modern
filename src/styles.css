@@ -208,43 +208,28 @@ button svg,
   --flag-h: 17px;
 }
 
-.player-country-flag {
-  position: absolute;
-  top: 13px;
-  right: 14px;
-  display: flex;
-  justify-content: center;
-  margin: 0;
-}
-
-.player-country-flag .flag {
-  --flag-w: 58px;
-  --flag-h: 38px;
-  border-radius: 4px;
-  border-color: rgba(245, 221, 162, .7);
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, .58),
-    inset 0 0 0 1px rgba(255, 255, 255, .13),
-    0 0 18px rgba(214, 170, 91, .16);
-}
-
-.empire-card {
-  position: relative;
-}
-
 .empire-card h1 {
-  padding-right: 66px;
-  text-align: left;
+  padding-right: 0;
+  text-align: center;
 }
 
-.state-emblem {
-  height: 92px;
-  margin: 0 0 7px;
+.state-flag {
+  display: grid;
+  place-items: center;
+  height: 104px;
+  margin: 0 0 10px;
 }
 
-.state-emblem svg {
-  width: 106px;
-  height: 99px;
+.state-flag .flag {
+  --flag-w: 150px;
+  --flag-h: 92px;
+  border-radius: 6px;
+  border-color: rgba(245, 221, 162, .74);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, .62),
+    inset 0 0 0 1px rgba(255, 255, 255, .14),
+    0 8px 22px rgba(0, 0, 0, .34),
+    0 0 20px rgba(214, 170, 91, .14);
 }
 
 .map-canvas {
