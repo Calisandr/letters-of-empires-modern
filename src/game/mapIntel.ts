@@ -1,4 +1,4 @@
-import type { DiplomacyTone, GameState, NationFocus, Order, WorldEventImpact, WorldEventTone } from './types';
+import type { DiplomacyTone, GameState, NationFocus, NationIntentType, Order, WorldEventImpact, WorldEventTone } from './types';
 
 export type MapModeId = 'political' | 'trade' | 'strategy';
 export type MapSignalMarker = 'capital' | 'diplomacy' | 'trade' | 'military' | 'threat' | 'event';
@@ -19,6 +19,7 @@ export type MapSignal = {
   tradeOrders: number;
   militaryOrders: number;
   hasEvent: boolean;
+  intentType?: NationIntentType;
   eventImpact?: WorldEventImpact;
   eventTone?: WorldEventTone;
   title: string;
@@ -76,6 +77,23 @@ function focusLabel(focus: NationFocus) {
   return 'оборона';
 }
 
+function intentLabel(type: NationIntentType) {
+  if (type === 'trade') return 'торговый замысел';
+  if (type === 'diplomacy') return 'переговоры';
+  if (type === 'military') return 'военное давление';
+  if (type === 'defense') return 'оборона';
+  if (type === 'industry') return 'промышленность';
+  return 'скрытая активность';
+}
+
+function intentMarker(type?: NationIntentType): MapSignalMarker | null {
+  if (type === 'trade' || type === 'industry') return 'trade';
+  if (type === 'military' || type === 'covert') return 'military';
+  if (type === 'defense') return 'threat';
+  if (type === 'diplomacy') return 'diplomacy';
+  return null;
+}
+
 function isActiveOrder(order: Order) {
   return order.statusClass !== 'cancelled' && order.statusClass !== 'completed' && order.statusClass !== 'failed';
 }
@@ -110,6 +128,7 @@ function markerForSignal({
   tradeOrders,
   militaryOrders,
   hasEvent,
+  intentType,
 }: {
   relation: number;
   focus: NationFocus;
@@ -118,10 +137,13 @@ function markerForSignal({
   tradeOrders: number;
   militaryOrders: number;
   hasEvent: boolean;
+  intentType?: NationIntentType;
 }): MapSignalMarker {
   if (militaryOrders > 0 || eventImpact === 'military' || eventImpact === 'threat') return 'military';
   if (tradeOrders > 0 || eventImpact === 'trade' || focus === 'trade') return 'trade';
   if (relation <= -60) return 'threat';
+  const fromIntent = intentMarker(intentType);
+  if (fromIntent) return fromIntent;
   if (activeOrders > 0 || hasEvent) return 'event';
   if (relation >= 50 || focus === 'diplomacy') return 'diplomacy';
   return 'event';
@@ -166,6 +188,7 @@ export function buildMapSignals(
       const relatedEvent = state.worldEvents.find((event) => event.actor === countryName);
       const score = countryName === 'Россия' ? 200 : relation?.score ?? nation?.relation ?? 0;
       const focus = nation?.focus ?? (relatedOrders.some(isTradeOrder) ? 'trade' : relatedOrders.some(isMilitaryOrder) ? 'military' : 'diplomacy');
+      const currentIntent = nation?.currentIntent;
       const threat = nation?.threat ?? (score <= -60 ? 82 : score <= -20 ? 58 : 24);
       const pressure = nation?.pressure ?? (score <= -60 ? 78 : score <= -20 ? 54 : 20);
       const tradeOrders = relatedOrders.filter(isTradeOrder).length;
@@ -180,6 +203,7 @@ export function buildMapSignals(
             tradeOrders,
             militaryOrders,
             hasEvent: Boolean(relatedEvent),
+            intentType: currentIntent?.type,
           });
       const severity = Math.max(
         countryName === 'Россия' ? 64 : 0,
@@ -187,18 +211,21 @@ export function buildMapSignals(
         pressure,
         score <= -60 ? 92 : score <= -20 ? 70 : score >= 100 ? 64 : 0,
         relatedOrders.length ? 62 + relatedOrders.length * 8 : 0,
+        currentIntent ? 42 + currentIntent.confidence * 0.52 : 0,
         eventSeverity(relatedEvent?.impact, relatedEvent?.tone),
       );
       const shortStatus = countryName === 'Россия'
         ? 'центр державы'
         : relatedOrders.length
           ? `${relatedOrders.length} приказ`
-          : relatedEvent
+            : relatedEvent
             ? relatedEvent.impact === 'trade'
               ? 'торговое событие'
               : relatedEvent.impact === 'threat' || relatedEvent.impact === 'military'
                 ? 'угроза'
                 : 'мировое событие'
+            : currentIntent
+              ? intentLabel(currentIntent.type)
             : relationLabel(score);
 
       return {
@@ -216,10 +243,11 @@ export function buildMapSignals(
         tradeOrders,
         militaryOrders,
         hasEvent: Boolean(relatedEvent),
+        intentType: currentIntent?.type,
         eventImpact: relatedEvent?.impact,
         eventTone: relatedEvent?.tone,
-        title: relatedEvent?.title || relatedOrders[0]?.title || nation?.lastAction || `${countryName}: ${focusLabel(focus)}`,
-        summary: relatedOrders[0]?.title || relatedEvent?.text || nation?.lastAction || `${countryName}: ${relationLabel(score)}, фокус - ${focusLabel(focus)}.`,
+        title: relatedEvent?.title || relatedOrders[0]?.title || currentIntent?.title || nation?.lastAction || `${countryName}: ${focusLabel(focus)}`,
+        summary: relatedOrders[0]?.title || relatedEvent?.text || currentIntent?.summary || nation?.lastAction || `${countryName}: ${relationLabel(score)}, фокус - ${focusLabel(focus)}.`,
         shortStatus,
       };
     })
@@ -235,6 +263,8 @@ export function filterMapSignalsForMode(signals: MapSignal[], mode: MapModeId) {
       signal.focus === 'trade' ||
       signal.tradeOrders > 0 ||
       signal.eventImpact === 'trade' ||
+      signal.intentType === 'trade' ||
+      signal.intentType === 'industry' ||
       signal.relation >= 100,
     );
   }
@@ -248,6 +278,9 @@ export function filterMapSignalsForMode(signals: MapSignal[], mode: MapModeId) {
       signal.militaryOrders > 0 ||
       signal.eventImpact === 'threat' ||
       signal.eventImpact === 'military' ||
+      signal.intentType === 'military' ||
+      signal.intentType === 'covert' ||
+      signal.intentType === 'defense' ||
       signal.threat >= 55 ||
       signal.pressure >= 55 ||
       signal.relation < -20,
@@ -258,6 +291,7 @@ export function filterMapSignalsForMode(signals: MapSignal[], mode: MapModeId) {
     signal.marker === 'capital' ||
     signal.activeOrders > 0 ||
     signal.hasEvent ||
+    Boolean(signal.intentType) ||
     signal.relation >= 50 ||
     signal.relation < -20,
   );

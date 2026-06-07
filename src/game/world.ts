@@ -3,6 +3,7 @@ import type {
   CompletedOrderReport,
   GameState,
   Letter,
+  NationIntent,
   NationProfile,
   ResourceDelta,
   ResourceId,
@@ -58,6 +59,204 @@ function makeChatMessage(turn: number, index: number, nation: NationProfile, tex
   };
 }
 
+function intentLabel(type: NationIntent['type']) {
+  if (type === 'trade') return 'торговое намерение';
+  if (type === 'diplomacy') return 'дипломатическое намерение';
+  if (type === 'military') return 'военное намерение';
+  if (type === 'defense') return 'оборонное намерение';
+  if (type === 'industry') return 'экономическое намерение';
+  return 'скрытое намерение';
+}
+
+function orderTouchesNation(order: CompletedOrderReport, nation: NationProfile) {
+  return (
+    order.target === nation.name ||
+    order.title.includes(nation.name) ||
+    order.text.includes(nation.name)
+  );
+}
+
+function intentTension(intent: NationIntent) {
+  if (intent.type === 'military') return 6;
+  if (intent.type === 'covert') return 4;
+  if (intent.type === 'defense') return 2;
+  if (intent.type === 'trade') return -2;
+  if (intent.type === 'diplomacy') return -1;
+  return 0;
+}
+
+function chooseNationIntent(
+  state: GameState,
+  nation: NationProfile,
+  nextTurn: number,
+  index: number,
+  completedOrders: CompletedOrderReport[],
+): NationIntent {
+  const relation = relationFor(state, nation);
+  const touchedOrder = completedOrders.find((order) => orderTouchesNation(order, nation));
+  const orderPressure = touchedOrder ? (touchedOrder.succeeded ? -4 : 5) : 0;
+  const pulse = (nextTurn + index + nation.id.length) % 6;
+  const danger = nation.threat + nation.pressure + (relation < -40 ? 20 : 0) + orderPressure * 2;
+
+  if (nation.id === 'russia') {
+    const underPressure = state.worldTension >= 62 || nation.stability < 62 || completedOrders.some((order) => !order.succeeded);
+    return {
+      type: underPressure ? 'defense' : 'industry',
+      target: underPressure ? 'внутренний порядок' : 'казна и снабжение',
+      title: underPressure ? 'Стабилизировать державу' : 'Укрепить хозяйство державы',
+      summary: underPressure
+        ? 'Совет держит резервы ближе к столице и просит не перегружать фронтир рискованными приказами.'
+        : 'Канцелярия готовит спокойный хозяйственный ход: налоги, зерно и снабжение должны идти ровнее.',
+      confidence: underPressure ? 86 : 78,
+      visibility: 'open',
+      pressureDelta: underPressure ? -2 : -3,
+      threatDelta: underPressure ? -1 : -2,
+      diplomacyDelta: 0,
+      eventTone: underPressure ? 'bronze' : 'green',
+      eventImpact: underPressure ? 'stability' : 'economy',
+    };
+  }
+
+  if (relation <= -65 || danger >= 150) {
+    const covert = nation.focus !== 'military' && pulse >= 4;
+    return {
+      type: covert ? 'covert' : 'military',
+      target: relation <= -65 ? 'российские рубежи' : 'спорный регион',
+      title: covert ? `${nation.name}: скрытая подготовка` : `${nation.name}: военное давление`,
+      summary: covert
+        ? `${nation.name} собирает закрытые сведения и ищет место, где российский приказ можно сорвать без открытой войны.`
+        : `${nation.name} стягивает силы, проверяет снабжение и показывает готовность ответить на слабый приказ.`,
+      confidence: clamp(58 + Math.round(danger / 6), 55, 96),
+      visibility: covert ? 'hidden' : 'guarded',
+      pressureDelta: covert ? 4 : 6,
+      threatDelta: covert ? 5 : 7,
+      diplomacyDelta: relation <= -65 ? -4 : -2,
+      eventTone: 'red',
+      eventImpact: 'threat',
+    };
+  }
+
+  if (relation < -20 || nation.focus === 'defense' || nation.stability < 52) {
+    return {
+      type: 'defense',
+      target: 'границы и столица',
+      title: `${nation.name}: оборонная стойка`,
+      summary: `${nation.name} укрепляет внутренний порядок и осторожно закрывает часть военных данных от чужих посольств.`,
+      confidence: clamp(54 + nation.pressure - Math.max(0, relation), 52, 88),
+      visibility: relation < -20 ? 'guarded' : 'open',
+      pressureDelta: relation < -20 ? 3 : 1,
+      threatDelta: relation < -20 ? 2 : 0,
+      diplomacyDelta: relation < -20 ? -1 : 0,
+      eventTone: 'bronze',
+      eventImpact: 'military',
+    };
+  }
+
+  if ((nation.focus === 'trade' || nation.grain >= 72 || nation.economy >= 78) && relation >= 35) {
+    const allyScale = relation >= 100 ? 1.25 : 1;
+    return {
+      type: 'trade',
+      target: 'российский рынок',
+      title: `${nation.name}: торговый коридор`,
+      summary: `${nation.name} готовит обмен ресурсами и ждет, будет ли Россия развивать безопасный маршрут.`,
+      confidence: clamp(56 + Math.round(nation.economy / 3) + (relation >= 100 ? 10 : 0), 55, 95),
+      visibility: 'open',
+      pressureDelta: -2,
+      threatDelta: -2,
+      diplomacyDelta: relation >= 100 ? 2 : 1,
+      resourceDelta: {
+        gold: Math.round((nation.focus === 'trade' ? 230 : 150) * allyScale),
+        grain: Math.round((nation.grain >= 72 ? 160 : 80) * allyScale),
+      },
+      eventTone: 'green',
+      eventImpact: 'trade',
+    };
+  }
+
+  if (nation.focus === 'industry' && relation >= 0) {
+    return {
+      type: 'industry',
+      target: 'промышленные поставки',
+      title: `${nation.name}: промышленная заявка`,
+      summary: `${nation.name} ищет железо, камень и стабильный договор, чтобы не зависеть от военных кризисов.`,
+      confidence: clamp(54 + Math.round(nation.treasury / 3), 52, 90),
+      visibility: relation >= 50 ? 'open' : 'guarded',
+      pressureDelta: -1,
+      threatDelta: 0,
+      diplomacyDelta: relation >= 50 ? 1 : 0,
+      resourceDelta: relation >= 50 ? { iron: 90 } : undefined,
+      eventTone: 'blue',
+      eventImpact: 'economy',
+    };
+  }
+
+  return {
+    type: 'diplomacy',
+    target: 'канал переговоров',
+    title: `${nation.name}: дипломатический зонд`,
+    summary: `${nation.name} проверяет, можно ли улучшить отношения без немедленных военных или торговых обязательств.`,
+    confidence: clamp(52 + Math.round(nation.stability / 4) + (pulse === 0 ? 8 : 0), 52, 88),
+    visibility: relation >= 45 ? 'open' : 'guarded',
+    pressureDelta: -1,
+    threatDelta: -1,
+    diplomacyDelta: relation >= 50 ? 1 : 2,
+    eventTone: 'blue',
+    eventImpact: 'diplomacy',
+  };
+}
+
+function applyIntentToNation(nation: NationProfile, intent: NationIntent): NationProfile {
+  const economyDelta = intent.type === 'trade' || intent.type === 'industry' ? 1 : 0;
+  const armyDelta = intent.type === 'military' || intent.type === 'defense' ? 1 : 0;
+  const stabilityDelta = intent.type === 'covert' || intent.type === 'military' ? -1 : intent.type === 'diplomacy' ? 1 : 0;
+
+  return {
+    ...nation,
+    economy: clamp(nation.economy + economyDelta),
+    army: clamp(nation.army + armyDelta),
+    stability: clamp(nation.stability + stabilityDelta),
+    pressure: clamp(nation.pressure + intent.pressureDelta),
+    threat: clamp(nation.threat + intent.threatDelta),
+    currentIntent: intent,
+    lastAction: intent.summary,
+  };
+}
+
+function createIntentEvent(turn: number, nation: NationProfile, intent: NationIntent): WorldEvent {
+  return {
+    id: eventId(turn, nation.id, intent.type),
+    turn,
+    actor: nation.name,
+    flag: nation.flag,
+    title: intent.title,
+    text: intent.summary,
+    tone: intent.eventTone,
+    impact: intent.eventImpact,
+  };
+}
+
+function intentChatText(intent: NationIntent) {
+  if (intent.type === 'trade') return 'Наши купцы подтверждают маршрут. Ждем ваших дальнейших распоряжений.';
+  if (intent.type === 'diplomacy') return 'Мы готовы к осторожному разговору, если условия будут ясными.';
+  if (intent.type === 'military') return 'Наши войска приведены в готовность. Любая провокация получит ответ.';
+  if (intent.type === 'defense') return 'Мы укрепляем порядок и не допустим давления на наши границы.';
+  if (intent.type === 'industry') return 'Промышленные палаты готовы обсуждать поставки при стабильном договоре.';
+  return 'Официальных заявлений нет. Канцелярии наблюдают за вашими шагами.';
+}
+
+function intentPriority(nation: NationProfile) {
+  const intent = nation.currentIntent;
+  if (!intent) return 0;
+  const typeWeight =
+    intent.type === 'military' ? 44 :
+    intent.type === 'covert' ? 38 :
+    intent.type === 'trade' ? 30 :
+    intent.type === 'diplomacy' ? 24 :
+    intent.type === 'defense' ? 22 :
+    18;
+  return typeWeight + intent.confidence + nation.threat + nation.pressure + (Math.abs(intent.diplomacyDelta) * 4);
+}
+
 function updateNationBase(state: GameState, nation: NationProfile): NationProfile {
   const relation = relationFor(state, nation);
   const hostilePressure = relation < -60 ? 7 : relation < -20 ? 4 : relation < 30 ? 2 : -2;
@@ -91,24 +290,6 @@ function patchNationAction(nations: NationProfile[], name: string, action: strin
   );
 }
 
-function strongestHostile(nations: NationProfile[]) {
-  return [...nations]
-    .filter((nation) => nation.relation < -20 || nation.threat >= 55)
-    .sort((a, b) => b.threat + b.pressure - (a.threat + a.pressure))[0];
-}
-
-function strongestFriendly(nations: NationProfile[]) {
-  return [...nations]
-    .filter((nation) => nation.relation >= 50 && nation.id !== 'russia')
-    .sort((a, b) => b.economy + b.relation - (a.economy + a.relation))[0];
-}
-
-function mostUsefulNeutral(nations: NationProfile[]) {
-  return [...nations]
-    .filter((nation) => nation.relation > -20 && nation.relation < 50)
-    .sort((a, b) => b.economy + b.stability - (a.economy + a.stability))[0];
-}
-
 function summarizeResourceDelta(delta: ResourceDelta) {
   const parts = Object.entries(delta)
     .filter(([, value]) => value)
@@ -122,7 +303,11 @@ export function simulateWorldTurn(
   nextTurn: number,
   completedOrders: CompletedOrderReport[],
 ): WorldSimulationResult {
-  let nations = state.nations.map((nation) => updateNationBase(state, nation));
+  let nations = state.nations
+    .map((nation) => updateNationBase(state, nation))
+    .map((nation, index) =>
+      applyIntentToNation(nation, chooseNationIntent(state, nation, nextTurn, index, completedOrders)),
+    );
   const events: WorldEvent[] = [];
   const letters: Letter[] = [];
   const chatMessages: ChatMessage[] = [];
@@ -132,80 +317,43 @@ export function simulateWorldTurn(
   const opportunities: string[] = [];
   let tensionDelta = completedOrders.some((order) => !order.succeeded) ? 5 : -1;
 
-  const hostile = strongestHostile(nations);
-  if (hostile && (hostile.threat >= 65 || nextTurn % 2 === 0)) {
-    const action = `${hostile.name} усиливает давление и проверяет слабые места границы.`;
-    events.push({
-      id: eventId(nextTurn, hostile.id, 'pressure'),
-      turn: nextTurn,
-      actor: hostile.name,
-      flag: hostile.flag,
-      title: `${hostile.name}: рост напряжения`,
-      text: action,
-      tone: 'red',
-      impact: 'threat',
-    });
-    addDiplomacy(diplomacyDelta, hostile.name, hostile.relation < -60 ? -4 : -2);
-    tensionDelta += hostile.relation < -60 ? 7 : 4;
-    warnings.push(`${hostile.name} может сорвать слабый приказ или втянуть регион в кризис.`);
-    chatMessages.push(makeChatMessage(nextTurn, 1, hostile, 'Наши войска приведены в готовность. Любая провокация получит ответ.'));
-    letters.push({
-      tone: 'red',
-      from: hostile.name,
-      subject: 'Военное предупреждение',
-      time: 'только что',
-    });
-    nations = patchNationAction(nations, hostile.name, action, 5, 4);
-  }
+  const visibleIntents = [...nations]
+    .filter((nation) => nation.id !== 'russia' && nation.currentIntent)
+    .sort((a, b) => intentPriority(b) - intentPriority(a))
+    .slice(0, 3);
 
-  const friendly = strongestFriendly(nations);
-  if (friendly && nextTurn % 3 !== 0) {
-    const goldBonus = friendly.focus === 'trade' ? 260 : 180;
-    const grainBonus = friendly.grain > 70 ? 180 : 90;
-    const action = `${friendly.name} расширяет обмен с российской канцелярией.`;
-    events.push({
-      id: eventId(nextTurn, friendly.id, 'trade'),
-      turn: nextTurn,
-      actor: friendly.name,
-      flag: friendly.flag,
-      title: `${friendly.name}: торговый ответ`,
-      text: `${action} Казна получает ${goldBonus} золота и ${grainBonus} зерна.`,
-      tone: 'green',
-      impact: 'trade',
-    });
-    addResource(resourceDelta, 'gold', goldBonus);
-    addResource(resourceDelta, 'grain', grainBonus);
-    addDiplomacy(diplomacyDelta, friendly.name, 2);
-    tensionDelta -= 2;
-    opportunities.push(`${friendly.name} готова принять новый торговый или союзный приказ.`);
-    chatMessages.push(makeChatMessage(nextTurn, 2, friendly, 'Наши купцы подтверждают маршрут. Ждем ваших дальнейших распоряжений.'));
-    nations = patchNationAction(nations, friendly.name, action, -2, -2);
-  }
+  visibleIntents.forEach((nation, index) => {
+    const intent = nation.currentIntent;
+    if (!intent) return;
 
-  const neutral = mostUsefulNeutral(nations);
-  if (neutral && nextTurn % 3 === 0) {
-    const action = `${neutral.name} предлагает осторожные переговоры без военных обязательств.`;
-    events.push({
-      id: eventId(nextTurn, neutral.id, 'talks'),
-      turn: nextTurn,
-      actor: neutral.name,
-      flag: neutral.flag,
-      title: `${neutral.name}: окно переговоров`,
-      text: action,
-      tone: 'blue',
-      impact: 'diplomacy',
+    events.push(createIntentEvent(nextTurn, nation, intent));
+    if (intent.diplomacyDelta) addDiplomacy(diplomacyDelta, nation.name, intent.diplomacyDelta);
+    Object.entries(intent.resourceDelta || {}).forEach(([resource, value]) => {
+      if (value) addResource(resourceDelta, resource as ResourceId, value);
     });
-    addDiplomacy(diplomacyDelta, neutral.name, 3);
-    tensionDelta -= 1;
-    opportunities.push(`${neutral.name} можно подтянуть к дружественному статусу дипломатическим письмом.`);
-    letters.push({
-      tone: 'gold',
-      from: neutral.name,
-      subject: 'Осторожные переговоры',
-      time: 'только что',
-    });
-    nations = patchNationAction(nations, neutral.name, action, -1, -1);
-  }
+    tensionDelta += intentTension(intent);
+    chatMessages.push(makeChatMessage(nextTurn, index + 1, nation, intentChatText(intent)));
+
+    if (intent.type === 'military' || intent.type === 'covert') {
+      warnings.push(`${nation.name}: ${intentLabel(intent.type)} может сорвать слабый приказ или поднять напряжение.`);
+      letters.push({
+        tone: 'red',
+        from: nation.name,
+        subject: intent.type === 'covert' ? 'Неясная активность у границ' : 'Военное предупреждение',
+        time: 'только что',
+      });
+    } else if (intent.type === 'trade' || intent.type === 'diplomacy' || intent.type === 'industry') {
+      opportunities.push(`${nation.name}: ${intentLabel(intent.type)} можно развить приказом, письмом или миссией.`);
+      if (intent.visibility === 'open') {
+        letters.push({
+          tone: intent.type === 'trade' ? 'gold' : 'neutral',
+          from: nation.name,
+          subject: intent.type === 'trade' ? 'Окно торгового соглашения' : 'Осторожные переговоры',
+          time: 'только что',
+        });
+      }
+    }
+  });
 
   const russia = nations.find((nation) => nation.id === 'russia');
   if (russia && (russia.stability < 58 || state.worldTension + tensionDelta > 70)) {
@@ -246,7 +394,7 @@ export function simulateWorldTurn(
   if (nextWorldTension >= 72) warnings.push('Напряжение мира высокое: риск провала военных приказов растет.');
   if (nextWorldTension <= 35) opportunities.push('Мир достаточно спокоен для торговли и инфраструктуры.');
 
-  const summary = `Ход ${nextTurn}: завершено приказов ${completedOrders.length}, событий мира ${events.length}, напряжение мира ${nextWorldTension}/100.`;
+  const summary = `Ход ${nextTurn}: завершено приказов ${completedOrders.length}, активных намерений держав ${nations.filter((nation) => nation.currentIntent).length}, событий мира ${events.length}, напряжение мира ${nextWorldTension}/100.`;
   const report: TurnReport = {
     turn: nextTurn,
     summary,

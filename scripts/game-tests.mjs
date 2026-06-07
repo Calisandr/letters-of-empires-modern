@@ -251,6 +251,41 @@ try {
     assert.ok(next.worldTension >= 0 && next.worldTension <= 100);
   });
 
+  test('world turn assigns explicit intentions to every nation', () => {
+    const next = endTurn(clone(initialGameState));
+    const player = next.nations.find((nation) => nation.id === 'russia');
+    const china = next.nations.find((nation) => nation.id === 'china');
+    const ukraine = next.nations.find((nation) => nation.id === 'ukraine');
+
+    assert.ok(next.nations.every((nation) => nation.currentIntent));
+    assert.ok(player.currentIntent.type === 'industry' || player.currentIntent.type === 'defense');
+    assert.equal(china.currentIntent.type, 'trade');
+    assert.ok(['military', 'covert', 'defense'].includes(ukraine.currentIntent.type));
+    assert.ok(ukraine.currentIntent.confidence >= 55);
+    assert.ok(next.lastTurnReport.summary.includes('активных намерений держав'));
+  });
+
+  test('map intel exposes nation intentions in map modes', () => {
+    const next = endTurn(clone(initialGameState));
+    const countryKeys = {
+      Россия: 'Russia',
+      Индия: 'India',
+      Украина: 'Ukraine',
+      Германия: 'Germany',
+      Китай: 'China',
+    };
+    const signals = buildMapSignals(next, countryKeys);
+    const germany = filterMapSignalsForMode(signals, 'trade').find((signal) => signal.countryKey === 'Germany');
+    const ukraine = filterMapSignalsForMode(signals, 'strategy').find((signal) => signal.countryKey === 'Ukraine');
+
+    assert.ok(germany);
+    assert.equal(germany.intentType, 'industry');
+    assert.equal(germany.marker, 'trade');
+    assert.ok(ukraine);
+    assert.equal(ukraine.intentType, 'military');
+    assert.equal(ukraine.marker, 'military');
+  });
+
   test('reckless completed order can fail with validated consequences', () => {
     const state = {
       ...clone(initialGameState),

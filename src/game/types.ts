@@ -16,6 +16,8 @@ export type OrderStatusClass = 'moving' | 'progress' | 'cancelled' | 'completed'
 export type OrderIconKey = 'package' | 'swords' | 'pickaxe' | 'anchor' | 'shield' | 'landmark' | 'mail';
 export type ActionStatusKind = 'idle' | 'loading' | 'success' | 'error';
 export type NationFocus = 'trade' | 'military' | 'industry' | 'diplomacy' | 'defense';
+export type NationIntentType = 'trade' | 'diplomacy' | 'military' | 'defense' | 'industry' | 'covert';
+export type NationIntentVisibility = 'open' | 'guarded' | 'hidden';
 export type WorldEventTone = 'blue' | 'green' | 'bronze' | 'red';
 export type WorldEventImpact = 'trade' | 'military' | 'diplomacy' | 'economy' | 'stability' | 'threat';
 
@@ -76,6 +78,21 @@ export type DiplomacyRelation = {
   score: number;
 };
 
+export type NationIntent = {
+  type: NationIntentType;
+  target: string;
+  title: string;
+  summary: string;
+  confidence: number;
+  visibility: NationIntentVisibility;
+  pressureDelta: number;
+  threatDelta: number;
+  diplomacyDelta: number;
+  resourceDelta?: ResourceDelta;
+  eventTone: WorldEventTone;
+  eventImpact: WorldEventImpact;
+};
+
 export type NationProfile = {
   id: string;
   name: string;
@@ -91,6 +108,7 @@ export type NationProfile = {
   pressure: number;
   goals: string[];
   lastAction: string;
+  currentIntent?: NationIntent;
 };
 
 export type ChatMessage = {

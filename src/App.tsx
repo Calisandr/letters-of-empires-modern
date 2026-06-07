@@ -659,6 +659,70 @@ function visibleStat(value: number, relation: number, status: string, hiddenForE
   return statBand(value);
 }
 
+function intentTypeLabel(intent: NonNullable<NationProfile['currentIntent']>['type']) {
+  if (intent === 'trade') return 'Торговля';
+  if (intent === 'diplomacy') return 'Дипломатия';
+  if (intent === 'military') return 'Военное давление';
+  if (intent === 'defense') return 'Оборона';
+  if (intent === 'industry') return 'Промышленность';
+  return 'Скрытая активность';
+}
+
+function intentAccessLabel(visibility: NonNullable<NationProfile['currentIntent']>['visibility']) {
+  if (visibility === 'open') return 'открыто';
+  if (visibility === 'guarded') return 'частично';
+  return 'скрыто';
+}
+
+function getVisibleIntent(
+  intent: NationProfile['currentIntent'],
+  relation: number,
+  status: string,
+) {
+  if (!intent) {
+    return {
+      tone: 'unknown',
+      label: 'Намерение',
+      title: 'Оценка не готова',
+      summary: 'Нужны разведка, дипломатия или следующий ход, чтобы понять ближайший замысел страны.',
+      meta: 'нет донесения',
+    };
+  }
+
+  const exact = status === 'russia' || relation >= 100;
+  const reliable = relation >= 45;
+  const partial = relation > -25;
+  const hidden = intent.visibility === 'hidden' && !exact;
+
+  if (hidden || (!partial && intent.visibility !== 'open')) {
+    return {
+      tone: 'hidden',
+      label: 'Намерение',
+      title: 'Замысел скрыт',
+      summary: 'Канцелярия видит движение и давление, но цель намерения пока не подтверждена.',
+      meta: 'нужна разведка',
+    };
+  }
+
+  if (!reliable && !exact) {
+    return {
+      tone: intent.type,
+      label: 'Слухи',
+      title: intentTypeLabel(intent.type),
+      summary: intent.summary,
+      meta: `уверенность ≈${Math.round(intent.confidence / 10) * 10}% · доступ ${intentAccessLabel(intent.visibility)}`,
+    };
+  }
+
+  return {
+    tone: intent.type,
+    label: intentTypeLabel(intent.type),
+    title: intent.title,
+    summary: intent.summary,
+    meta: `уверенность ${intent.confidence}% · цель: ${intent.target}`,
+  };
+}
+
 function buildFallbackNation(selected: SelectedCountry): NationProfile {
   const hash = hashCountryName(selected.name);
   const relation = fallbackRelation(selected.status);
@@ -744,6 +808,7 @@ function CountryIntelPanel({
   const intel = getCountryIntel(selectedCountry, nations, diplomacy, worldEvents);
   const relationText = intel.relation > 0 ? `+${intel.relation}` : String(intel.relation);
   const flagView = getCountryFlagView(selected.key || intel.id, intel.name, intel.flag);
+  const intentView = getVisibleIntent(intel.currentIntent, intel.relation, selected.status);
 
   return (
     <aside className="country-intel" aria-label="Разведка выбранной страны">
@@ -795,6 +860,12 @@ function CountryIntelPanel({
           <dd>{visibleStat(intel.army, intel.relation, selectedCountry?.status || 'russia', true)}</dd>
         </div>
       </dl>
+      <section className={`country-intent ${intentView.tone}`} aria-label={`Намерение страны: ${intel.name}`}>
+        <span>{intentView.label}</span>
+        <b>{intentView.title}</b>
+        <p>{intentView.summary}</p>
+        <small>{intentView.meta}</small>
+      </section>
       <div className="country-intel-actions" aria-label={`Действия по стране: ${intel.name}`}>
         {countryIntelActions.map((action) => {
           const ActionIcon = action.icon;
@@ -816,7 +887,9 @@ function CountryIntelPanel({
           );
         })}
       </div>
-      <p>{intel.relatedEvent?.text || intel.lastAction}</p>
+      {intel.relatedEvent || !intel.currentIntent ? (
+        <p className="country-intel-activity">{intel.relatedEvent?.text || intel.lastAction}</p>
+      ) : null}
       <small>{intel.isDetailed ? 'Досье обновляется каждый ход.' : 'Базовое досье: точность растет через дипломатию и разведку.'}</small>
     </aside>
   );

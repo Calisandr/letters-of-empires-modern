@@ -182,7 +182,7 @@ try {
     diplomacyNames: [...document.querySelectorAll('.diplomacy-panel li b')].map((node) =>
       node.textContent?.trim(),
     ),
-    intelText: document.querySelector('.country-intel p')?.textContent?.trim() || '',
+    intelText: document.querySelector('.country-intel-activity')?.textContent?.trim() || '',
     timelineTop: document.querySelector('.timeline-panel article h3')?.textContent?.trim() || '',
   }));
   const countryIntelActionDiagnostics = {
@@ -274,6 +274,16 @@ try {
     await page.waitForSelector('.app-shell');
     return page.locator('.turn-info strong').first().textContent();
   })();
+  const countryIntentAfterReload = await page.evaluate(() => {
+    const intent = document.querySelector('.country-intent');
+    const text = intent?.textContent?.replace(/\s+/g, ' ').trim() || '';
+
+    return {
+      text,
+      hasIntentBlock: Boolean(intent),
+      hasTurnIntent: text.includes('уверенность') || text.includes('цель:') || text.includes('Намерение'),
+    };
+  });
   const buttonNameDiagnostics = await page.evaluate(() => {
     const unnamed = [...document.querySelectorAll('button')].filter((button) => {
       const label = button.getAttribute('aria-label') || button.getAttribute('title') || button.textContent || '';
@@ -290,6 +300,7 @@ try {
     afterEndTurn,
     composeButtonUnlockedAfterTurn,
     savedTurnAfterReload,
+    countryIntentAfterReload,
     resourcesChangedAfterAction:
       beforeGameAction.resources.join('|') !== afterLandManagement.resources.join('|'),
     turnAdvanced: Number(afterEndTurn.turn) === Number(beforeGameAction.turn) + 1,
@@ -393,6 +404,8 @@ try {
     !gameCycle.resourcesChangedAfterTurn ||
     !gameCycle.composeButtonUnlockedAfterTurn ||
     gameCycle.savedTurnAfterReload !== gameCycle.afterEndTurn.turn ||
+    !gameCycle.countryIntentAfterReload.hasIntentBlock ||
+    !gameCycle.countryIntentAfterReload.hasTurnIntent ||
     toastDiagnostics.count !== 1 ||
     toastDiagnostics.visibleCount !== 1 ||
     mailBadgeDiagnostics.navBadge !== mailBadgeDiagnostics.panelCount ||
