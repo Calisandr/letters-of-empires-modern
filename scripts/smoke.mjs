@@ -28,6 +28,21 @@ try {
 
   const countryCount = await page.locator('.country').count();
   const initialTitle = await page.locator('.brand-text').textContent();
+  const loadedScripts = await page.evaluate(() => [...document.scripts].map((script) => script.src));
+  const legacyScriptLoaded = loadedScripts.some((src) => src.includes('/js/app.js'));
+  const legacyScriptResponse = await page.evaluate(async () => {
+    const response = await fetch('/js/app.js', { cache: 'no-store' });
+    const text = await response.text();
+
+    return {
+      status: response.status,
+      contentType: response.headers.get('content-type') || '',
+      servesLegacyJs:
+        text.includes('function showToast') ||
+        text.includes('querySelectorAll') ||
+        text.includes('addEventListener'),
+    };
+  });
 
   await page.locator('#mapMode').click();
   await page.waitForFunction(() => document.querySelector('.app-shell')?.classList.contains('trade-mode'));
@@ -62,11 +77,21 @@ try {
     filter: getComputedStyle(node).filter,
   }));
 
+  await page.locator('.nav-link').last().dblclick();
+  await page.waitForTimeout(90);
+  const toastDiagnostics = await page.evaluate(() => ({
+    count: document.querySelectorAll('.toast').length,
+    visibleCount: document.querySelectorAll('.toast.visible').length,
+    text: document.querySelector('.toast')?.textContent || '',
+  }));
+
   await page.screenshot({ path: screenshotPath, fullPage: true });
 
   const result = {
     loaded: true,
     initialTitle,
+    legacyScriptLoaded,
+    legacyScriptResponse,
     countryCount,
     routesState,
     beforeZoom,
@@ -75,16 +100,21 @@ try {
     selectedRussia,
     chatAdded: chatText.includes('React smoke message'),
     cancelledStyle,
+    toastDiagnostics,
     consoleErrors,
     screenshot: screenshotPath,
   };
 
   const failed =
+    legacyScriptLoaded ||
+    legacyScriptResponse.servesLegacyJs ||
     countryCount < 30 ||
     routesState !== 'off' ||
     !afterZoom.includes('1.12') ||
     !selectedRussia ||
     !result.chatAdded ||
+    toastDiagnostics.count !== 1 ||
+    toastDiagnostics.visibleCount !== 1 ||
     consoleErrors.length > 0;
 
   console.log(JSON.stringify(result, null, 2));

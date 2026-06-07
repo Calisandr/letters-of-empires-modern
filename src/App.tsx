@@ -33,7 +33,6 @@ import {
 import worldMapSvg from './assets/world-map.svg?raw';
 
 type ToastState = {
-  id: number;
   message: string;
 };
 
@@ -332,7 +331,6 @@ function App() {
   const activeTooltipCountryRef = useRef<string | null>(null);
   const tooltipFrameRef = useRef<number | null>(null);
   const toastTimerRef = useRef<number | null>(null);
-  const toastIdRef = useRef(0);
   const lastToastRef = useRef<{ message: string; time: number } | null>(null);
   const latestTooltipRef = useRef<{
     country: SVGElement;
@@ -344,17 +342,16 @@ function App() {
   const showToast = useCallback((message: string) => {
     const now = window.performance.now();
     const lastToast = lastToastRef.current;
+    const isDuplicateToast = lastToast?.message === message && now - lastToast.time < 900;
 
     lastToastRef.current = { message, time: now };
 
-    if (lastToast?.message !== message || now - lastToast.time >= 650) {
-      toastIdRef.current += 1;
-    }
-
-    setToast({ id: toastIdRef.current, message });
-
     if (toastTimerRef.current !== null) {
       window.clearTimeout(toastTimerRef.current);
+    }
+
+    if (!isDuplicateToast) {
+      setToast({ message });
     }
 
     toastTimerRef.current = window.setTimeout(() => {
@@ -653,19 +650,13 @@ function App() {
         <RightPanel showToast={showToast} />
       </div>
 
-      <motion.div
-        key="app-toast"
+      <div
         className={`toast ${toast ? 'visible' : ''}`}
-        animate={{
-          opacity: toast ? 1 : 0,
-          y: toast ? 0 : 14,
-          scale: toast ? 1 : 0.98,
-        }}
-        transition={{ duration: 0.16 }}
         aria-live="polite"
+        aria-atomic="true"
       >
         {toast?.message}
-      </motion.div>
+      </div>
     </>
   );
 }

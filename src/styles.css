@@ -356,6 +356,9 @@ button svg,
 
 .toast {
   white-space: nowrap;
+  box-shadow:
+    0 8px 18px rgba(0, 0, 0, .34),
+    inset 0 0 12px rgba(214, 169, 94, .06);
 }
 
 /* Desktop readability pass: keep dense strategy UI legible without changing the art direction. */
