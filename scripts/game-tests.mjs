@@ -265,6 +265,63 @@ try {
     assert.ok(next.lastTurnReport.summary.includes('активных намерений держав'));
   });
 
+  test('turn report offers playable strategic responses', () => {
+    const afterTurn = endTurn(clone(initialGameState));
+    const responses = afterTurn.lastTurnReport.strategicResponses;
+    const response = responses.find((item) => item.kind === 'counter-threat' || item.kind === 'secure-trade');
+    const next = gameReducer(afterTurn, { type: 'RUN_STRATEGIC_RESPONSE', id: response.id });
+
+    assert.ok(responses.length > 0);
+    assert.ok(response);
+    assert.equal(next.lastTurnReport.strategicResponses.find((item) => item.id === response.id).used, true);
+    assert.ok(next.orders.length > afterTurn.orders.length);
+    assert.notEqual(next.lastNotice.kind, 'error');
+  });
+
+  test('failed strategic response does not consume the response', () => {
+    const afterTurn = endTurn(clone(initialGameState));
+    const response = afterTurn.lastTurnReport.strategicResponses.find((item) => item.kind === 'counter-threat');
+    const drained = {
+      ...afterTurn,
+      resources: afterTurn.resources.map((resource) => ({ ...resource, value: 0 })),
+    };
+    const next = gameReducer(drained, { type: 'RUN_STRATEGIC_RESPONSE', id: response.id });
+
+    assert.equal(next.lastNotice.kind, 'error');
+    assert.equal(next.lastTurnReport.strategicResponses.find((item) => item.id === response.id).used, undefined);
+  });
+
+  test('completed orders can change nation dossier pressure and threat', () => {
+    const state = {
+      ...clone(initialGameState),
+      orders: [
+        {
+          id: 'nation-delta-success',
+          iconKey: 'shield',
+          title: 'Проверочные контрмеры',
+          owner: 'Оперативный штаб',
+          target: 'Украина',
+          status: 'В работе',
+          statusClass: 'progress',
+          due: '1 день',
+          remainingTurns: 1,
+          totalTurns: 1,
+          cost: { gold: 10 },
+          completeText: 'Контрмеры снизили давление.',
+          riskLevel: 'low',
+          successChance: 100,
+          nationDelta: { Украина: { threat: -18, pressure: -18 } },
+        },
+      ],
+    };
+    const next = endTurn(state);
+    const changedUkraine = next.nations.find((nation) => nation.name === 'Украина');
+    const baselineUkraine = endTurn(clone(initialGameState)).nations.find((nation) => nation.name === 'Украина');
+
+    assert.ok(changedUkraine.threat < baselineUkraine.threat);
+    assert.ok(changedUkraine.pressure < baselineUkraine.pressure);
+  });
+
   test('map intel exposes nation intentions in map modes', () => {
     const next = endTurn(clone(initialGameState));
     const countryKeys = {

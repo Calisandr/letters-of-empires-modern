@@ -20,6 +20,14 @@ export type NationIntentType = 'trade' | 'diplomacy' | 'military' | 'defense' | 
 export type NationIntentVisibility = 'open' | 'guarded' | 'hidden';
 export type WorldEventTone = 'blue' | 'green' | 'bronze' | 'red';
 export type WorldEventImpact = 'trade' | 'military' | 'diplomacy' | 'economy' | 'stability' | 'threat';
+export type NationMetricId = 'economy' | 'army' | 'stability' | 'treasury' | 'grain' | 'relation' | 'threat' | 'pressure';
+export type StrategicResponseKind =
+  | 'secure-trade'
+  | 'open-diplomacy'
+  | 'counter-threat'
+  | 'stabilize-realm'
+  | 'industrial-contract'
+  | 'recon-intent';
 
 export type ResourceState = {
   id: ResourceId;
@@ -30,6 +38,7 @@ export type ResourceState = {
 };
 
 export type ResourceDelta = Partial<Record<ResourceId, number>>;
+export type NationDelta = Partial<Record<NationMetricId, number>>;
 
 export type Order = {
   id: string;
@@ -51,6 +60,8 @@ export type Order = {
   failureText?: string;
   failureCost?: ResourceDelta;
   failureDiplomacyDelta?: Record<string, number>;
+  nationDelta?: Record<string, NationDelta>;
+  failureNationDelta?: Record<string, NationDelta>;
 };
 
 export type OrderDraft = Omit<Order, 'id' | 'status' | 'statusClass' | 'due'>;
@@ -147,6 +158,17 @@ export type WorldEvent = {
   impact: WorldEventImpact;
 };
 
+export type StrategicResponse = {
+  id: string;
+  kind: StrategicResponseKind;
+  target: string;
+  title: string;
+  description: string;
+  actionLabel: string;
+  tone: 'opportunity' | 'warning' | 'danger' | 'stability';
+  used?: boolean;
+};
+
 export type CompletedOrderReport = {
   title: string;
   target: string;
@@ -163,6 +185,7 @@ export type TurnReport = {
   diplomacyDelta: Record<string, number>;
   warnings: string[];
   opportunities: string[];
+  strategicResponses?: StrategicResponse[];
 };
 
 export type GameState = {
@@ -218,5 +241,6 @@ export type GameAction =
   | { type: 'SUBMIT_COUNCIL_MESSAGE'; text: string; time: string }
   | { type: 'RUN_QUICK_ACTION'; id: QuickActionId }
   | { type: 'RUN_COUNTRY_INTEL_ACTION'; id: CountryIntelActionId; country: SelectedCountry }
+  | { type: 'RUN_STRATEGIC_RESPONSE'; id: string }
   | { type: 'CANCEL_ORDER'; id: string }
   | { type: 'END_TURN' };

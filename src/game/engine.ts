@@ -8,6 +8,7 @@ import type {
   EngineEffect,
   GameState,
   Letter,
+  NationDelta,
   NationProfile,
   Order,
   OrderDraft,
@@ -17,6 +18,7 @@ import type {
   ResourceId,
   ResourceState,
   SelectedCountry,
+  StrategicResponse,
   TimelineEvent,
 } from './types';
 
@@ -66,6 +68,19 @@ function mergeDiplomacyDelta(...deltas: Record<string, number>[]) {
   }, {});
 }
 
+function mergeNationDelta(...deltas: Record<string, NationDelta>[]) {
+  return deltas.reduce<Record<string, NationDelta>>((merged, delta) => {
+    Object.entries(delta || {}).forEach(([name, nationDelta]) => {
+      merged[name] = merged[name] || {};
+      Object.entries(nationDelta || {}).forEach(([metric, value]) => {
+        const metricKey = metric as keyof NationDelta;
+        merged[name][metricKey] = (merged[name][metricKey] || 0) + value;
+      });
+    });
+    return merged;
+  }, {});
+}
+
 export function canPay(resources: ResourceState[], cost: ResourceDelta = {}) {
   return resources.every((resource) => (cost[resource.id] ?? 0) <= resource.value);
 }
@@ -79,6 +94,10 @@ export function describeResourceCost(resources: ResourceState[], cost: ResourceD
 
 function clampStat(value: number) {
   return Math.max(8, Math.min(96, Math.round(value)));
+}
+
+function clampRelation(value: number) {
+  return Math.max(-100, Math.min(200, Math.round(value)));
 }
 
 function hashCountryName(name: string) {
@@ -123,6 +142,36 @@ export function applyDiplomacyDelta(relations: DiplomacyRelation[], delta: Recor
       score,
       status: relationStatus(score),
       tone: relationTone(score),
+    };
+  });
+}
+
+function applyNationDeltaToNations(nations: NationProfile[], delta: Record<string, NationDelta> = {}) {
+  if (!Object.keys(delta).length) return nations;
+
+  return nations.map((nation) => {
+    const nationDelta = delta[nation.name];
+    if (!nationDelta) return nation;
+
+    const relation = nationDelta.relation ? clampRelation(nation.relation + nationDelta.relation) : nation.relation;
+    const pressure = nationDelta.pressure ? clampStat(nation.pressure + nationDelta.pressure) : nation.pressure;
+    const threat = nationDelta.threat ? clampStat(nation.threat + nationDelta.threat) : nation.threat;
+    const economy = nationDelta.economy ? clampStat(nation.economy + nationDelta.economy) : nation.economy;
+    const army = nationDelta.army ? clampStat(nation.army + nationDelta.army) : nation.army;
+    const stability = nationDelta.stability ? clampStat(nation.stability + nationDelta.stability) : nation.stability;
+    const treasury = nationDelta.treasury ? clampStat(nation.treasury + nationDelta.treasury) : nation.treasury;
+    const grain = nationDelta.grain ? clampStat(nation.grain + nationDelta.grain) : nation.grain;
+
+    return {
+      ...nation,
+      relation,
+      pressure,
+      threat,
+      economy,
+      army,
+      stability,
+      treasury,
+      grain,
     };
   });
 }
@@ -430,11 +479,247 @@ export function runCountryIntelAction(state: GameState, id: CountryIntelActionId
   });
 }
 
+function countryFromStrategicTarget(state: GameState, target: string): SelectedCountry {
+  if (target === 'Россия') return { key: 'Russia', name: target, status: 'russia' };
+
+  const relation = state.diplomacy.find((item) => item.name === target);
+  const nation = state.nations.find((item) => item.name === target);
+  const score = relation?.score ?? nation?.relation ?? 0;
+
+  return {
+    key: nation?.flag || relation?.flag || target,
+    name: target,
+    status: relationTone(score),
+  };
+}
+
+function markStrategicResponseUsed(state: GameState, responseId: string): GameState {
+  if (!state.lastTurnReport?.strategicResponses?.length) return state;
+
+  return {
+    ...state,
+    lastTurnReport: {
+      ...state.lastTurnReport,
+      strategicResponses: state.lastTurnReport.strategicResponses.map((response) =>
+        response.id === responseId ? { ...response, used: true } : response,
+      ),
+    },
+  };
+}
+
+function findStrategicResponse(state: GameState, responseId: string): StrategicResponse | null {
+  return state.lastTurnReport?.strategicResponses?.find((response) => response.id === responseId) || null;
+}
+
+export function runStrategicResponse(state: GameState, responseId: string): GameState {
+  const response = findStrategicResponse(state, responseId);
+  if (!response) return createNotice(state, 'Решение штаба больше недоступно', 'error');
+  if (response.used) return createNotice(state, 'Это решение штаба уже принято', 'error');
+
+  const country = countryFromStrategicTarget(state, response.target);
+  const existingRelation = state.diplomacy.find((relation) => relation.name === country.name);
+  const relation = existingRelation?.score ?? fallbackRelationForStatus(country.status);
+  const baseNation =
+    state.nations.find((nation) => nation.name === country.name) ||
+    buildFallbackNationProfile(country, relation);
+
+  if (response.kind === 'secure-trade') {
+    const preparedState = {
+      ...state,
+      diplomacy: upsertDiplomacyTarget(state.diplomacy, country, 0),
+      nations: upsertNationTarget(state.nations, country, {
+        relation,
+        pressure: baseNation.pressure - 2,
+        threat: baseNation.threat - 1,
+        lastAction: `Штаб закрепляет торговое окно с целью "${country.name}".`,
+      }),
+    };
+
+    const nextState = createStrategicOrder(preparedState, {
+      iconKey: 'anchor',
+      title: `Закрепить торговый коридор: ${country.name}`,
+      owner: 'Оперативный торговый штаб',
+      target: country.name,
+      remainingTurns: 2,
+      totalTurns: 2,
+      cost: { gold: 440, grain: 220 },
+      reward: { gold: 1450, grain: 560 },
+      diplomacyDelta: { [country.name]: relation < -20 ? 2 : 6 },
+      nationDelta: { [country.name]: { economy: 3, pressure: -4, threat: -2 } },
+      completeText: `Торговый коридор с целью "${country.name}" закреплен: купцы получили охрану, прибыль и устойчивый канал влияния.`,
+      riskLevel: relation < -20 ? 'medium' : 'low',
+      successChance: relation < -20 ? 70 : 92,
+      failureCost: { gold: -220, grain: -140 },
+      failureDiplomacyDelta: { [country.name]: relation < -20 ? -5 : -2 },
+      failureNationDelta: { [country.name]: { pressure: 5, threat: 3 } },
+      failureText: `Попытка закрепить торговый коридор с целью "${country.name}" сорвалась: часть товаров потеряна, доверие к маршруту снизилось.`,
+    });
+
+    return nextState.lastNotice?.kind === 'success' ? markStrategicResponseUsed(nextState, responseId) : nextState;
+  }
+
+  if (response.kind === 'counter-threat') {
+    const preparedState = {
+      ...state,
+      diplomacy: upsertDiplomacyTarget(state.diplomacy, country, 0),
+      nations: upsertNationTarget(state.nations, country, {
+        relation,
+        pressure: baseNation.pressure + 2,
+        threat: baseNation.threat + 1,
+        lastAction: `Российский штаб готовит контрмеры против давления цели "${country.name}".`,
+      }),
+    };
+
+    const nextState = createStrategicOrder(preparedState, {
+      iconKey: 'shield',
+      title: `Контрмеры против давления: ${country.name}`,
+      owner: 'Оперативный штаб',
+      target: country.name,
+      remainingTurns: 2,
+      totalTurns: 2,
+      cost: { gold: 520, iron: 260, grain: 180 },
+      reward: { iron: 180 },
+      diplomacyDelta: { [country.name]: relation < -40 ? -2 : -1 },
+      nationDelta: { [country.name]: { threat: -8, pressure: -7, stability: -1 }, Россия: { stability: 2, pressure: -3 } },
+      completeText: `Контрмеры против цели "${country.name}" сработали: разведка вскрыла подготовку, снабжение укреплено, риск внезапного удара снижен.`,
+      riskLevel: relation < -50 ? 'high' : 'medium',
+      successChance: relation < -50 ? 66 : 78,
+      failureCost: { gold: -320, iron: -180, grain: -120 },
+      failureDiplomacyDelta: { [country.name]: relation < -40 ? -7 : -3 },
+      failureNationDelta: { [country.name]: { threat: 7, pressure: 6 }, Россия: { stability: -2, pressure: 4 } },
+      failureText: `Контрмеры против цели "${country.name}" раскрыты слишком рано: противник усилил давление, часть снабжения потеряна.`,
+    });
+
+    return nextState.lastNotice?.kind === 'success' ? markStrategicResponseUsed(nextState, responseId) : nextState;
+  }
+
+  if (response.kind === 'recon-intent') {
+    const consumedState = markStrategicResponseUsed(state, responseId);
+    const cost: ResourceDelta = { gold: 180 };
+    if (!canPay(consumedState.resources, cost)) {
+      return createNotice(state, `Не хватает ресурсов для наблюдателей: ${describeResourceCost(state.resources, cost)}`, 'error');
+    }
+
+    return createNotice(
+      {
+        ...consumedState,
+        resources: applyResourceDelta(consumedState.resources, { gold: -180 }),
+        diplomacy: upsertDiplomacyTarget(consumedState.diplomacy, country, 0),
+        nations: upsertNationTarget(consumedState.nations, country, {
+          relation,
+          pressure: baseNation.pressure - 2,
+          threat: baseNation.threat - 1,
+          lastAction: `Наблюдатели уточнили оборонные намерения цели "${country.name}".`,
+        }),
+        timelineEvents: pushTimeline(consumedState.timelineEvents, {
+          icon: '◎',
+          tone: 'blue',
+          title: `Наблюдатели отправлены: ${country.name}`,
+          text: `Оперативный штаб потратил золото и уточнил оборонное досье цели "${country.name}".`,
+        }),
+      },
+      `Наблюдатели отправлены: ${country.name}`,
+    );
+  }
+
+  if (response.kind === 'industrial-contract') {
+    const consumedState = markStrategicResponseUsed(state, responseId);
+    const cost: ResourceDelta = { gold: 260, stone: 120 };
+    if (!canPay(consumedState.resources, cost)) {
+      return createNotice(state, `Не хватает ресурсов для договора: ${describeResourceCost(state.resources, cost)}`, 'error');
+    }
+
+    return createNotice(
+      {
+        ...consumedState,
+        resources: applyResourceDelta(consumedState.resources, { gold: -260, stone: -120, iron: 340 }),
+        diplomacy: upsertDiplomacyTarget(consumedState.diplomacy, country, relation < -20 ? 1 : 3),
+        nations: upsertNationTarget(consumedState.nations, country, {
+          relation: Math.min(200, relation + (relation < -20 ? 1 : 3)),
+          economy: baseNation.economy + 2,
+          pressure: baseNation.pressure - 2,
+          lastAction: `Промышленный договор с Россией дал цели "${country.name}" устойчивый канал поставок.`,
+        }),
+        letters: pushLetter(consumedState.letters, {
+          tone: 'gold',
+          from: country.name,
+          subject: 'Промышленный договор',
+          time: 'только что',
+        }),
+        timelineEvents: pushTimeline(consumedState.timelineEvents, {
+          icon: '♜',
+          tone: 'green',
+          title: `Промышленный договор: ${country.name}`,
+          text: `Канцелярия обменяла золото и камень на железо и улучшила отношения с целью "${country.name}".`,
+        }),
+      },
+      `Промышленный договор заключен: ${country.name}`,
+    );
+  }
+
+  if (response.kind === 'open-diplomacy') {
+    const consumedState = markStrategicResponseUsed(state, responseId);
+    const cost: ResourceDelta = { gold: 160 };
+    if (!canPay(consumedState.resources, cost)) {
+      return createNotice(state, `Не хватает ресурсов для переговоров: ${describeResourceCost(state.resources, cost)}`, 'error');
+    }
+
+    return createNotice(
+      {
+        ...consumedState,
+        resources: applyResourceDelta(consumedState.resources, { gold: -160 }),
+        diplomacy: upsertDiplomacyTarget(consumedState.diplomacy, country, relation < -30 ? 3 : 5),
+        nations: upsertNationTarget(consumedState.nations, country, {
+          relation: Math.min(200, relation + (relation < -30 ? 3 : 5)),
+          pressure: baseNation.pressure - 4,
+          threat: baseNation.threat - 2,
+          lastAction: `Открыт переговорный канал с целью "${country.name}".`,
+        }),
+        letters: pushLetter(consumedState.letters, {
+          tone: relation < -30 ? 'red' : 'gold',
+          from: country.name,
+          subject: 'Переговорный канал открыт',
+          time: 'только что',
+        }),
+        timelineEvents: pushTimeline(consumedState.timelineEvents, {
+          icon: '◊',
+          tone: 'green',
+          title: `Канал переговоров: ${country.name}`,
+          text: `Дипломаты быстро превратили мировое окно в рабочий канал с целью "${country.name}".`,
+        }),
+      },
+      `Переговоры начаты: ${country.name}`,
+    );
+  }
+
+  const consumedState = markStrategicResponseUsed(state, responseId);
+  const cost: ResourceDelta = { gold: 220, grain: 160 };
+  if (!canPay(consumedState.resources, cost)) {
+    return createNotice(state, `Не хватает ресурсов для внутреннего штаба: ${describeResourceCost(state.resources, cost)}`, 'error');
+  }
+
+  return createNotice(
+    {
+      ...consumedState,
+      resources: applyResourceDelta(consumedState.resources, { gold: -220, grain: -160 }),
+      nations: applyNationDeltaToNations(consumedState.nations, { Россия: { stability: 5, pressure: -6, threat: -2 } }),
+      timelineEvents: pushTimeline(consumedState.timelineEvents, {
+        icon: '♜',
+        tone: 'green',
+        title: 'Внутренний штаб собран',
+        text: 'Совет разгрузил снабжение, сверил казну и снизил внутреннее давление державы.',
+      }),
+    },
+    'Внутренний штаб стабилизировал державу',
+  );
+}
+
 type ResolvedOrderOutcome = {
   report: CompletedOrderReport;
   event: TimelineEvent;
   resourceDelta: ResourceDelta;
   diplomacyDelta: Record<string, number>;
+  nationDelta: Record<string, NationDelta>;
   letter?: Letter;
 };
 
@@ -471,6 +756,7 @@ function resolveCompletedOrder(order: Order, nextTurn: number): ResolvedOrderOut
       },
       resourceDelta: order.reward || {},
       diplomacyDelta: order.diplomacyDelta || {},
+      nationDelta: order.nationDelta || {},
     };
   }
 
@@ -502,6 +788,11 @@ function resolveCompletedOrder(order: Order, nextTurn: number): ResolvedOrderOut
     },
     resourceDelta: failureCost,
     diplomacyDelta: failureDiplomacyDelta,
+    nationDelta:
+      order.failureNationDelta ||
+      (order.riskLevel === 'critical' || order.riskLevel === 'high'
+        ? { [order.target]: { threat: 5, pressure: 6, stability: -2 } }
+        : {}),
     letter: {
       tone: 'red',
       from: 'Военный совет',
@@ -540,11 +831,13 @@ export function endTurn(state: GameState): GameState {
   const resolvedOrders = completedOrders.map((order) => resolveCompletedOrder(order, nextTurn));
   const orderResourceDelta = mergeResourceDelta(...resolvedOrders.map((order) => order.resourceDelta));
   const orderDiplomacyDelta = mergeDiplomacyDelta(...resolvedOrders.map((order) => order.diplomacyDelta));
+  const orderNationDelta = mergeNationDelta(...resolvedOrders.map((order) => order.nationDelta));
   const world = simulateWorldTurn(
     {
       ...state,
       resources: applyResourceDelta(state.resources, mergeResourceDelta(incomeDelta, orderResourceDelta)),
       diplomacy: applyDiplomacyDelta(state.diplomacy, orderDiplomacyDelta),
+      nations: applyNationDeltaToNations(state.nations, orderNationDelta),
     },
     nextTurn,
     resolvedOrders.map((order) => order.report),

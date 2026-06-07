@@ -7,6 +7,7 @@ import type {
   NationProfile,
   ResourceDelta,
   ResourceId,
+  StrategicResponse,
   TurnReport,
   WorldEvent,
 } from './types';
@@ -235,6 +236,77 @@ function createIntentEvent(turn: number, nation: NationProfile, intent: NationIn
   };
 }
 
+function createIntentResponse(turn: number, nation: NationProfile, intent: NationIntent): StrategicResponse | null {
+  if (nation.id === 'russia') return null;
+
+  const baseId = `response-${turn}-${nation.id}-${intent.type}`;
+
+  if (intent.type === 'military' || intent.type === 'covert') {
+    return {
+      id: baseId,
+      kind: 'counter-threat',
+      target: nation.name,
+      title: `Контрмеры: ${nation.name}`,
+      description:
+        intent.type === 'covert'
+          ? `Разведка предлагает вскрыть скрытую подготовку державы "${nation.name}" и сорвать давление до открытого кризиса.`
+          : `Штаб предлагает усилить наблюдение и снабжение против военного давления державы "${nation.name}".`,
+      actionLabel: 'Подготовить контрмеры',
+      tone: 'danger',
+    };
+  }
+
+  if (intent.type === 'defense') {
+    return {
+      id: baseId,
+      kind: 'recon-intent',
+      target: nation.name,
+      title: `Проверить оборону: ${nation.name}`,
+      description: `Совет предлагает отправить наблюдателей: понять, оборона "${nation.name}" временная или готовит долгий кризис.`,
+      actionLabel: 'Отправить наблюдателей',
+      tone: 'warning',
+    };
+  }
+
+  if (intent.type === 'trade') {
+    return {
+      id: baseId,
+      kind: 'secure-trade',
+      target: nation.name,
+      title: `Закрепить торговлю: ${nation.name}`,
+      description: `Купцы видят окно сделки с державой "${nation.name}". Можно оформить маршрут до того, как его перехватят конкуренты.`,
+      actionLabel: 'Закрепить маршрут',
+      tone: 'opportunity',
+    };
+  }
+
+  if (intent.type === 'industry') {
+    return {
+      id: baseId,
+      kind: 'industrial-contract',
+      target: nation.name,
+      title: `Промышленный договор: ${nation.name}`,
+      description: `Промышленные палаты "${nation.name}" готовы говорить о поставках. Такой ход даст железо и немного улучшит отношения.`,
+      actionLabel: 'Заключить договор',
+      tone: 'opportunity',
+    };
+  }
+
+  if (intent.type === 'diplomacy') {
+    return {
+      id: baseId,
+      kind: 'open-diplomacy',
+      target: nation.name,
+      title: `Открыть канал: ${nation.name}`,
+      description: `Канцелярия может быстро превратить дипломатический зонд державы "${nation.name}" в рабочий переговорный канал.`,
+      actionLabel: 'Начать переговоры',
+      tone: 'opportunity',
+    };
+  }
+
+  return null;
+}
+
 function intentChatText(intent: NationIntent) {
   if (intent.type === 'trade') return 'Наши купцы подтверждают маршрут. Ждем ваших дальнейших распоряжений.';
   if (intent.type === 'diplomacy') return 'Мы готовы к осторожному разговору, если условия будут ясными.';
@@ -315,6 +387,7 @@ export function simulateWorldTurn(
   const diplomacyDelta: Record<string, number> = {};
   const warnings: string[] = [];
   const opportunities: string[] = [];
+  const strategicResponses: StrategicResponse[] = [];
   let tensionDelta = completedOrders.some((order) => !order.succeeded) ? 5 : -1;
 
   const visibleIntents = [...nations]
@@ -327,6 +400,8 @@ export function simulateWorldTurn(
     if (!intent) return;
 
     events.push(createIntentEvent(nextTurn, nation, intent));
+    const response = createIntentResponse(nextTurn, nation, intent);
+    if (response) strategicResponses.push(response);
     if (intent.diplomacyDelta) addDiplomacy(diplomacyDelta, nation.name, intent.diplomacyDelta);
     Object.entries(intent.resourceDelta || {}).forEach(([resource, value]) => {
       if (value) addResource(resourceDelta, resource as ResourceId, value);
@@ -372,6 +447,15 @@ export function simulateWorldTurn(
     addResource(resourceDelta, 'grain', -120);
     tensionDelta += 2;
     warnings.push('Высокое напряжение мира начинает давить на казну и снабжение.');
+    strategicResponses.push({
+      id: `response-${nextTurn}-russia-stability`,
+      kind: 'stabilize-realm',
+      target: russia.name,
+      title: 'Стабилизировать державу',
+      description: 'Совет предлагает срочно разгрузить снабжение и укрепить порядок, пока напряжение мира не ударило по доходам сильнее.',
+      actionLabel: 'Собрать внутренний штаб',
+      tone: 'stability',
+    });
     nations = patchNationAction(nations, russia.name, action, 3, 0);
   }
 
@@ -404,6 +488,7 @@ export function simulateWorldTurn(
     diplomacyDelta,
     warnings: warnings.slice(0, MAX_REPORT_ITEMS),
     opportunities: opportunities.slice(0, MAX_REPORT_ITEMS),
+    strategicResponses: strategicResponses.slice(0, MAX_REPORT_ITEMS),
   };
 
   return {

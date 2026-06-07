@@ -11,6 +11,7 @@ import {
   pushLetter,
   pushTimeline,
   runCountryIntelAction,
+  runStrategicResponse,
 } from './engine';
 import type { GameAction, GameState, OrderDraft, QuickActionId, ResourceDelta } from './types';
 
@@ -204,6 +205,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
   if (action.type === 'RUN_QUICK_ACTION') return runQuickAction(state, action.id);
   if (action.type === 'RUN_COUNTRY_INTEL_ACTION') return runCountryIntelAction(state, action.id, action.country);
+  if (action.type === 'RUN_STRATEGIC_RESPONSE') return runStrategicResponse(state, action.id);
   if (action.type === 'CANCEL_ORDER') return cancelOrder(state, action.id);
   if (action.type === 'END_TURN') return endTurn(state);
 

@@ -268,6 +268,31 @@ try {
   await page.locator('.end-turn-button').dblclick();
   await page.waitForTimeout(120);
   const afterEndTurn = await readGameState();
+  await page.waitForSelector('.strategic-response');
+  const strategicResponseBefore = await page.evaluate(() => {
+    const responses = [...document.querySelectorAll('.strategic-response')];
+
+    return {
+      count: responses.length,
+      firstTitle: responses[0]?.querySelector('b')?.textContent?.trim() || '',
+      firstButton: responses[0]?.querySelector('button')?.textContent?.trim() || '',
+      hasEnabledButton: responses.some((response) => !response.querySelector('button')?.disabled),
+    };
+  });
+  await page.locator('.strategic-response button').first().click();
+  await page.waitForTimeout(160);
+  const afterStrategicResponse = await readGameState();
+  const strategicResponseAfter = await page.evaluate(() => {
+    const responses = [...document.querySelectorAll('.strategic-response')];
+    const firstButton = responses[0]?.querySelector('button');
+
+    return {
+      firstUsed: responses[0]?.classList.contains('used') || false,
+      firstButtonText: firstButton?.textContent?.trim() || '',
+      firstButtonDisabled: Boolean(firstButton?.disabled),
+      toast: document.querySelector('.toast')?.textContent || '',
+    };
+  });
   const composeButtonUnlockedAfterTurn = !(await page.locator('.quick-actions button').first().isDisabled());
   const savedTurnAfterReload = await (async () => {
     await page.reload({ waitUntil: 'networkidle' });
@@ -298,6 +323,9 @@ try {
     beforeGameAction,
     afterLandManagement,
     afterEndTurn,
+    afterStrategicResponse,
+    strategicResponseBefore,
+    strategicResponseAfter,
     composeButtonUnlockedAfterTurn,
     savedTurnAfterReload,
     countryIntentAfterReload,
@@ -306,6 +334,9 @@ try {
     turnAdvanced: Number(afterEndTurn.turn) === Number(beforeGameAction.turn) + 1,
     resourcesChangedAfterTurn:
       afterLandManagement.resources.join('|') !== afterEndTurn.resources.join('|'),
+    strategicResponseChangedState:
+      afterStrategicResponse.orderCounter !== afterEndTurn.orderCounter ||
+      afterStrategicResponse.resources.join('|') !== afterEndTurn.resources.join('|'),
   };
 
   await page.locator('.nav-link').last().dblclick();
@@ -402,6 +433,11 @@ try {
     !gameCycle.resourcesChangedAfterAction ||
     !gameCycle.turnAdvanced ||
     !gameCycle.resourcesChangedAfterTurn ||
+    gameCycle.strategicResponseBefore.count < 1 ||
+    !gameCycle.strategicResponseBefore.hasEnabledButton ||
+    !gameCycle.strategicResponseAfter.firstUsed ||
+    !gameCycle.strategicResponseAfter.firstButtonDisabled ||
+    !gameCycle.strategicResponseChangedState ||
     !gameCycle.composeButtonUnlockedAfterTurn ||
     gameCycle.savedTurnAfterReload !== gameCycle.afterEndTurn.turn ||
     !gameCycle.countryIntentAfterReload.hasIntentBlock ||

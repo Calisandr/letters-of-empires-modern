@@ -895,7 +895,24 @@ function CountryIntelPanel({
   );
 }
 
-function TurnReportDialog({ report, onClose }: { report: TurnReport; onClose: () => void }) {
+function responseToneLabel(tone: NonNullable<TurnReport['strategicResponses']>[number]['tone']) {
+  if (tone === 'danger') return 'Угроза';
+  if (tone === 'warning') return 'Осторожно';
+  if (tone === 'stability') return 'Стабильность';
+  return 'Возможность';
+}
+
+function TurnReportDialog({
+  report,
+  onClose,
+  onRunResponse,
+}: {
+  report: TurnReport;
+  onClose: () => void;
+  onRunResponse: (id: string) => void;
+}) {
+  const responses = report.strategicResponses || [];
+
   return (
     <div className="modal-backdrop" role="presentation">
       <section className="turn-report framed-panel" role="dialog" aria-modal="true" aria-labelledby="turnReportTitle">
@@ -944,6 +961,31 @@ function TurnReportDialog({ report, onClose }: { report: TurnReport; onClose: ()
             ))}
           </section>
         </div>
+        {responses.length ? (
+          <section className="strategic-responses" aria-label="Решения штаба по итогам хода">
+            <div>
+              <h3>Решения штаба</h3>
+              <small>Выберите реакцию на текущий ход. Каждое решение сразу меняет состояние партии или создает приказ.</small>
+            </div>
+            <div className="strategic-response-list">
+              {responses.map((response) => (
+                <article key={response.id} className={`strategic-response ${response.tone} ${response.used ? 'used' : ''}`}>
+                  <span>{responseToneLabel(response.tone)}</span>
+                  <b>{response.title}</b>
+                  <p>{response.description}</p>
+                  <button
+                    type="button"
+                    onClick={() => onRunResponse(response.id)}
+                    disabled={response.used}
+                    aria-label={`${response.actionLabel}: ${response.target}`}
+                  >
+                    {response.used ? 'Принято' : response.actionLabel}
+                  </button>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
         <footer>
           <span>Ресурсы: {formatResourceDelta(report.resourceDelta)}</span>
           <button type="button" className="primary" onClick={onClose}>
@@ -1472,6 +1514,10 @@ function App() {
     dispatchGame({ type: 'RUN_COUNTRY_INTEL_ACTION', id, country });
   };
 
+  const handleStrategicResponse = (id: string) => {
+    dispatchGame({ type: 'RUN_STRATEGIC_RESPONSE', id });
+  };
+
   const confirmPendingQuickAction = () => {
     if (!pendingQuickAction) return;
     runQuickAction(pendingQuickAction);
@@ -1685,7 +1731,11 @@ function App() {
       ) : null}
 
       {turnReportOpen && lastTurnReport ? (
-        <TurnReportDialog report={lastTurnReport} onClose={() => setTurnReportOpen(false)} />
+        <TurnReportDialog
+          report={lastTurnReport}
+          onClose={() => setTurnReportOpen(false)}
+          onRunResponse={handleStrategicResponse}
+        />
       ) : null}
 
       <div
