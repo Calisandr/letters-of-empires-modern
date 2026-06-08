@@ -207,8 +207,41 @@ try {
     intelUpdated: afterCountryIntelAction.intelText.includes('Разведка'),
   };
 
+  const diplomacyScrollDiagnostics = await page.evaluate(() => {
+    const panel = document.querySelector('.diplomacy-panel');
+    const list = document.querySelector('.diplomacy-panel ul');
+    if (!panel || !list) {
+      return { exists: false };
+    }
+
+    const before = list.scrollTop;
+    list.scrollTop = list.scrollHeight;
+    const after = list.scrollTop;
+    list.scrollTop = 0;
+    const style = getComputedStyle(list);
+    const panelRect = panel.getBoundingClientRect();
+    const listRect = list.getBoundingClientRect();
+    const needsScroll = list.scrollHeight > list.clientHeight + 1;
+
+    return {
+      exists: true,
+      itemCount: list.querySelectorAll('li').length,
+      overflowY: style.overflowY,
+      clientHeight: list.clientHeight,
+      scrollHeight: list.scrollHeight,
+      needsScroll,
+      canReachBottom: !needsScroll || after > before,
+      contained: listRect.top >= panelRect.top - 1 && listRect.bottom <= panelRect.bottom + 1,
+    };
+  });
+
   await page.locator('.country-intel-close').click();
+  await page.waitForFunction(() => document.querySelectorAll('.country-intel').length === 0);
   const countryIntelClosed = (await page.locator('.country-intel').count()) === 0;
+  const countrySelectionAfterClose = await page.evaluate(() => ({
+    selectedCount: document.querySelectorAll('.world-svg .country.selected').length,
+    selectedNames: [...document.querySelectorAll('.world-svg .country.selected')].map((node) => node.dataset.name),
+  }));
   await franceCountry.focus();
   await page.keyboard.press('Enter');
   await page.waitForSelector('.country-intel');
@@ -280,6 +313,69 @@ try {
     noOutgoingInInbox: !afterComposeLetter.letterSubjects.some((subject) => subject?.includes('Исходящее')),
     sentTimelineCount: afterComposeLetter.timelineTitles.filter((title) => title === 'Письмо союзникам отправлено').length,
   };
+
+  const rightPanelLayoutDiagnostics = await page.evaluate(() => {
+    const rect = (selector) => {
+      const node = document.querySelector(selector);
+      if (!node) return null;
+      const box = node.getBoundingClientRect();
+      return {
+        top: box.top,
+        bottom: box.bottom,
+        left: box.left,
+        right: box.right,
+        width: box.width,
+        height: box.height,
+      };
+    };
+    const ordered = (first, second) => Boolean(first && second && first.bottom <= second.top + 1);
+
+    const timeline = rect('.timeline-panel');
+    const mail = rect('.mail-panel');
+    const diplomacy = rect('.diplomacy-panel');
+    const mailList = rect('.mail-list');
+    const letter = rect('.letter-detail');
+    const showAll = rect('.mail-panel .show-all');
+    const timelinePanel = document.querySelector('.timeline-panel');
+    const mailPanel = document.querySelector('.mail-panel');
+
+    return {
+      panelsStacked: ordered(timeline, mail) && ordered(mail, diplomacy),
+      mailPartsStacked: ordered(mailList, letter) && ordered(letter, showAll),
+      showAllInsideMail: Boolean(showAll && mail && showAll.bottom <= mail.bottom + 1),
+      timelineOverflowY: timelinePanel ? getComputedStyle(timelinePanel).overflowY : '',
+      mailOverflowY: mailPanel ? getComputedStyle(mailPanel).overflowY : '',
+    };
+  });
+
+  const timelineRowDiagnostics = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('.timeline-panel article')].map((node) => {
+      const row = node.getBoundingClientRect();
+      const title = node.querySelector('h3')?.getBoundingClientRect();
+      const body = node.querySelector('p')?.getBoundingClientRect();
+      const time = node.querySelector('time')?.getBoundingClientRect();
+
+      return {
+        height: row.height,
+        textFits:
+          (!title || title.top >= row.top - 1 && title.bottom <= row.bottom + 1) &&
+          (!body || body.top >= row.top - 1 && body.bottom <= row.bottom + 1) &&
+          (!time || time.top >= row.top - 1 && time.bottom <= row.bottom + 1),
+      };
+    });
+    const noOverlap = rows.every((_, index) => {
+      const current = document.querySelectorAll('.timeline-panel article')[index]?.getBoundingClientRect();
+      const next = document.querySelectorAll('.timeline-panel article')[index + 1]?.getBoundingClientRect();
+      return !current || !next || current.bottom <= next.top + 1;
+    });
+
+    return {
+      count: rows.length,
+      minHeight: rows.reduce((min, row) => Math.min(min, row.height), Number.POSITIVE_INFINITY),
+      textFits: rows.every((row) => row.textFits),
+      noOverlap,
+    };
+  });
 
   const readGameState = () =>
     page.evaluate(() => ({
@@ -431,6 +527,8 @@ try {
     countryIntelShowsTextCode,
     countryIntelActionDiagnostics,
     countryIntelClosed,
+    countrySelectionAfterClose,
+    diplomacyScrollDiagnostics,
     chatTabDiagnostics,
     letterResponseBefore,
     letterResponseAfter,
@@ -439,6 +537,8 @@ try {
     dialogOpened,
     orderCounterAfterDialog,
     composeAction,
+    rightPanelLayoutDiagnostics,
+    timelineRowDiagnostics,
     gameCycle,
     toastDiagnostics,
     mailBadgeDiagnostics,
@@ -474,6 +574,11 @@ try {
     !countryIntelActionDiagnostics.operationPlanDiagnostics.hasRunButton ||
     !countryIntelActionDiagnostics.operationPlanDiagnostics.hasDismissButton ||
     !countryIntelClosed ||
+    countrySelectionAfterClose.selectedCount !== 0 ||
+    !diplomacyScrollDiagnostics.exists ||
+    !['auto', 'scroll'].includes(diplomacyScrollDiagnostics.overflowY) ||
+    !diplomacyScrollDiagnostics.canReachBottom ||
+    !diplomacyScrollDiagnostics.contained ||
     !result.chatAdded ||
     chatTabDiagnostics.activeText !== 'Альянс' ||
     !chatTabDiagnostics.allianceSelected ||
@@ -488,6 +593,15 @@ try {
     !composeAction.inboxCountUnchanged ||
     !composeAction.noOutgoingInInbox ||
     composeAction.sentTimelineCount !== 1 ||
+    !rightPanelLayoutDiagnostics.panelsStacked ||
+    !rightPanelLayoutDiagnostics.mailPartsStacked ||
+    !rightPanelLayoutDiagnostics.showAllInsideMail ||
+    rightPanelLayoutDiagnostics.timelineOverflowY === 'visible' ||
+    rightPanelLayoutDiagnostics.mailOverflowY === 'visible' ||
+    timelineRowDiagnostics.count < 3 ||
+    timelineRowDiagnostics.minHeight < 50 ||
+    !timelineRowDiagnostics.textFits ||
+    !timelineRowDiagnostics.noOverlap ||
     !gameCycle.resourcesChangedAfterAction ||
     !gameCycle.turnAdvanced ||
     !gameCycle.resourcesChangedAfterTurn ||

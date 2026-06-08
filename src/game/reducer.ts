@@ -157,6 +157,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     );
   }
 
+  if (action.type === 'CLEAR_SELECTED_COUNTRY') {
+    return {
+      ...state,
+      selectedCountry: null,
+    };
+  }
+
   if (action.type === 'SUBMIT_COUNCIL_MESSAGE') {
     const withMessage: GameState = {
       ...state,

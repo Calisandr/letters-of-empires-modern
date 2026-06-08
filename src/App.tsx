@@ -1358,6 +1358,12 @@ function App() {
     window.requestAnimationFrame(() => applySelectedCountryClass(sourceName));
   }, [applySelectedCountryClass]);
 
+  const closeCountryIntel = useCallback(() => {
+    applySelectedCountryClass('');
+    setClosedIntelKey(null);
+    dispatchGame({ type: 'CLEAR_SELECTED_COUNTRY' });
+  }, [applySelectedCountryClass]);
+
   useEffect(() => {
     const mapRoot = mapSvgRef.current;
     if (!mapRoot) return;
@@ -1665,13 +1671,13 @@ function App() {
                   onSelectCountry={selectCountryByKey}
                 />
               </WorldMapLayer>
-              {mapLayers.intel && closedIntelKey !== activeIntelKey ? (
+              {mapLayers.intel && gameState.selectedCountry && closedIntelKey !== activeIntelKey ? (
                 <CountryIntelPanel
                   selectedCountry={gameState.selectedCountry}
                   nations={nations}
                   diplomacy={diplomacy}
                   worldEvents={worldEvents}
-                  onClose={() => setClosedIntelKey(activeIntelKey)}
+                  onClose={closeCountryIntel}
                   onCountryAction={handleCountryIntelAction}
                 />
               ) : null}
@@ -2421,26 +2427,28 @@ function RightPanel({
             Смотреть все
           </button>
         </div>
-        {latestWorldEvent ? (
-          <article className="world-pulse-row">
-            <span className={`flag ${latestWorldEvent.flag}`} />
-            <div>
-              <h3>{latestWorldEvent.title}</h3>
-              <p>{latestWorldEvent.text}</p>
-            </div>
-            <time>ход {latestWorldEvent.turn}</time>
-          </article>
-        ) : null}
-        {timeline.slice(0, latestWorldEvent ? 4 : 5).map((event, index) => (
-          <article key={`${event.title}-${event.time}-${index}`}>
-            <span className={`event-icon ${event.tone}`}>{event.icon}</span>
-            <div>
-              <h3>{event.title}</h3>
-              <p>{event.text}</p>
-            </div>
-            <time>{event.time}</time>
-          </article>
-        ))}
+        <div className="timeline-list">
+          {latestWorldEvent ? (
+            <article className="world-pulse-row">
+              <span className={`flag ${latestWorldEvent.flag}`} />
+              <div>
+                <h3>{latestWorldEvent.title}</h3>
+                <p>{latestWorldEvent.text}</p>
+              </div>
+              <time>ход {latestWorldEvent.turn}</time>
+            </article>
+          ) : null}
+          {timeline.slice(0, latestWorldEvent ? 6 : 7).map((event, index) => (
+            <article key={`${event.title}-${event.time}-${index}`}>
+              <span className={`event-icon ${event.tone}`}>{event.icon}</span>
+              <div>
+                <h3>{event.title}</h3>
+                <p>{event.text}</p>
+              </div>
+              <time>{event.time}</time>
+            </article>
+          ))}
+        </div>
       </section>
 
       <section className="mail-panel framed-panel compact">

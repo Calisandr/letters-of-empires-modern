@@ -298,6 +298,7 @@ export type AiArbitrationDecision = {
 
 export type GameAction =
   | { type: 'SELECT_COUNTRY'; country: SelectedCountry }
+  | { type: 'CLEAR_SELECTED_COUNTRY' }
   | { type: 'SUBMIT_COUNCIL_MESSAGE'; text: string; time: string }
   | { type: 'RUN_QUICK_ACTION'; id: QuickActionId }
   | { type: 'RUN_COUNTRY_INTEL_ACTION'; id: CountryIntelActionId; country: SelectedCountry }
