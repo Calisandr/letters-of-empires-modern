@@ -2279,14 +2279,14 @@ input:focus-visible,
 }
 
 .order-card {
-  grid-template-columns: 30px minmax(0, 1fr) 23px 23px;
+  grid-template-columns: 34px minmax(0, 1fr) 27px 27px;
   grid-template-areas:
     "icon title view cancel"
     "icon details details details"
     "icon counter counter counter"
     "icon expanded expanded expanded";
-  gap: 3px 7px;
-  min-height: 52px;
+  gap: 4px 8px;
+  min-height: 78px;
   overflow: hidden;
 }
 
@@ -2303,11 +2303,25 @@ input:focus-visible,
 
 .order-main {
   grid-area: title;
+  display: grid;
+  gap: 2px;
 }
 
-.order-card h3,
+.order-card h3 {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+  white-space: normal;
+}
+
+.order-card:has(.order-countermove) h3 {
+  -webkit-line-clamp: 1;
+}
+
 .order-main p,
-.order-card dt,
 .order-card dd {
   min-width: 0;
   overflow: hidden;
@@ -2318,9 +2332,52 @@ input:focus-visible,
 .order-card dl {
   grid-area: details;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 3px 7px;
-  font-size: 9.5px;
+  gap: 5px;
+  font-size: 11.5px;
+}
+
+.order-card dt {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.order-card dd {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  max-width: 100%;
+  margin: 0;
+  padding: 2px 7px;
+  border: 1px solid rgba(205, 162, 85, .14);
+  border-radius: 999px;
+  background: rgba(4, 10, 11, .48);
+  color: rgba(232, 224, 194, .9);
+}
+
+.order-card dd::before {
+  margin-right: 4px;
+  color: rgba(166, 185, 162, .72);
+  font-size: 9.8px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.order-card dd:nth-of-type(1)::before {
+  content: "Цель";
+}
+
+.order-card dd:nth-of-type(2)::before {
+  content: "Статус";
+}
+
+.order-card dd:nth-of-type(3)::before {
+  content: "Срок";
 }
 
 .order-countermove {
@@ -2328,10 +2385,15 @@ input:focus-visible,
   display: flex;
   align-items: center;
   gap: 5px;
-  margin: -1px 0 0;
+  min-height: 20px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: rgba(232, 198, 109, .88);
-  font-size: 9.8px;
-  line-height: 1.1;
+  font-size: 11.5px;
+  line-height: 1.18;
 }
 
 .order-countermove span,
@@ -2349,12 +2411,26 @@ input:focus-visible,
 
 .order-countermove b {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 19px;
+  padding: 1px 5px;
+  border: 1px solid rgba(205, 162, 85, .16);
+  border-radius: 999px;
+  background: rgba(8, 17, 15, .72);
   color: #f7d986;
   font-weight: 700;
 }
 
 .order-countermove em {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 19px;
+  padding: 1px 5px;
+  border: 1px solid rgba(205, 162, 85, .12);
+  border-radius: 999px;
+  background: rgba(8, 17, 15, .54);
   color: rgba(166, 185, 162, .82);
   font-style: normal;
 }
@@ -3106,9 +3182,9 @@ input:focus-visible,
   }
 
   .order-card {
-    min-height: 64px;
-    padding: 5px 8px;
-    overflow: visible;
+    min-height: 78px;
+    padding: 8px 10px;
+    overflow: hidden;
   }
 
   .order-main {
@@ -3120,26 +3196,26 @@ input:focus-visible,
   }
 
   .order-card h3 {
-    overflow: visible;
-    text-overflow: clip;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: normal;
-    font-size: 15.8px;
-    line-height: 1.06;
+    font-size: 15.2px;
+    line-height: 1.15;
   }
 
   .order-main p {
     justify-self: start;
     max-width: 100%;
-    overflow: visible;
+    overflow: hidden;
     text-align: left;
-    text-overflow: clip;
-    white-space: normal;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .order-main p,
   .order-card dl {
-    font-size: 13.2px;
-    line-height: 1.1;
+    font-size: 12.4px;
+    line-height: 1.2;
   }
 
   .order-card dl {
@@ -3148,8 +3224,12 @@ input:focus-visible,
   }
 
   .order-countermove {
-    font-size: 12.4px;
-    gap: 8px;
+    margin-top: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-size: 11.6px;
+    gap: 5px;
   }
 
   .order-expanded p,
@@ -4553,8 +4633,8 @@ input:focus-visible,
       "icon details details details"
       "icon counter counter counter"
       "icon expanded expanded expanded";
-    min-height: 64px;
-    padding: 10px;
+    min-height: 82px;
+    padding: 8px 10px;
     border: 1px solid rgba(215, 168, 87, .12);
     border-radius: 7px;
     background:
@@ -4564,12 +4644,32 @@ input:focus-visible,
 
   .redesign-shell .order-card h3 {
     color: #f3d37e;
-    font-size: 15px;
+    font-size: 14.2px;
+    line-height: 1.18;
   }
 
   .redesign-shell .order-card p,
   .redesign-shell .order-card dl {
-    font-size: 12.2px;
+    font-size: 11.8px;
+    line-height: 1.18;
+  }
+
+  .redesign-shell .order-card dl {
+    gap: 3px 6px;
+  }
+
+  .redesign-shell .order-countermove {
+    min-height: 20px;
+    border-radius: 0;
+    color: rgba(233, 206, 133, .9);
+  }
+
+  .redesign-shell .order-countermove b,
+  .redesign-shell .order-countermove em {
+    padding: 1px 5px;
+    border: 1px solid rgba(205, 162, 85, .14);
+    border-radius: 999px;
+    background: rgba(2, 7, 8, .58);
   }
 
   .redesign-shell .order-icon {
@@ -4929,8 +5029,8 @@ input:focus-visible,
       "icon details details details"
       "icon counter counter counter"
       "icon expanded expanded expanded";
-    gap: 8px;
-    min-height: 62px;
+    gap: 4px 8px;
+    min-height: 82px;
   }
 
   .redesign-shell .order-card h3 {
