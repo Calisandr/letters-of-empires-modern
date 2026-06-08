@@ -2242,6 +2242,139 @@ input:focus-visible,
   }
 }
 
+@media (min-width: 901px) {
+  .empire-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 9px 13px 8px;
+    overflow: hidden;
+  }
+
+  .empire-card h1 {
+    margin: 0 0 5px;
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .state-flag {
+    height: 72px;
+    margin: 0 0 4px;
+  }
+
+  .state-flag .flag {
+    --flag-w: 120px;
+    --flag-h: 72px;
+  }
+
+  .ruler-block {
+    grid-template-columns: 45px minmax(0, 1fr);
+    gap: 8px;
+    padding: 4px 4px 7px;
+  }
+
+  .ruler-avatar {
+    width: 42px;
+    height: 42px;
+  }
+
+  .ruler-block strong {
+    font-size: 16px;
+  }
+
+  .ruler-block small {
+    margin-top: 2px;
+    font-size: 11px;
+  }
+
+  .meta-line {
+    padding: 6px 4px 7px;
+    font-size: 12.5px;
+  }
+
+  .section-title {
+    margin: 7px 0 4px;
+    font-size: 12px;
+  }
+
+  .resource-list li {
+    padding-block: 1px;
+    font-size: 11.5px;
+  }
+
+  .resource-list span {
+    font-size: 11.8px;
+  }
+
+  .resource-list b {
+    font-size: 12px;
+  }
+
+  .resource-list em {
+    font-size: 10px;
+  }
+
+  .empire-pulse {
+    gap: 3px;
+    margin-bottom: 4px;
+    padding: 5px 6px;
+  }
+
+  .empire-pulse div {
+    font-size: 10.5px;
+  }
+
+  .empire-pulse p {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 9.8px;
+    line-height: 1.2;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .turn-info {
+    gap: 5px 8px;
+    margin: 5px 0 1px;
+    padding: 6px 0;
+  }
+
+  .turn-info small {
+    margin-bottom: 2px;
+    font-size: 9.6px;
+  }
+
+  .turn-info strong {
+    font-size: 22px;
+  }
+
+  .turn-info div:nth-child(2) strong {
+    font-size: 16px;
+  }
+
+  .end-turn-button {
+    min-height: 26px;
+  }
+
+  .quick-actions {
+    flex: 0 0 auto;
+    gap: 4px;
+    min-height: 0;
+    max-height: 190px;
+    overflow-y: auto;
+    padding: 0 3px 1px 0;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(205, 162, 85, .34) rgba(5, 12, 13, .66);
+  }
+
+  .quick-actions button {
+    min-height: 26px;
+    padding: 2px 8px;
+    font-size: 11.4px;
+    line-height: 1.12;
+  }
+}
+
 @media (max-width: 900px) {
   body {
     overflow-x: hidden;

@@ -544,6 +544,37 @@ try {
       panelCount,
     };
   });
+  const quickActionsFitDiagnostics = await page.evaluate(() => {
+    const card = document.querySelector('.empire-card');
+    const actions = document.querySelector('.quick-actions');
+    if (!card || !actions) {
+      return { exists: false };
+    }
+
+    const cardBox = card.getBoundingClientRect();
+    const actionBox = actions.getBoundingClientRect();
+    const buttons = [...actions.querySelectorAll('button')].map((node) => {
+      const box = node.getBoundingClientRect();
+      return {
+        top: box.top,
+        bottom: box.bottom,
+        height: box.height,
+        text: node.textContent?.replace(/\s+/g, ' ').trim() || '',
+      };
+    });
+
+    return {
+      exists: true,
+      buttonCount: buttons.length,
+      minButtonHeight: buttons.reduce((min, button) => Math.min(min, button.height), Number.POSITIVE_INFINITY),
+      allButtonsInsideCard: buttons.every((button) => button.top >= cardBox.top - 1 && button.bottom <= cardBox.bottom + 1),
+      allButtonsInsideActions: buttons.every(
+        (button) => button.top >= actionBox.top - 1 && button.bottom <= actionBox.bottom + 1,
+      ),
+      actionsInsideCard: actionBox.top >= cardBox.top - 1 && actionBox.bottom <= cardBox.bottom + 1,
+      actionsNeedScroll: actions.scrollHeight > actions.clientHeight + 1,
+    };
+  });
 
   await page.screenshot({ path: screenshotPath, fullPage: true });
 
@@ -584,6 +615,7 @@ try {
     gameCycle,
     toastDiagnostics,
     mailBadgeDiagnostics,
+    quickActionsFitDiagnostics,
     consoleErrors,
     screenshot: screenshotPath,
   };
@@ -672,6 +704,13 @@ try {
     toastDiagnostics.visibleCount !== 1 ||
     mailBadgeDiagnostics.navBadge !== mailBadgeDiagnostics.panelCount ||
     mailBadgeDiagnostics.topBadge !== mailBadgeDiagnostics.panelCount ||
+    !quickActionsFitDiagnostics.exists ||
+    quickActionsFitDiagnostics.buttonCount < 6 ||
+    quickActionsFitDiagnostics.minButtonHeight < 24 ||
+    !quickActionsFitDiagnostics.allButtonsInsideCard ||
+    !quickActionsFitDiagnostics.allButtonsInsideActions ||
+    !quickActionsFitDiagnostics.actionsInsideCard ||
+    quickActionsFitDiagnostics.actionsNeedScroll ||
     buttonNameDiagnostics.unnamedCount !== 0 ||
     consoleErrors.length > 0;
 
