@@ -582,6 +582,33 @@ try {
       panelCount,
     };
   });
+  const empirePulseDiagnostics = await page.evaluate(() => {
+    const pulse = document.querySelector('.empire-pulse');
+    const note = pulse?.querySelector('p');
+    const rows = [...(pulse?.querySelectorAll('div') || [])].map((node) => {
+      const box = node.getBoundingClientRect();
+      const label = node.querySelector('span');
+      const value = node.querySelector('b');
+
+      return {
+        height: box.height,
+        labelText: label?.textContent?.trim() || '',
+        valueText: value?.textContent?.trim() || '',
+        labelFontSize: label ? Number.parseFloat(getComputedStyle(label).fontSize) : 0,
+        valueFontSize: value ? Number.parseFloat(getComputedStyle(value).fontSize) : 0,
+      };
+    });
+
+    return {
+      exists: Boolean(pulse && note),
+      rowCount: rows.length,
+      rows,
+      noteText: note?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      noteFontSize: note ? Number.parseFloat(getComputedStyle(note).fontSize) : 0,
+      noteFits: note ? note.scrollHeight <= note.clientHeight + 1 : false,
+      noteHeight: note?.getBoundingClientRect().height || 0,
+    };
+  });
   const quickActionsFitDiagnostics = await page.evaluate(() => {
     const card = document.querySelector('.empire-card');
     const actions = document.querySelector('.quick-actions');
@@ -655,6 +682,7 @@ try {
     gameCycle,
     toastDiagnostics,
     mailBadgeDiagnostics,
+    empirePulseDiagnostics,
     quickActionsFitDiagnostics,
     consoleErrors,
     screenshot: screenshotPath,
@@ -754,6 +782,11 @@ try {
     toastDiagnostics.visibleCount !== 1 ||
     mailBadgeDiagnostics.navBadge !== mailBadgeDiagnostics.panelCount ||
     mailBadgeDiagnostics.topBadge !== mailBadgeDiagnostics.panelCount ||
+    !empirePulseDiagnostics.exists ||
+    empirePulseDiagnostics.rowCount < 3 ||
+    !empirePulseDiagnostics.noteFits ||
+    empirePulseDiagnostics.noteFontSize < 10.5 ||
+    empirePulseDiagnostics.rows.some((row) => row.height < 20 || row.labelFontSize < 11 || row.valueFontSize < 11.8) ||
     !quickActionsFitDiagnostics.exists ||
     quickActionsFitDiagnostics.buttonCount < 6 ||
     quickActionsFitDiagnostics.minButtonHeight < 24 ||

@@ -1064,25 +1064,59 @@ input:focus-visible,
 
 .empire-pulse {
   display: grid;
-  gap: 5px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
   margin-bottom: 7px;
   padding: 7px;
-  border: 1px solid rgba(205, 162, 85, .18);
-  background: rgba(7, 13, 14, .42);
+  border: 1px solid rgba(205, 162, 85, .24);
+  background:
+    linear-gradient(180deg, rgba(13, 24, 21, .62), rgba(4, 10, 11, .5)),
+    rgba(7, 13, 14, .42);
 }
 
 .empire-pulse div {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  color: rgba(176, 172, 144, .9);
-  font-size: 11px;
+  gap: 5px;
+  min-width: 0;
+  min-height: 22px;
+  padding: 4px 5px;
+  border: 1px solid rgba(205, 162, 85, .1);
+  background: rgba(5, 12, 13, .46);
+  color: rgba(204, 198, 166, .95);
+  font-size: 11.5px;
+  line-height: 1.12;
+}
+
+.empire-pulse div:nth-of-type(-n+2) {
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  gap: 2px;
+  min-height: 32px;
+}
+
+.empire-pulse div:nth-of-type(3),
+.empire-pulse p {
+  grid-column: 1 / -1;
+}
+
+.empire-pulse span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empire-pulse div:nth-of-type(-n+2) span {
+  white-space: normal;
 }
 
 .empire-pulse b {
-  color: #e0c67e;
+  color: #f0d482;
+  font-size: 12.2px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .empire-pulse b.warn {
@@ -1094,10 +1128,13 @@ input:focus-visible,
 }
 
 .empire-pulse p {
-  margin: 2px 0 0;
-  color: rgba(164, 185, 161, .82);
-  font-size: 10.5px;
-  line-height: 1.25;
+  margin: 1px 0 0;
+  padding: 6px 7px 5px;
+  border-left: 2px solid rgba(126, 189, 128, .42);
+  background: rgba(9, 23, 18, .34);
+  color: rgba(198, 218, 190, .92);
+  font-size: 11px;
+  line-height: 1.32;
 }
 
 .world-pulse-row {
@@ -2507,13 +2544,13 @@ input:focus-visible,
   }
 
   .state-flag {
-    height: 72px;
+    height: 66px;
     margin: 0 0 4px;
   }
 
   .state-flag .flag {
-    --flag-w: 120px;
-    --flag-h: 72px;
+    --flag-w: 110px;
+    --flag-h: 66px;
   }
 
   .ruler-block {
@@ -2564,22 +2601,31 @@ input:focus-visible,
   }
 
   .empire-pulse {
-    gap: 3px;
-    margin-bottom: 4px;
-    padding: 5px 6px;
+    gap: 5px;
+    margin-bottom: 5px;
+    padding: 6px;
   }
 
   .empire-pulse div {
-    font-size: 10.5px;
+    min-height: 21px;
+    padding: 3px 6px;
+    font-size: 11.2px;
+  }
+
+  .empire-pulse div:nth-of-type(-n+2) {
+    min-height: 31px;
+  }
+
+  .empire-pulse b {
+    font-size: 12px;
   }
 
   .empire-pulse p {
-    display: -webkit-box;
-    overflow: hidden;
-    font-size: 9.8px;
-    line-height: 1.2;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    display: block;
+    overflow: visible;
+    padding: 4px 6px;
+    font-size: 10.8px;
+    line-height: 1.22;
   }
 
   .turn-info {
