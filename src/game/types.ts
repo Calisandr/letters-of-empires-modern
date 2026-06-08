@@ -74,13 +74,15 @@ export type Order = {
   failureDiplomacyDelta?: Record<string, number>;
   nationDelta?: Record<string, NationDelta>;
   failureNationDelta?: Record<string, NationDelta>;
+  letter?: Letter;
   counterPressure?: number;
   lastCounterMove?: OrderCounterMove;
 };
 
 export type OrderDraft = Omit<Order, 'id' | 'status' | 'statusClass' | 'due'>;
 
-export type OperationPlanKind = 'trade' | 'diplomacy' | 'countermeasure' | 'raid' | 'stability';
+export type OperationPlanKind = 'trade' | 'diplomacy' | 'countermeasure' | 'raid' | 'stability' | 'military' | 'infrastructure';
+export type OperationPlanOrigin = 'council' | 'intel' | 'turn-report';
 
 export type OperationPlan = {
   id: string;
@@ -105,6 +107,10 @@ export type OperationPlan = {
   failureNationDelta?: Record<string, NationDelta>;
   completeText: string;
   failureText: string;
+  letter?: Letter;
+  origin?: OperationPlanOrigin;
+  sourceText?: string;
+  refinements?: number;
 };
 
 export type TimelineEvent = {
@@ -307,6 +313,7 @@ export type GameAction =
   | { type: 'RUN_COUNTRY_INTEL_ACTION'; id: CountryIntelActionId; country: SelectedCountry }
   | { type: 'RUN_STRATEGIC_RESPONSE'; id: string }
   | { type: 'RUN_OPERATION_PLAN'; id: string }
+  | { type: 'REFINE_OPERATION_PLAN'; id: string }
   | { type: 'DISMISS_OPERATION_PLAN'; id: string }
   | { type: 'RESPOND_TO_LETTER'; letterId: string; responseId: string }
   | { type: 'CANCEL_ORDER'; id: string }

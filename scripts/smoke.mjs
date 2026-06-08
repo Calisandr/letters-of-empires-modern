@@ -193,7 +193,7 @@ try {
     return {
       count: plans.length,
       title: first?.querySelector('h3')?.textContent?.trim() || '',
-      hasRunButton: Boolean(first?.querySelector('.plan-run')?.textContent?.includes('Запустить')),
+      hasRunButton: Boolean(first?.querySelector('.plan-run')?.textContent?.includes('Утвердить')),
       hasDismissButton: Boolean(first?.querySelector('.plan-dismiss')),
       meta: first?.querySelector('small')?.textContent?.replace(/\s+/g, ' ').trim() || '',
     };
@@ -450,12 +450,16 @@ try {
     firstChanged: orderRemovalBefore.count <= 1 || orderRemovalAfter.firstTitle !== orderRemovalBefore.firstTitle,
     logged: orderRemovalAfter.timelineHasCancel,
   };
+  const orderCounterBeforeDialog = await page.locator('.orders-panel .panel-heading h2 span').textContent();
+  const proposalCountBeforeDialog = await page.locator('.operation-plan').count();
   await page.locator('.create-order').click();
   await page.waitForSelector('[role="dialog"]');
   const dialogOpened = await page.locator('[role="dialog"]').isVisible();
   await page.locator('[role="dialog"]').getByRole('button', { name: 'Подтвердить приказ' }).click();
   await page.waitForTimeout(120);
   const orderCounterAfterDialog = await page.locator('.orders-panel .panel-heading h2 span').textContent();
+  const proposalCountAfterDialog = await page.locator('.operation-plan').count();
+  const proposalTitleAfterDialog = await page.locator('.operation-plan h3').first().textContent();
 
   const readRightPanelState = () =>
     page.evaluate(() => ({
@@ -466,6 +470,9 @@ try {
         node.textContent?.replace(/\s+/g, ' ').trim(),
       ),
       mailCount: document.querySelectorAll('.mail-panel article').length,
+      operationPlanTitles: [...document.querySelectorAll('.operation-plan h3')].map((node) =>
+        node.textContent?.replace(/\s+/g, ' ').trim(),
+      ),
     }));
 
   const beforeComposeLetter = await readRightPanelState();
@@ -479,7 +486,8 @@ try {
     composeButtonDisabled,
     inboxCountUnchanged: afterComposeLetter.mailCount === beforeComposeLetter.mailCount,
     noOutgoingInInbox: !afterComposeLetter.letterSubjects.some((subject) => subject?.includes('Исходящее')),
-    sentTimelineCount: afterComposeLetter.timelineTitles.filter((title) => title === 'Письмо союзникам отправлено').length,
+    proposalCountChanged: afterComposeLetter.operationPlanTitles.length > beforeComposeLetter.operationPlanTitles.length,
+    preparedTimelineCount: afterComposeLetter.timelineTitles.filter((title) => title === 'Совет подготовил предложение').length,
   };
 
   const rightPanelLayoutDiagnostics = await page.evaluate(() => {
@@ -588,6 +596,8 @@ try {
       turn: document.querySelector('.turn-info strong')?.textContent || '',
       timelineTop: document.querySelector('.timeline-panel article h3')?.textContent || '',
       orderCounter: document.querySelector('.orders-panel .panel-heading h2 span')?.textContent || '',
+      operationPlanCount: document.querySelectorAll('.operation-plan').length,
+      operationPlanTop: document.querySelector('.operation-plan h3')?.textContent?.trim() || '',
     }));
 
   const beforeGameAction = await readGameState();
@@ -676,8 +686,8 @@ try {
     composeButtonUnlockedAfterTurn,
     savedTurnAfterReload,
     countryIntentAfterReload,
-    resourcesChangedAfterAction:
-      beforeGameAction.resources.join('|') !== afterLandManagement.resources.join('|'),
+    proposalChangedAfterAction:
+      afterLandManagement.operationPlanCount > beforeGameAction.operationPlanCount,
     turnAdvanced: Number(afterEndTurn.turn) === Number(beforeGameAction.turn) + 1,
     resourcesChangedAfterTurn:
       afterLandManagement.resources.join('|') !== afterEndTurn.resources.join('|'),
@@ -800,8 +810,12 @@ try {
     letterDialogClosed,
     chatAdded: chatText.includes('React smoke message'),
     orderRemovalDiagnostics,
+    orderCounterBeforeDialog,
     dialogOpened,
     orderCounterAfterDialog,
+    proposalCountBeforeDialog,
+    proposalCountAfterDialog,
+    proposalTitleAfterDialog,
     composeAction,
     rightPanelLayoutDiagnostics,
     mailPanelReadabilityDiagnostics,
@@ -910,11 +924,14 @@ try {
     orderRemovalDiagnostics.after.cancelledVisible ||
     !orderRemovalDiagnostics.logged ||
     !dialogOpened ||
-    !orderCounterAfterDialog?.includes('(3/5)') ||
+    orderCounterAfterDialog !== orderCounterBeforeDialog ||
+    proposalCountAfterDialog <= proposalCountBeforeDialog ||
+    !proposalTitleAfterDialog?.includes('Развить инфраструктуру') ||
     !composeAction.composeButtonDisabled ||
     !composeAction.inboxCountUnchanged ||
     !composeAction.noOutgoingInInbox ||
-    composeAction.sentTimelineCount !== 1 ||
+    !composeAction.proposalCountChanged ||
+    composeAction.preparedTimelineCount < 1 ||
     !rightPanelLayoutDiagnostics.panelsStacked ||
     !rightPanelLayoutDiagnostics.mailPartsStacked ||
     !rightPanelLayoutDiagnostics.showAllInsideMail ||
@@ -934,7 +951,7 @@ try {
     timelineRowDiagnostics.minHeight < 50 ||
     !timelineRowDiagnostics.textFits ||
     !timelineRowDiagnostics.noOverlap ||
-    !gameCycle.resourcesChangedAfterAction ||
+    !gameCycle.proposalChangedAfterAction ||
     !gameCycle.turnAdvanced ||
     !gameCycle.resourcesChangedAfterTurn ||
     gameCycle.orderCounterMoveDiagnostics.count < 1 ||

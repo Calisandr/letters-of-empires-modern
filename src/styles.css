@@ -2429,22 +2429,22 @@ input:focus-visible,
 
 .operation-plan-list {
   display: grid;
-  gap: 5px;
-  max-height: 132px;
+  gap: 6px;
+  max-height: 188px;
   overflow: auto;
   padding-right: 2px;
 }
 
 .operation-plan {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) 26px;
+  grid-template-columns: 30px minmax(0, 1fr);
   grid-template-areas:
-    "icon body close"
-    "run run run";
-  gap: 5px 7px;
-  align-items: center;
-  min-height: 76px;
-  padding: 7px;
+    "icon body"
+    "actions actions";
+  gap: 6px 9px;
+  align-items: start;
+  min-height: 78px;
+  padding: 8px;
   border: 1px solid rgba(205, 162, 85, .16);
   background: rgba(3, 9, 10, .58);
 }
@@ -2480,6 +2480,13 @@ input:focus-visible,
   min-width: 0;
 }
 
+.operation-plan .operation-plan-actions {
+  grid-area: actions;
+  display: grid;
+  grid-template-columns: minmax(132px, 1fr) minmax(86px, .72fr) minmax(82px, .62fr);
+  gap: 6px;
+}
+
 .operation-plan h3,
 .operation-plan p,
 .operation-plan small,
@@ -2500,42 +2507,59 @@ input:focus-visible,
 .operation-plan p {
   margin-top: 2px;
   color: rgba(218, 209, 176, .86);
-  font-size: 11.3px;
-  line-height: 1.22;
+  font-size: 11.6px;
+  line-height: 1.28;
   white-space: normal;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
 }
 
 .operation-plan small,
 .operation-plan em {
   margin-top: 2px;
   color: rgba(166, 185, 162, .8);
-  font-size: 9.5px;
+  font-size: 10.2px;
   font-style: normal;
 }
 
 .operation-plan button {
   border: 1px solid rgba(205, 162, 85, .3);
+  border-radius: 4px;
   background: rgba(9, 17, 16, .78);
   color: #d9bf77;
   cursor: pointer;
 }
 
 .operation-plan .plan-run {
-  grid-area: run;
   min-height: 30px;
   padding: 0 10px;
+  border-color: rgba(226, 183, 100, .42);
+  background: rgba(86, 56, 23, .42);
   color: #ffe08d;
   font: 700 11.2px/1 var(--serif);
 }
 
+.operation-plan .plan-refine,
 .operation-plan .plan-dismiss {
-  grid-area: close;
-  display: grid;
-  place-items: center;
-  width: 26px;
+  min-height: 30px;
+  padding: 0 8px;
+  font-size: 10.8px;
+}
+
+.operation-plan .plan-refine:disabled {
+  cursor: default;
+  opacity: .52;
+}
+
+.operation-plan .plan-dismiss {
+  color: rgba(218, 209, 176, .78);
+}
+
+.operation-plan .plan-run,
+.operation-plan .plan-refine,
+.operation-plan .plan-dismiss {
+  align-self: stretch;
   height: 30px;
 }
 

@@ -225,6 +225,30 @@ function applyDiplomacyDeltaWithUpserts(relations: DiplomacyRelation[], delta: R
   }, relations);
 }
 
+function upsertNationsForDiplomacyDeltas(
+  nations: NationProfile[],
+  diplomacy: DiplomacyRelation[],
+  delta: Record<string, number> = {},
+) {
+  return Object.keys(delta).reduce<NationProfile[]>((nextNations, name) => {
+    if (nextNations.some((nation) => nation.name === name)) return nextNations;
+
+    const relation = diplomacy.find((item) => item.name === name)?.score ?? 0;
+    const country: SelectedCountry = {
+      key: countryKeyForDiplomacyName(name),
+      name,
+      status: relation >= 50 ? 'friendly' : relation <= -50 ? 'hostile' : 'common',
+    };
+
+    return upsertNationTarget(nextNations, country, {
+      relation,
+      pressure: relation < 0 ? 52 : 30,
+      threat: relation < 0 ? 54 : 28,
+      lastAction: 'Досье открыто через дипломатический ход России.',
+    });
+  }, nations);
+}
+
 function upsertDiplomacyTarget(relations: DiplomacyRelation[], country: SelectedCountry, delta = 0) {
   const existing = relations.find((relation) => relation.name === country.name);
   const baseScore = existing?.score ?? fallbackRelationForStatus(country.status);
@@ -324,6 +348,8 @@ function planKindLabel(kind: OperationPlan['kind']) {
   if (kind === 'diplomacy') return 'дипломатический план';
   if (kind === 'countermeasure') return 'план контрмер';
   if (kind === 'raid') return 'военный план';
+  if (kind === 'military') return 'военный план';
+  if (kind === 'infrastructure') return 'инфраструктурный план';
   return 'внутренний план';
 }
 
@@ -361,6 +387,7 @@ function operationPlanToOrder(plan: OperationPlan): OrderDraft {
     failureDiplomacyDelta: plan.failureDiplomacyDelta,
     failureNationDelta: plan.failureNationDelta,
     failureText: plan.failureText,
+    letter: plan.letter,
   };
 }
 
@@ -1117,6 +1144,59 @@ export function runOperationPlan(state: GameState, planIdToRun: string): GameSta
   };
 }
 
+function lowerPlanRisk(risk: NonNullable<Order['riskLevel']>): NonNullable<Order['riskLevel']> {
+  if (risk === 'critical') return 'high';
+  if (risk === 'high') return 'medium';
+  if (risk === 'medium') return 'low';
+  return 'low';
+}
+
+function riskText(risk: NonNullable<Order['riskLevel']>) {
+  if (risk === 'critical') return 'критический';
+  if (risk === 'high') return 'высокий';
+  if (risk === 'medium') return 'средний';
+  return 'низкий';
+}
+
+export function refineOperationPlan(state: GameState, planIdToRefine: string): GameState {
+  const plan = state.operationPlans.find((item) => item.id === planIdToRefine);
+  if (!plan) return createNotice(state, 'Предложение совета не найдено', 'error');
+
+  const refinements = plan.refinements || 0;
+  if (refinements >= 2) {
+    return createNotice(state, 'Совет уже уточнил этот план до предела текущих данных', 'error');
+  }
+
+  const cost: ResourceDelta = { gold: plan.riskLevel === 'critical' || plan.riskLevel === 'high' ? 140 : 90 };
+  if (!canPay(state.resources, cost)) {
+    return createNotice(state, `Не хватает ресурсов для уточнения: ${describeResourceCost(state.resources, cost)}`, 'error');
+  }
+
+  const refinedPlan: OperationPlan = {
+    ...plan,
+    summary: `${plan.summary} Совет уточнил маршрут исполнения: риск понятнее, шанс выше, окно решения шире.`,
+    successChance: Math.min(96, plan.successChance + (plan.riskLevel === 'critical' || plan.riskLevel === 'high' ? 10 : 7)),
+    riskLevel: refinements === 0 ? lowerPlanRisk(plan.riskLevel) : plan.riskLevel,
+    expiresTurn: Math.max(plan.expiresTurn, state.turnNumber + 2),
+    refinements: refinements + 1,
+  };
+
+  return createNotice(
+    {
+      ...state,
+      resources: applyResourceDelta(state.resources, { gold: -(cost.gold || 0) }),
+      operationPlans: state.operationPlans.map((item) => (item.id === planIdToRefine ? refinedPlan : item)),
+      timelineEvents: pushTimeline(state.timelineEvents, {
+        icon: '◎',
+        tone: refinedPlan.riskLevel === 'high' || refinedPlan.riskLevel === 'critical' ? 'bronze' : 'blue',
+        title: 'План Совета уточнен',
+        text: `Совет уточнил "${plan.title}": шанс повышен до ${refinedPlan.successChance}%, риск теперь ${riskText(refinedPlan.riskLevel)}.`,
+      }),
+    },
+    'Совет уточнил предложение',
+  );
+}
+
 export function dismissOperationPlan(state: GameState, planIdToDismiss: string): GameState {
   const plan = state.operationPlans.find((item) => item.id === planIdToDismiss);
   if (!plan) return createNotice(state, 'Оперативный план не найден', 'error');
@@ -1408,6 +1488,7 @@ function resolveCompletedOrder(order: Order, nextTurn: number): ResolvedOrderOut
       resourceDelta: order.reward || {},
       diplomacyDelta: order.diplomacyDelta || {},
       nationDelta: order.nationDelta || {},
+      letter: order.letter,
     };
   }
 
@@ -1546,6 +1627,9 @@ export function endTurn(state: GameState): GameState {
     });
   }
 
+  const finalDiplomacy = applyDiplomacyDeltaWithUpserts(state.diplomacy, totalDiplomacyDelta);
+  const finalNations = upsertNationsForDiplomacyDeltas(world.nations, finalDiplomacy, totalDiplomacyDelta);
+
   return createNotice(
     {
       ...state,
@@ -1553,8 +1637,8 @@ export function endTurn(state: GameState): GameState {
       orders: activeOrders,
       operationPlans: activeOperationPlans,
       resources: applyResourceDelta(state.resources, totalResourceDelta),
-      diplomacy: applyDiplomacyDeltaWithUpserts(state.diplomacy, totalDiplomacyDelta),
-      nations: world.nations,
+      diplomacy: finalDiplomacy,
+      nations: finalNations,
       worldEvents: mergeWorldEvents(state.worldEvents, world.events),
       worldTension: world.worldTension,
       lastTurnReport: {

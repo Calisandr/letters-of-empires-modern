@@ -1615,6 +1615,10 @@ function App() {
     dispatchGame({ type: 'RUN_OPERATION_PLAN', id });
   };
 
+  const refineOperationPlan = (id: string) => {
+    dispatchGame({ type: 'REFINE_OPERATION_PLAN', id });
+  };
+
   const dismissOperationPlan = (id: string) => {
     dispatchGame({ type: 'DISMISS_OPERATION_PLAN', id });
   };
@@ -1806,6 +1810,7 @@ function App() {
               onCancel={cancelOrder}
               onCreateOrder={() => handleQuickAction('create-order')}
               onRunPlan={runOperationPlan}
+              onRefinePlan={refineOperationPlan}
               onDismissPlan={dismissOperationPlan}
             />
           </section>
@@ -2333,6 +2338,7 @@ function OrdersPanel({
   onCancel,
   onCreateOrder,
   onRunPlan,
+  onRefinePlan,
   onDismissPlan,
 }: {
   orders: Order[];
@@ -2341,6 +2347,7 @@ function OrdersPanel({
   onCancel: (id: string) => void;
   onCreateOrder: () => void;
   onRunPlan: (id: string) => void;
+  onRefinePlan: (id: string) => void;
   onDismissPlan: (id: string) => void;
 }) {
   const visibleOrders = useMemo(() => orders.filter((order) => order.statusClass !== 'cancelled'), [orders]);
@@ -2362,16 +2369,21 @@ function OrdersPanel({
       {operationPlans.length ? (
         <section className="operation-plans" aria-label="Оперативные планы">
           <header>
-            <b>Оперативные планы</b>
-            <small>{operationPlans.length}/4 подготовлено</small>
+            <b>Предложения Совета</b>
+            <small>{operationPlans.length}/4 ожидают решения</small>
           </header>
           <div className="operation-plan-list">
             {operationPlans.map((plan) => {
               const Icon = orderIcons[plan.iconKey];
               const expiresIn = Math.max(0, plan.expiresTurn - currentTurn);
+              const refinements = plan.refinements || 0;
 
               return (
-                <article key={plan.id} className={`operation-plan ${plan.riskLevel}`}>
+                <article
+                  key={plan.id}
+                  className={`operation-plan ${plan.riskLevel}`}
+                  title={plan.sourceText ? `Основание: ${plan.sourceText}` : undefined}
+                >
                   <span className="operation-plan-icon">
                     <Icon aria-hidden="true" />
                   </span>
@@ -2379,26 +2391,36 @@ function OrdersPanel({
                     <h3>{plan.title}</h3>
                     <p>{plan.summary}</p>
                     <small>
-                      {plan.advisor} · шанс {plan.successChance}% · {planRiskLabel(plan.riskLevel)} · окно {expiresIn} ход.
+                      {plan.advisor} · {formatResourceCost(plan.cost)} · шанс {plan.successChance}% · {planRiskLabel(plan.riskLevel)} · {expiresIn} ход.
                     </small>
-                    <em>Стоимость: {formatResourceCost(plan.cost)}</em>
                   </div>
-                  <button
-                    type="button"
-                    className="plan-run"
-                    aria-label={`Запустить план: ${plan.title}`}
-                    onClick={() => onRunPlan(plan.id)}
-                  >
-                    Запустить
-                  </button>
-                  <button
-                    type="button"
-                    className="plan-dismiss"
-                    aria-label={`Снять план: ${plan.title}`}
-                    onClick={() => onDismissPlan(plan.id)}
-                  >
-                    <X aria-hidden="true" />
-                  </button>
+                  <div className="operation-plan-actions">
+                    <button
+                      type="button"
+                      className="plan-run"
+                      aria-label={`Утвердить предложение: ${plan.title}`}
+                      onClick={() => onRunPlan(plan.id)}
+                    >
+                      Утвердить приказ
+                    </button>
+                    <button
+                      type="button"
+                      className="plan-refine"
+                      aria-label={`Уточнить предложение: ${plan.title}`}
+                      onClick={() => onRefinePlan(plan.id)}
+                      disabled={refinements >= 2}
+                    >
+                      {refinements >= 2 ? 'Уточнено' : 'Уточнить'}
+                    </button>
+                    <button
+                      type="button"
+                      className="plan-dismiss"
+                      aria-label={`Отложить предложение: ${plan.title}`}
+                      onClick={() => onDismissPlan(plan.id)}
+                    >
+                      Отложить
+                    </button>
+                  </div>
                 </article>
               );
             })}

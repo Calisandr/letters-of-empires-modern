@@ -26,13 +26,37 @@ try {
     results.push(name);
   };
 
-  test('quick trade action creates an order and spends resources', () => {
+  test('quick trade action prepares a council proposal before spending resources', () => {
     const state = clone(initialGameState);
     const next = gameReducer(state, { type: 'RUN_QUICK_ACTION', id: 'trade-routes' });
+    const plan = next.operationPlans[0];
 
-    assert.equal(next.orders.length, state.orders.length + 1);
-    assert.ok(next.resources.find((resource) => resource.id === 'gold').value < 12540);
+    assert.equal(next.orders.length, state.orders.length);
+    assert.equal(next.operationPlans.length, state.operationPlans.length + 1);
+    assert.ok(plan.title.includes('торговый маршрут'));
+    assert.equal(next.resources.find((resource) => resource.id === 'gold').value, state.resources.find((resource) => resource.id === 'gold').value);
     assert.equal(next.lastNotice.kind, 'success');
+
+    const launched = gameReducer(next, { type: 'RUN_OPERATION_PLAN', id: plan.id });
+
+    assert.equal(launched.orders.length, state.orders.length + 1);
+    assert.ok(!launched.operationPlans.some((item) => item.id === plan.id));
+    assert.ok(launched.resources.find((resource) => resource.id === 'gold').value < state.resources.find((resource) => resource.id === 'gold').value);
+  });
+
+  test('council proposal can be refined before approval', () => {
+    const prepared = gameReducer(clone(initialGameState), { type: 'RUN_QUICK_ACTION', id: 'recruit-army' });
+    const plan = prepared.operationPlans[0];
+    const beforeGold = prepared.resources.find((resource) => resource.id === 'gold').value;
+    const refined = gameReducer(prepared, { type: 'REFINE_OPERATION_PLAN', id: plan.id });
+    const refinedPlan = refined.operationPlans.find((item) => item.id === plan.id);
+
+    assert.ok(refinedPlan);
+    assert.equal(refinedPlan.refinements, 1);
+    assert.ok(refinedPlan.successChance > plan.successChance);
+    assert.ok(refinedPlan.riskLevel === 'low' || refinedPlan.riskLevel === 'medium');
+    assert.ok(refined.resources.find((resource) => resource.id === 'gold').value < beforeGold);
+    assert.equal(refined.lastNotice.kind, 'success');
   });
 
   test('once-per-turn action is blocked on the second use', () => {
@@ -73,17 +97,25 @@ try {
     assert.equal(effect.kind, 'blocked');
   });
 
-  test('council command can create a validated order through reducer', () => {
+  test('council command creates a validated proposal that can be approved', () => {
     const state = clone(initialGameState);
     const next = gameReducer(state, {
       type: 'SUBMIT_COUNCIL_MESSAGE',
       text: 'Построить дороги и склады в Москве',
       time: '13:00',
     });
+    const plan = next.operationPlans[0];
 
-    assert.equal(next.orders.length, state.orders.length + 1);
-    assert.ok(next.timelineEvents[0].title.includes('Новый приказ'));
+    assert.equal(next.orders.length, state.orders.length);
+    assert.equal(next.operationPlans.length, state.operationPlans.length + 1);
+    assert.ok(plan.title.length > 3);
+    assert.ok(next.timelineEvents[0].title.includes('Совет подготовил предложение'));
     assert.ok(next.chatMessages.some((message) => message.faction === 'Совет' && message.channel === 'council'));
+
+    const approved = gameReducer(next, { type: 'RUN_OPERATION_PLAN', id: plan.id });
+
+    assert.equal(approved.orders.length, state.orders.length + 1);
+    assert.ok(approved.timelineEvents[0].title.includes('Новый приказ'));
   });
 
   test('casual council chat does not create an accidental order', () => {
@@ -95,6 +127,7 @@ try {
     });
 
     assert.equal(next.orders.length, state.orders.length);
+    assert.equal(next.operationPlans.length, state.operationPlans.length);
     assert.ok(next.chatMessages.some((message) => message.faction === 'Совет' && message.channel === 'council'));
   });
 
@@ -172,7 +205,7 @@ try {
     assert.equal(reopened[0].time, 'только что');
   });
 
-  test('diplomatic council command changes selected relation safely', () => {
+  test('diplomatic council command prepares and resolves a safe relation order', () => {
     const selected = gameReducer(clone(initialGameState), {
       type: 'SELECT_COUNTRY',
       country: { key: 'France', name: 'Франция', status: 'friendly' },
@@ -182,9 +215,16 @@ try {
       text: 'Улучшить отношения и начать переговоры с Францией',
       time: '13:10',
     });
+    const plan = next.operationPlans[0];
+    const approved = gameReducer(next, { type: 'RUN_OPERATION_PLAN', id: plan.id });
+    const guaranteed = { ...approved, orders: approved.orders.map((order) => ({ ...order, successChance: 100 })) };
+    const resolved = endTurn(guaranteed);
 
-    assert.ok(next.diplomacy.find((relation) => relation.name === 'Франция').score > 75);
-    assert.equal(next.letters[0].from, 'Франция');
+    assert.equal(next.orders.length, selected.orders.length);
+    assert.equal(plan.target, 'Франция');
+    assert.equal(approved.orders.length, selected.orders.length + 1);
+    assert.ok(resolved.diplomacy.find((relation) => relation.name === 'Франция').score > selected.diplomacy.find((relation) => relation.name === 'Франция').score);
+    assert.ok(resolved.letters.some((letter) => letter.from === 'Франция'));
   });
 
   test('country intel envoy creates diplomacy for a new map country', () => {
@@ -203,7 +243,7 @@ try {
     assert.equal(next.letters[0].from, 'Бразилия');
   });
 
-  test('council diplomacy can target a newly selected map country', () => {
+  test('council diplomacy can target a newly selected map country after approval', () => {
     const country = { key: 'Brazil', name: 'Бразилия', status: 'friendly' };
     const selected = gameReducer(clone(initialGameState), { type: 'SELECT_COUNTRY', country });
     const next = gameReducer(selected, {
@@ -211,12 +251,18 @@ try {
       text: 'Начать переговоры и улучшить отношения с Бразилией',
       time: '13:20',
     });
-    const relation = next.diplomacy.find((item) => item.name === 'Бразилия');
+    const plan = next.operationPlans[0];
+    const approved = gameReducer(next, { type: 'RUN_OPERATION_PLAN', id: plan.id });
+    const guaranteed = { ...approved, orders: approved.orders.map((order) => ({ ...order, successChance: 100 })) };
+    const resolved = endTurn(guaranteed);
+    const relation = resolved.diplomacy.find((item) => item.name === 'Бразилия');
 
+    assert.equal(next.orders.length, selected.orders.length);
+    assert.equal(plan.target, 'Бразилия');
     assert.ok(relation);
     assert.ok(relation.score > 64);
-    assert.ok(next.nations.some((item) => item.name === 'Бразилия'));
-    assert.notEqual(next.lastNotice.kind, 'error');
+    assert.ok(resolved.nations.some((item) => item.name === 'Бразилия'));
+    assert.notEqual(resolved.lastNotice.kind, 'error');
   });
 
   test('negative selected-country diplomacy raises dossier pressure', () => {
