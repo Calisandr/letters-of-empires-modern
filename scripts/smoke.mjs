@@ -348,6 +348,47 @@ try {
     };
   });
 
+  const mailPanelReadabilityDiagnostics = await page.evaluate(() => {
+    const list = document.querySelector('.mail-list');
+    const responseList = document.querySelector('.letter-response-list');
+    const detail = document.querySelector('.letter-detail');
+    if (!list || !responseList || !detail) {
+      return { exists: false };
+    }
+
+    const listRect = list.getBoundingClientRect();
+    const responseListRect = responseList.getBoundingClientRect();
+    const rowBoxes = [...document.querySelectorAll('.mail-row-button')].map((node) => {
+      const box = node.getBoundingClientRect();
+      return { top: box.top, bottom: box.bottom, height: box.height };
+    });
+    const responseBoxes = [...document.querySelectorAll('.letter-response')].map((node) => {
+      const box = node.getBoundingClientRect();
+      return { top: box.top, bottom: box.bottom, height: box.height };
+    });
+    const orderedRows = rowBoxes.every((row, index) => {
+      const next = rowBoxes[index + 1];
+      return !next || row.bottom <= next.top + 1;
+    });
+    const fullyVisibleRows = rowBoxes.filter((row) => row.top >= listRect.top - 1 && row.bottom <= listRect.bottom + 1);
+    const fullyVisibleResponses = responseBoxes.filter(
+      (row) => row.top >= responseListRect.top - 1 && row.bottom <= responseListRect.bottom + 1,
+    );
+
+    return {
+      exists: true,
+      listOverflowY: getComputedStyle(list).overflowY,
+      responseOverflowY: getComputedStyle(responseList).overflowY,
+      rowCount: rowBoxes.length,
+      minRowHeight: rowBoxes.reduce((min, row) => Math.min(min, row.height), Number.POSITIVE_INFINITY),
+      orderedRows,
+      fullyVisibleRowCount: fullyVisibleRows.length,
+      responseListHeight: responseListRect.height,
+      fullyVisibleResponseCount: fullyVisibleResponses.length,
+      detailHeight: detail.getBoundingClientRect().height,
+    };
+  });
+
   const timelineRowDiagnostics = await page.evaluate(() => {
     const rows = [...document.querySelectorAll('.timeline-panel article')].map((node) => {
       const row = node.getBoundingClientRect();
@@ -538,6 +579,7 @@ try {
     orderCounterAfterDialog,
     composeAction,
     rightPanelLayoutDiagnostics,
+    mailPanelReadabilityDiagnostics,
     timelineRowDiagnostics,
     gameCycle,
     toastDiagnostics,
@@ -598,6 +640,15 @@ try {
     !rightPanelLayoutDiagnostics.showAllInsideMail ||
     rightPanelLayoutDiagnostics.timelineOverflowY === 'visible' ||
     rightPanelLayoutDiagnostics.mailOverflowY === 'visible' ||
+    !mailPanelReadabilityDiagnostics.exists ||
+    !['auto', 'scroll'].includes(mailPanelReadabilityDiagnostics.listOverflowY) ||
+    !['auto', 'scroll'].includes(mailPanelReadabilityDiagnostics.responseOverflowY) ||
+    mailPanelReadabilityDiagnostics.minRowHeight < 38 ||
+    !mailPanelReadabilityDiagnostics.orderedRows ||
+    mailPanelReadabilityDiagnostics.fullyVisibleRowCount < 2 ||
+    mailPanelReadabilityDiagnostics.responseListHeight < 72 ||
+    mailPanelReadabilityDiagnostics.fullyVisibleResponseCount < 2 ||
+    mailPanelReadabilityDiagnostics.detailHeight < 150 ||
     timelineRowDiagnostics.count < 3 ||
     timelineRowDiagnostics.minHeight < 50 ||
     !timelineRowDiagnostics.textFits ||
