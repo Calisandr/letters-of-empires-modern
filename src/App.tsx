@@ -1174,7 +1174,7 @@ function App() {
   }, []);
 
   const appClassName = useMemo(() => {
-    return ['app-shell', mapModes[mapModeIndex].className].filter(Boolean).join(' ');
+    return ['app-shell', 'redesign-shell', mapModes[mapModeIndex].className].filter(Boolean).join(' ');
   }, [mapModeIndex]);
 
   const mapLayerAttributes = useMemo(() => {
