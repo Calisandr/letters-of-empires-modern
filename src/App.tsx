@@ -724,6 +724,32 @@ function getVisibleIntent(
   };
 }
 
+function diplomacyFallbackPressure(score: number) {
+  if (score <= -60) return 76;
+  if (score <= -20) return 58;
+  if (score < 40) return 39;
+  if (score < 100) return 24;
+  return 18;
+}
+
+function diplomacyPressureTone(value: number) {
+  if (value >= 70) return 'danger';
+  if (value >= 50) return 'warning';
+  if (value >= 30) return 'watch';
+  return 'calm';
+}
+
+function diplomacyPressureLabel(value: number) {
+  if (value >= 70) return 'Кризисное давление';
+  if (value >= 50) return 'Высокое давление';
+  if (value >= 30) return 'Наблюдение';
+  return 'Спокойный канал';
+}
+
+function getDiplomacyDossierId(name: string) {
+  return `diplomacy-dossier-${name.replace(/\s+/g, '-').toLowerCase()}`;
+}
+
 function buildFallbackNation(selected: SelectedCountry): NationProfile {
   const hash = hashCountryName(selected.name);
   const relation = fallbackRelation(selected.status);
@@ -2394,6 +2420,7 @@ function RightPanel({
 }) {
   const latestWorldEvent = worldEvents[0];
   const [selectedLetterId, setSelectedLetterId] = useState<string | null>(null);
+  const [expandedDiplomacyName, setExpandedDiplomacyName] = useState<string | null>(null);
   const selectedLetterEntry =
     letters
       .map((letter, index) => ({
@@ -2412,6 +2439,23 @@ function RightPanel({
   const selectedLetter = selectedLetterEntry?.letter || null;
   const selectedResponses = selectedLetter ? getLetterResponseOptions(selectedLetter) : [];
   const selectedLetterAnswered = selectedLetter?.status === 'answered';
+
+  useEffect(() => {
+    if (!expandedDiplomacyName || diplomacy.some((item) => item.name === expandedDiplomacyName)) return;
+    setExpandedDiplomacyName(null);
+  }, [diplomacy, expandedDiplomacyName]);
+
+  useEffect(() => {
+    if (!expandedDiplomacyName) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(getDiplomacyDossierId(expandedDiplomacyName))?.scrollIntoView({
+        block: 'nearest',
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [expandedDiplomacyName]);
 
   return (
     <motion.aside
@@ -2535,14 +2579,79 @@ function RightPanel({
         <ul>
           {diplomacy.map((item) => {
             const nation = nations.find((entry) => entry.name === item.name);
+            const isExpanded = expandedDiplomacyName === item.name;
+            const pressure = nation?.pressure ?? diplomacyFallbackPressure(item.score);
+            const threat = nation?.threat ?? clampStat(pressure + (item.score < -20 ? 12 : -8));
+            const stability = nation?.stability ?? clampStat(72 - Math.max(0, pressure - 32));
+            const intentView = nation
+              ? getVisibleIntent(nation.currentIntent, item.score, item.tone)
+              : {
+                  tone: 'unknown',
+                  label: 'Досье',
+                  title: 'Сводка ожидает разведку',
+                  summary: 'Канцелярия видит отношения, но точное давление и цели пока не подтверждены.',
+                  meta: 'нет донесения',
+                };
+            const pressureTone = diplomacyPressureTone(pressure);
+            const pressureStyle = { '--value': `${pressure}%` } as CSSProperties;
+            const dossierId = getDiplomacyDossierId(item.name);
 
             return (
-              <li key={item.name}>
-                <CountryFlagMark countryName={item.name} fallbackFlag={item.flag} />
-                <b>{item.name}</b>
-                <em className={item.tone}>{item.status}</em>
-                <strong>{item.score > 0 ? `+${item.score}` : item.score}</strong>
-                <small>{nation ? `Давление ${nation.pressure}/100 · ${nation.lastAction}` : 'Досье ожидает разведданных'}</small>
+              <li key={item.name} className={isExpanded ? 'expanded' : ''}>
+                <button
+                  type="button"
+                  className="diplomacy-row"
+                  aria-expanded={isExpanded}
+                  aria-controls={dossierId}
+                  onClick={() => setExpandedDiplomacyName((current) => (current === item.name ? null : item.name))}
+                >
+                  <CountryFlagMark countryName={item.name} fallbackFlag={item.flag} />
+                  <b>{item.name}</b>
+                  <em className={item.tone}>{item.status}</em>
+                  <strong>{item.score > 0 ? `+${item.score}` : item.score}</strong>
+                  <small>
+                    <span>{`Давление ${pressure}/100`}</span>
+                    <i>{nation?.lastAction || 'Досье ожидает разведданных'}</i>
+                  </small>
+                </button>
+                {isExpanded ? (
+                  <section
+                    id={dossierId}
+                    className={`diplomacy-dossier ${pressureTone}`}
+                    aria-label={`Дипломатическое досье: ${item.name}`}
+                  >
+                    <div className="dossier-meter">
+                      <span>{`${item.name}: ${diplomacyPressureLabel(pressure)}`}</span>
+                      <b>{pressure}/100</b>
+                      <i style={pressureStyle} aria-hidden="true" />
+                    </div>
+                    <div className="dossier-metrics">
+                      <span>
+                        Угроза <b>{threat}/100</b>
+                      </span>
+                      <span>
+                        Устойчивость <b>{stability}/100</b>
+                      </span>
+                      <span>
+                        Фокус <b>{nation ? focusLabels[nation.focus] : 'не раскрыт'}</b>
+                      </span>
+                    </div>
+                    <p className="dossier-activity">{nation?.lastAction || 'Открытых донесений пока мало: нужна дипломатия, торговля или разведка.'}</p>
+                    <div className={`dossier-intent ${intentView.tone}`}>
+                      <small>{intentView.label}</small>
+                      <b>{intentView.title}</b>
+                      <p>{intentView.summary}</p>
+                      <em>{intentView.meta}</em>
+                    </div>
+                    {nation?.goals.length ? (
+                      <ul className="dossier-goals" aria-label={`Цели державы: ${item.name}`}>
+                        {nation.goals.slice(0, 2).map((goal) => (
+                          <li key={goal}>{goal}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </section>
+                ) : null}
               </li>
             );
           })}

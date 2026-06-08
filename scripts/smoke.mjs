@@ -165,13 +165,13 @@ try {
     goldText: [...document.querySelectorAll('.resource-list li')].find((node) =>
       node.textContent?.includes('Золото'),
     )?.textContent || '',
-    diplomacyNames: [...document.querySelectorAll('.diplomacy-panel li b')].map((node) =>
+    diplomacyNames: [...document.querySelectorAll('.diplomacy-row > b')].map((node) =>
       node.textContent?.trim(),
     ),
   }));
   await page.getByRole('button', { name: 'Посол: Бразилия' }).click();
   await page.waitForFunction(() =>
-    [...document.querySelectorAll('.diplomacy-panel li b')].some((node) => node.textContent?.includes('Бразилия')),
+    [...document.querySelectorAll('.diplomacy-row > b')].some((node) => node.textContent?.includes('Бразилия')),
   );
   await page.getByRole('button', { name: 'Разведка: Бразилия' }).click();
   await page.waitForTimeout(120);
@@ -180,7 +180,7 @@ try {
     goldText: [...document.querySelectorAll('.resource-list li')].find((node) =>
       node.textContent?.includes('Золото'),
     )?.textContent || '',
-    diplomacyNames: [...document.querySelectorAll('.diplomacy-panel li b')].map((node) =>
+    diplomacyNames: [...document.querySelectorAll('.diplomacy-row > b')].map((node) =>
       node.textContent?.trim(),
     ),
     intelText: document.querySelector('.country-intel-activity')?.textContent?.trim() || '',
@@ -225,13 +225,44 @@ try {
 
     return {
       exists: true,
-      itemCount: list.querySelectorAll('li').length,
+      itemCount: list.children.length,
       overflowY: style.overflowY,
       clientHeight: list.clientHeight,
       scrollHeight: list.scrollHeight,
       needsScroll,
       canReachBottom: !needsScroll || after > before,
       contained: listRect.top >= panelRect.top - 1 && listRect.bottom <= panelRect.bottom + 1,
+    };
+  });
+
+  const diplomacyDossierRow = page.locator('.diplomacy-row').first();
+  if ((await diplomacyDossierRow.getAttribute('aria-expanded')) !== 'true') {
+    await diplomacyDossierRow.click();
+  }
+  await page.waitForSelector('.diplomacy-dossier');
+  const diplomacyDossierDiagnostics = await page.evaluate(() => {
+    const row = document.querySelector('.diplomacy-row[aria-expanded="true"]') || document.querySelector('.diplomacy-row');
+    const dossier = document.querySelector('.diplomacy-dossier');
+    const item = row?.closest('li');
+    const meter = dossier?.querySelector('.dossier-meter');
+    const activity = dossier?.querySelector('.dossier-activity');
+    const metrics = [...(dossier?.querySelectorAll('.dossier-metrics span') || [])].map((node) =>
+      node.textContent?.replace(/\s+/g, ' ').trim(),
+    );
+    const rowRect = row?.getBoundingClientRect();
+    const itemRect = item?.getBoundingClientRect();
+    const dossierRect = dossier?.getBoundingClientRect();
+
+    return {
+      exists: Boolean(dossier),
+      rowExpanded: row?.getAttribute('aria-expanded') === 'true',
+      meterText: meter?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      activityText: activity?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      metrics,
+      goalCount: dossier?.querySelectorAll('.dossier-goals li').length || 0,
+      visibleHeight: dossierRect?.height || 0,
+      itemHeight: itemRect?.height || 0,
+      rowHeight: rowRect?.height || 0,
     };
   });
 
@@ -601,6 +632,7 @@ try {
     countryIntelClosed,
     countrySelectionAfterClose,
     diplomacyScrollDiagnostics,
+    diplomacyDossierDiagnostics,
     chatTabDiagnostics,
     letterResponseBefore,
     letterResponseAfter,
@@ -653,6 +685,13 @@ try {
     !['auto', 'scroll'].includes(diplomacyScrollDiagnostics.overflowY) ||
     !diplomacyScrollDiagnostics.canReachBottom ||
     !diplomacyScrollDiagnostics.contained ||
+    !diplomacyDossierDiagnostics.exists ||
+    !diplomacyDossierDiagnostics.rowExpanded ||
+    !diplomacyDossierDiagnostics.meterText.includes('/100') ||
+    diplomacyDossierDiagnostics.activityText.length < 20 ||
+    diplomacyDossierDiagnostics.metrics.length < 3 ||
+    diplomacyDossierDiagnostics.visibleHeight < 110 ||
+    diplomacyDossierDiagnostics.itemHeight <= diplomacyDossierDiagnostics.rowHeight + 40 ||
     !result.chatAdded ||
     chatTabDiagnostics.activeText !== 'Альянс' ||
     !chatTabDiagnostics.allianceSelected ||
