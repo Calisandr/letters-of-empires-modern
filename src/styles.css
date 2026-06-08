@@ -1154,6 +1154,45 @@ input:focus-visible,
   scrollbar-color: rgba(205, 162, 85, .34) rgba(5, 12, 13, .66);
 }
 
+.timeline-panel article {
+  display: block;
+  padding: 0;
+}
+
+.timeline-panel article.selected {
+  border-color: rgba(246, 206, 116, .5);
+  background: rgba(65, 48, 23, .24);
+}
+
+.timeline-row-button {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) max-content;
+  align-items: start;
+  gap: 9px;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 9px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.timeline-row-button:hover,
+.timeline-row-button:focus-visible {
+  background: rgba(205, 162, 85, .08);
+}
+
+.timeline-row-button:focus-visible {
+  outline: 1px solid rgba(226, 183, 100, .52);
+  outline-offset: -1px;
+}
+
+.timeline-row-button > div {
+  min-width: 0;
+}
+
 .diplomacy-panel ul {
   min-height: 0;
   overflow-y: auto;
@@ -1691,7 +1730,9 @@ input:focus-visible,
 }
 
 .letter-dialog,
-.diplomacy-dialog {
+.diplomacy-dialog,
+.chronicle-dialog,
+.chronicle-archive-dialog {
   display: flex;
   flex-direction: column;
   width: min(780px, calc(100vw - 42px));
@@ -1706,6 +1747,11 @@ input:focus-visible,
 
 .diplomacy-dialog {
   width: min(820px, calc(100vw - 42px));
+}
+
+.chronicle-dialog,
+.chronicle-archive-dialog {
+  width: min(760px, calc(100vw - 42px));
 }
 
 .dialog-heading {
@@ -1807,7 +1853,9 @@ input:focus-visible,
 }
 
 .letter-dialog-body,
-.diplomacy-dialog-body {
+.diplomacy-dialog-body,
+.chronicle-dialog-body,
+.chronicle-archive-list {
   min-height: 0;
   overflow: auto;
   padding: 14px;
@@ -2024,6 +2072,126 @@ input:focus-visible,
   width: 5px;
   height: 5px;
   background: #d2b36a;
+}
+
+.chronicle-dialog-body {
+  display: grid;
+  gap: 12px;
+}
+
+.chronicle-dialog-body > p {
+  margin: 0;
+  color: rgba(226, 219, 188, .94);
+  font-size: 14px;
+  line-height: 1.48;
+}
+
+.chronicle-dialog-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin: 0;
+}
+
+.chronicle-dialog-metrics div,
+.chronicle-dialog-meaning {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(205, 162, 85, .18);
+  background: rgba(6, 13, 14, .45);
+}
+
+.chronicle-dialog-metrics dt {
+  color: rgba(166, 185, 162, .84);
+  font-size: 12px;
+  line-height: 1.1;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.chronicle-dialog-metrics dd {
+  margin: 5px 0 0;
+  color: #f0cf78;
+  font: 700 15px/1.15 var(--serif);
+  overflow-wrap: anywhere;
+}
+
+.chronicle-dialog-meaning {
+  border-color: rgba(126, 189, 128, .2);
+  background: rgba(10, 22, 18, .48);
+}
+
+.chronicle-dialog-meaning h3 {
+  margin: 0 0 6px;
+  color: #f0cf78;
+  font: 700 16px/1.15 var(--serif);
+}
+
+.chronicle-dialog-meaning p {
+  margin: 0;
+  color: rgba(226, 219, 188, .94);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.chronicle-archive-list {
+  display: grid;
+  gap: 8px;
+  max-height: 520px;
+}
+
+.chronicle-archive-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) max-content;
+  align-items: start;
+  gap: 10px;
+  width: 100%;
+  min-height: 66px;
+  padding: 10px 11px;
+  border: 1px solid rgba(205, 162, 85, .18);
+  background: rgba(6, 13, 14, .5);
+  color: rgba(226, 219, 188, .92);
+  text-align: left;
+  cursor: pointer;
+}
+
+.chronicle-archive-row:hover,
+.chronicle-archive-row:focus-visible {
+  border-color: rgba(246, 206, 116, .72);
+  background: rgba(65, 48, 23, .32);
+  outline: none;
+}
+
+.chronicle-archive-row > div {
+  min-width: 0;
+}
+
+.chronicle-archive-row b,
+.chronicle-archive-row p,
+.chronicle-archive-row time {
+  min-width: 0;
+}
+
+.chronicle-archive-row b {
+  display: block;
+  margin-bottom: 3px;
+  color: #f0cf78;
+  font: 700 14px/1.15 var(--serif);
+  overflow-wrap: anywhere;
+}
+
+.chronicle-archive-row p {
+  margin: 0;
+  color: rgba(174, 195, 166, .9);
+  font-size: 12.5px;
+  line-height: 1.34;
+}
+
+.chronicle-archive-row time {
+  color: rgba(166, 185, 162, .82);
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .dialog-footer {
@@ -2676,9 +2844,15 @@ input:focus-visible,
   }
 
   .timeline-panel article {
+    display: block;
     flex: 0 0 auto;
     min-height: 58px;
-    align-items: start;
+    padding: 0;
+  }
+
+  .timeline-row-button {
+    min-height: 58px;
+    padding: 8px 9px;
   }
 
   .mail-panel article {

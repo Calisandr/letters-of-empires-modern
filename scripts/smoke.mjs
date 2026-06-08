@@ -288,6 +288,77 @@ try {
     selectedCount: document.querySelectorAll('.world-svg .country.selected').length,
     selectedNames: [...document.querySelectorAll('.world-svg .country.selected')].map((node) => node.dataset.name),
   }));
+
+  await page.locator('.timeline-row-button').first().click();
+  await page.waitForSelector('.chronicle-dialog');
+  const chronicleDialogDiagnostics = await page.evaluate(() => {
+    const dialog = document.querySelector('.chronicle-dialog');
+    const rightPanel = document.querySelector('.right-panel');
+    const dialogRect = dialog?.getBoundingClientRect();
+    const rightPanelRect = rightPanel?.getBoundingClientRect();
+    const textNodes = [...(dialog?.querySelectorAll('p, dd, button, small') || [])];
+    const smallTextNodes = textNodes.filter((node) => Number.parseFloat(getComputedStyle(node).fontSize) < 12);
+    const overflowingNodes = [...(dialog?.querySelectorAll('*') || [])].filter(
+      (node) => node.scrollWidth > node.clientWidth + 2,
+    );
+
+    return {
+      exists: Boolean(dialog),
+      role: dialog?.getAttribute('role') || '',
+      modal: dialog?.getAttribute('aria-modal') || '',
+      title: dialog?.querySelector('h2')?.textContent?.trim() || '',
+      metrics: dialog?.querySelectorAll('.chronicle-dialog-metrics dd').length || 0,
+      meaningText: dialog?.querySelector('.chronicle-dialog-meaning p')?.textContent?.trim() || '',
+      visibleWidth: dialogRect?.width || 0,
+      visibleHeight: dialogRect?.height || 0,
+      outsideRightPanel: Boolean(dialogRect && rightPanelRect && dialogRect.left < rightPanelRect.left - 12),
+      closeButtonExists: Boolean(dialog?.querySelector('.dialog-close')),
+      smallTextCount: smallTextNodes.length,
+      overflowCount: overflowingNodes.length,
+    };
+  });
+  await page.locator('.chronicle-dialog .dialog-close').click();
+  await page.waitForFunction(() => document.querySelectorAll('.chronicle-dialog').length === 0);
+  const chronicleDialogClosed = (await page.locator('.chronicle-dialog').count()) === 0;
+
+  await page.locator('.timeline-panel .panel-heading button').click();
+  await page.waitForSelector('.chronicle-archive-dialog');
+  const chronicleArchiveDiagnostics = await page.evaluate(() => {
+    const dialog = document.querySelector('.chronicle-archive-dialog');
+    const rightPanel = document.querySelector('.right-panel');
+    const dialogRect = dialog?.getBoundingClientRect();
+    const rightPanelRect = rightPanel?.getBoundingClientRect();
+    const rows = [...document.querySelectorAll('.chronicle-archive-row')];
+    const rowBoxes = rows.map((node) => {
+      const box = node.getBoundingClientRect();
+      return { top: box.top, bottom: box.bottom, height: box.height };
+    });
+    const smallTextNodes = [...(dialog?.querySelectorAll('p, time, button, small') || [])].filter(
+      (node) => Number.parseFloat(getComputedStyle(node).fontSize) < 12,
+    );
+    const overflowingNodes = [...(dialog?.querySelectorAll('*') || [])].filter(
+      (node) => node.scrollWidth > node.clientWidth + 2,
+    );
+
+    return {
+      exists: Boolean(dialog),
+      role: dialog?.getAttribute('role') || '',
+      modal: dialog?.getAttribute('aria-modal') || '',
+      rowCount: rows.length,
+      minRowHeight: rowBoxes.reduce((min, row) => Math.min(min, row.height), Number.POSITIVE_INFINITY),
+      visibleWidth: dialogRect?.width || 0,
+      outsideRightPanel: Boolean(dialogRect && rightPanelRect && dialogRect.left < rightPanelRect.left - 12),
+      smallTextCount: smallTextNodes.length,
+      overflowCount: overflowingNodes.length,
+    };
+  });
+  await page.locator('.chronicle-archive-row').first().click();
+  await page.waitForSelector('.chronicle-dialog');
+  const chronicleArchiveOpensEntry = (await page.locator('.chronicle-dialog').count()) === 1;
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => document.querySelectorAll('.chronicle-dialog').length === 0);
+  const chronicleArchiveClosed = (await page.locator('.chronicle-archive-dialog').count()) === 0;
+
   await franceCountry.focus();
   await page.keyboard.press('Enter');
   await page.waitForSelector('.country-intel');
@@ -714,6 +785,11 @@ try {
     countryIntelActionDiagnostics,
     countryIntelClosed,
     countrySelectionAfterClose,
+    chronicleDialogDiagnostics,
+    chronicleDialogClosed,
+    chronicleArchiveDiagnostics,
+    chronicleArchiveOpensEntry,
+    chronicleArchiveClosed,
     diplomacyScrollDiagnostics,
     diplomacyDossierDiagnostics,
     diplomacyDossierCloseDiagnostics,
@@ -767,6 +843,30 @@ try {
     !countryIntelActionDiagnostics.operationPlanDiagnostics.hasDismissButton ||
     !countryIntelClosed ||
     countrySelectionAfterClose.selectedCount !== 0 ||
+    !chronicleDialogDiagnostics.exists ||
+    chronicleDialogDiagnostics.role !== 'dialog' ||
+    chronicleDialogDiagnostics.modal !== 'true' ||
+    chronicleDialogDiagnostics.title.length < 4 ||
+    chronicleDialogDiagnostics.metrics < 3 ||
+    chronicleDialogDiagnostics.meaningText.length < 40 ||
+    chronicleDialogDiagnostics.visibleHeight < 330 ||
+    chronicleDialogDiagnostics.visibleWidth < 640 ||
+    !chronicleDialogDiagnostics.outsideRightPanel ||
+    !chronicleDialogDiagnostics.closeButtonExists ||
+    chronicleDialogDiagnostics.smallTextCount > 0 ||
+    chronicleDialogDiagnostics.overflowCount > 0 ||
+    !chronicleDialogClosed ||
+    !chronicleArchiveDiagnostics.exists ||
+    chronicleArchiveDiagnostics.role !== 'dialog' ||
+    chronicleArchiveDiagnostics.modal !== 'true' ||
+    chronicleArchiveDiagnostics.rowCount < 3 ||
+    chronicleArchiveDiagnostics.minRowHeight < 58 ||
+    chronicleArchiveDiagnostics.visibleWidth < 620 ||
+    !chronicleArchiveDiagnostics.outsideRightPanel ||
+    chronicleArchiveDiagnostics.smallTextCount > 0 ||
+    chronicleArchiveDiagnostics.overflowCount > 0 ||
+    !chronicleArchiveOpensEntry ||
+    !chronicleArchiveClosed ||
     !diplomacyScrollDiagnostics.exists ||
     !['auto', 'scroll'].includes(diplomacyScrollDiagnostics.overflowY) ||
     !diplomacyScrollDiagnostics.canReachBottom ||

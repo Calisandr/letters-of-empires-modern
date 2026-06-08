@@ -2403,6 +2403,183 @@ type LetterEntry = {
   id: string;
 };
 
+type ChronicleEntry = {
+  id: string;
+  kind: 'world' | 'timeline';
+  title: string;
+  text: string;
+  time: string;
+  tone: string;
+  icon?: string;
+  flag?: string;
+  actor?: string;
+  turn?: number;
+  impact?: WorldEvent['impact'];
+};
+
+function chronicleToneLabel(tone: string) {
+  if (tone === 'red') return 'Кризис';
+  if (tone === 'green') return 'Успех';
+  if (tone === 'blue') return 'Сводка';
+  if (tone === 'bronze') return 'Внимание';
+  return 'Событие';
+}
+
+function chronicleImpactLabel(impact?: WorldEvent['impact']) {
+  if (impact === 'trade') return 'Торговля';
+  if (impact === 'military') return 'Военное давление';
+  if (impact === 'diplomacy') return 'Дипломатия';
+  if (impact === 'economy') return 'Экономика';
+  if (impact === 'stability') return 'Стабильность';
+  if (impact === 'threat') return 'Угроза';
+  return 'Общая хроника';
+}
+
+function chronicleAdvice(entry: ChronicleEntry) {
+  if (entry.tone === 'red' || entry.impact === 'threat' || entry.impact === 'military') {
+    return 'Событие может ухудшить безопасность или отношения. Стоит проверить приказы, дипломатические связи и давление соседей.';
+  }
+
+  if (entry.impact === 'trade' || entry.tone === 'green') {
+    return 'Событие можно использовать как окно возможностей: торговля, дипломатия или новый приказ могут усилить позицию державы.';
+  }
+
+  if (entry.tone === 'bronze') {
+    return 'Событие требует наблюдения. Оно не ломает ход сразу, но может стать проблемой, если оставить его без реакции.';
+  }
+
+  return 'Событие зафиксировано в хронике. Оно помогает понять, почему меняются письма, отношения, ресурсы и намерения держав.';
+}
+
+function ChronicleDialog({ entry, onClose }: { entry: ChronicleEntry; onClose: () => void }) {
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    closeRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        className={`chronicle-dialog framed-panel ${entry.tone}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="chronicleDialogTitle"
+        aria-describedby="chronicleDialogBody"
+      >
+        <header className="dialog-heading">
+          {entry.flag ? <span className={`flag ${entry.flag}`} /> : <span className={`event-icon ${entry.tone}`}>{entry.icon || '•'}</span>}
+          <div>
+            <small>{entry.kind === 'world' ? 'Событие мира' : 'Запись хроники'}</small>
+            <h2 id="chronicleDialogTitle">{entry.title}</h2>
+            <p>{entry.actor || chronicleImpactLabel(entry.impact)}</p>
+          </div>
+          <em>{entry.time}</em>
+          <button ref={closeRef} type="button" className="dialog-close" aria-label="Закрыть запись хроники" onClick={onClose}>
+            <X aria-hidden="true" />
+          </button>
+        </header>
+        <div className="chronicle-dialog-body" id="chronicleDialogBody">
+          <p>{entry.text}</p>
+          <dl className="chronicle-dialog-metrics">
+            <div>
+              <dt>Тип</dt>
+              <dd>{chronicleToneLabel(entry.tone)}</dd>
+            </div>
+            <div>
+              <dt>Сфера</dt>
+              <dd>{chronicleImpactLabel(entry.impact)}</dd>
+            </div>
+            <div>
+              <dt>Источник</dt>
+              <dd>{entry.actor || 'Канцелярия'}</dd>
+            </div>
+          </dl>
+          <section className="chronicle-dialog-meaning">
+            <h3>Что это значит</h3>
+            <p>{chronicleAdvice(entry)}</p>
+          </section>
+        </div>
+        <footer className="dialog-footer">
+          <span>Хроника связывает карту, письма, приказы и дипломатию в одну игровую ленту.</span>
+          <button type="button" className="dialog-secondary" onClick={onClose}>
+            Понятно
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function ChronicleArchiveDialog({ entries, onOpenEntry, onClose }: { entries: ChronicleEntry[]; onOpenEntry: (id: string) => void; onClose: () => void }) {
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    closeRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section className="chronicle-archive-dialog framed-panel" role="dialog" aria-modal="true" aria-labelledby="chronicleArchiveTitle">
+        <header className="dialog-heading">
+          <span className="event-icon bronze">◆</span>
+          <div>
+            <small>Архив сводок</small>
+            <h2 id="chronicleArchiveTitle">Хроника мира</h2>
+            <p>{entries.length} последних записей</p>
+          </div>
+          <em>обзор</em>
+          <button ref={closeRef} type="button" className="dialog-close" aria-label="Закрыть архив хроники" onClick={onClose}>
+            <X aria-hidden="true" />
+          </button>
+        </header>
+        <div className="chronicle-archive-list">
+          {entries.map((entry) => (
+            <button key={entry.id} type="button" className={`chronicle-archive-row ${entry.tone}`} onClick={() => onOpenEntry(entry.id)}>
+              {entry.flag ? <span className={`flag ${entry.flag}`} /> : <span className={`event-icon ${entry.tone}`}>{entry.icon || '•'}</span>}
+              <div>
+                <b>{entry.title}</b>
+                <p>{entry.text}</p>
+              </div>
+              <time>{entry.time}</time>
+            </button>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function LetterDialog({
   entry,
   responses,
@@ -2621,8 +2798,42 @@ function RightPanel({
   showToast: (message: string) => void;
 }) {
   const latestWorldEvent = worldEvents[0];
+  const [openChronicleId, setOpenChronicleId] = useState<string | null>(null);
+  const [isChronicleArchiveOpen, setIsChronicleArchiveOpen] = useState(false);
   const [openLetterId, setOpenLetterId] = useState<string | null>(null);
   const [openDiplomacyName, setOpenDiplomacyName] = useState<string | null>(null);
+  const chronicleEntries = useMemo<ChronicleEntry[]>(() => {
+    const entries: ChronicleEntry[] = [];
+
+    if (latestWorldEvent) {
+      entries.push({
+        id: `world-${latestWorldEvent.id}`,
+        kind: 'world',
+        title: latestWorldEvent.title,
+        text: latestWorldEvent.text,
+        time: `ход ${latestWorldEvent.turn}`,
+        tone: latestWorldEvent.tone,
+        flag: latestWorldEvent.flag,
+        actor: latestWorldEvent.actor,
+        turn: latestWorldEvent.turn,
+        impact: latestWorldEvent.impact,
+      });
+    }
+
+    timeline.slice(0, latestWorldEvent ? 6 : 7).forEach((event, index) => {
+      entries.push({
+        id: `timeline-${index}-${event.title}-${event.time}`,
+        kind: 'timeline',
+        title: event.title,
+        text: event.text,
+        time: event.time,
+        tone: event.tone,
+        icon: event.icon,
+      });
+    });
+
+    return entries;
+  }, [latestWorldEvent, timeline]);
   const letterEntries = useMemo<LetterEntry[]>(
     () =>
       letters.map((letter, index) => ({
@@ -2634,8 +2845,14 @@ function RightPanel({
   );
   const openLetterEntry = openLetterId ? letterEntries.find((entry) => entry.id === openLetterId) || null : null;
   const openLetterResponses = openLetterEntry ? getLetterResponseOptions(openLetterEntry.letter) : [];
+  const openChronicleEntry = openChronicleId ? chronicleEntries.find((entry) => entry.id === openChronicleId) || null : null;
   const openDiplomacyItem = openDiplomacyName ? diplomacy.find((item) => item.name === openDiplomacyName) || null : null;
   const openDiplomacyNation = openDiplomacyItem ? nations.find((entry) => entry.name === openDiplomacyItem.name) : undefined;
+
+  useEffect(() => {
+    if (!openChronicleId || chronicleEntries.some((entry) => entry.id === openChronicleId)) return;
+    setOpenChronicleId(null);
+  }, [chronicleEntries, openChronicleId]);
 
   useEffect(() => {
     if (!openLetterId || letterEntries.some((entry) => entry.id === openLetterId)) return;
@@ -2658,29 +2875,27 @@ function RightPanel({
       <section className="timeline-panel framed-panel compact">
         <div className="panel-heading">
           <h2>Хроника мира</h2>
-          <button type="button" onClick={() => showToast('Смотреть все')}>
+          <button type="button" aria-haspopup="dialog" onClick={() => setIsChronicleArchiveOpen(true)}>
             Смотреть все
           </button>
         </div>
         <div className="timeline-list">
-          {latestWorldEvent ? (
-            <article className="world-pulse-row">
-              <span className={`flag ${latestWorldEvent.flag}`} />
-              <div>
-                <h3>{latestWorldEvent.title}</h3>
-                <p>{latestWorldEvent.text}</p>
-              </div>
-              <time>ход {latestWorldEvent.turn}</time>
-            </article>
-          ) : null}
-          {timeline.slice(0, latestWorldEvent ? 6 : 7).map((event, index) => (
-            <article key={`${event.title}-${event.time}-${index}`}>
-              <span className={`event-icon ${event.tone}`}>{event.icon}</span>
-              <div>
-                <h3>{event.title}</h3>
-                <p>{event.text}</p>
-              </div>
-              <time>{event.time}</time>
+          {chronicleEntries.map((entry) => (
+            <article key={entry.id} className={`${entry.kind === 'world' ? 'world-pulse-row' : ''}${openChronicleId === entry.id ? ' selected' : ''}`}>
+              <button
+                type="button"
+                className="timeline-row-button"
+                aria-haspopup="dialog"
+                aria-expanded={openChronicleId === entry.id}
+                onClick={() => setOpenChronicleId(entry.id)}
+              >
+                {entry.flag ? <span className={`flag ${entry.flag}`} /> : <span className={`event-icon ${entry.tone}`}>{entry.icon}</span>}
+                <div>
+                  <h3>{entry.title}</h3>
+                  <p>{entry.text}</p>
+                </div>
+                <time>{entry.time}</time>
+              </button>
             </article>
           ))}
         </div>
@@ -2768,6 +2983,17 @@ function RightPanel({
         </ul>
       </section>
     </motion.aside>
+    {openChronicleEntry ? <ChronicleDialog entry={openChronicleEntry} onClose={() => setOpenChronicleId(null)} /> : null}
+    {isChronicleArchiveOpen ? (
+      <ChronicleArchiveDialog
+        entries={chronicleEntries}
+        onOpenEntry={(id) => {
+          setIsChronicleArchiveOpen(false);
+          setOpenChronicleId(id);
+        }}
+        onClose={() => setIsChronicleArchiveOpen(false)}
+      />
+    ) : null}
     {openLetterEntry ? (
       <LetterDialog
         entry={openLetterEntry}
