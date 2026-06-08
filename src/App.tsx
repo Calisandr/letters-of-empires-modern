@@ -2445,18 +2445,6 @@ function RightPanel({
     setExpandedDiplomacyName(null);
   }, [diplomacy, expandedDiplomacyName]);
 
-  useEffect(() => {
-    if (!expandedDiplomacyName) return;
-
-    const frame = window.requestAnimationFrame(() => {
-      document.getElementById(getDiplomacyDossierId(expandedDiplomacyName))?.scrollIntoView({
-        block: 'nearest',
-      });
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, [expandedDiplomacyName]);
-
   return (
     <motion.aside
       className="side-panel right-panel"
@@ -2623,6 +2611,14 @@ function RightPanel({
                     <div className="dossier-meter">
                       <span>{`${item.name}: ${diplomacyPressureLabel(pressure)}`}</span>
                       <b>{pressure}/100</b>
+                      <button
+                        type="button"
+                        className="dossier-close"
+                        aria-label={`Свернуть досье: ${item.name}`}
+                        onClick={() => setExpandedDiplomacyName(null)}
+                      >
+                        <X size={14} aria-hidden="true" />
+                      </button>
                       <i style={pressureStyle} aria-hidden="true" />
                     </div>
                     <div className="dossier-metrics">

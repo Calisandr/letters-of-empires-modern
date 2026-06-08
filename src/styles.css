@@ -1209,12 +1209,16 @@ input:focus-visible,
 .diplomacy-dossier {
   display: grid;
   gap: 7px;
+  max-height: 210px;
   margin: 0 7px 7px;
   padding: 8px;
+  overflow-y: auto;
   border: 1px solid rgba(205, 162, 85, .16);
   background:
     linear-gradient(180deg, rgba(9, 20, 19, .72), rgba(3, 9, 10, .62)),
     rgba(5, 12, 13, .64);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(205, 162, 85, .34) rgba(5, 12, 13, .66);
 }
 
 .diplomacy-dossier b,
@@ -1226,21 +1230,56 @@ input:focus-visible,
   white-space: normal;
 }
 
+.diplomacy-dossier > * {
+  min-width: 0;
+}
+
 .dossier-meter {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
+  grid-template-columns: minmax(0, 1fr) max-content 24px;
   gap: 5px 8px;
   align-items: center;
+  width: 100%;
+  min-width: 0;
 }
 
 .dossier-meter span {
+  min-width: 0;
+  overflow: hidden;
   color: rgba(222, 215, 185, .86);
   font: 700 11px/1.1 var(--serif);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dossier-meter b {
   color: #f0ce78;
   font-size: 11px;
+  white-space: nowrap;
+}
+
+.dossier-close {
+  display: inline-flex;
+  width: 23px;
+  height: 23px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(226, 183, 100, .28);
+  background: rgba(11, 17, 15, .72);
+  color: #dfbd6e;
+  cursor: pointer;
+  transition:
+    border-color .16s ease,
+    background .16s ease,
+    color .16s ease;
+}
+
+.dossier-close:hover,
+.dossier-close:focus-visible {
+  border-color: rgba(246, 206, 116, .75);
+  background: rgba(65, 48, 23, .52);
+  color: #ffe08d;
+  outline: none;
 }
 
 .dossier-meter i {

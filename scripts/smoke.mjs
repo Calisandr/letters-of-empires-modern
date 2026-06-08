@@ -263,8 +263,15 @@ try {
       visibleHeight: dossierRect?.height || 0,
       itemHeight: itemRect?.height || 0,
       rowHeight: rowRect?.height || 0,
+      closeButtonExists: Boolean(dossier?.querySelector('.dossier-close')),
     };
   });
+  await page.locator('.dossier-close').click();
+  await page.waitForFunction(() => document.querySelectorAll('.diplomacy-dossier').length === 0);
+  const diplomacyDossierCloseDiagnostics = {
+    closed: (await page.locator('.diplomacy-dossier').count()) === 0,
+    expandedRows: await page.locator('.diplomacy-row[aria-expanded="true"]').count(),
+  };
 
   await page.locator('.country-intel-close').click();
   await page.waitForFunction(() => document.querySelectorAll('.country-intel').length === 0);
@@ -633,6 +640,7 @@ try {
     countrySelectionAfterClose,
     diplomacyScrollDiagnostics,
     diplomacyDossierDiagnostics,
+    diplomacyDossierCloseDiagnostics,
     chatTabDiagnostics,
     letterResponseBefore,
     letterResponseAfter,
@@ -692,6 +700,9 @@ try {
     diplomacyDossierDiagnostics.metrics.length < 3 ||
     diplomacyDossierDiagnostics.visibleHeight < 110 ||
     diplomacyDossierDiagnostics.itemHeight <= diplomacyDossierDiagnostics.rowHeight + 40 ||
+    !diplomacyDossierDiagnostics.closeButtonExists ||
+    !diplomacyDossierCloseDiagnostics.closed ||
+    diplomacyDossierCloseDiagnostics.expandedRows !== 0 ||
     !result.chatAdded ||
     chatTabDiagnostics.activeText !== 'Альянс' ||
     !chatTabDiagnostics.allianceSelected ||
