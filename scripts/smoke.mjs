@@ -291,6 +291,10 @@ try {
 
   await page.locator('.timeline-row-button').first().click();
   await page.waitForSelector('.chronicle-dialog');
+  const chronicleHighlightLabel = await page
+    .locator('.world-pulse-row .timeline-kind')
+    .first()
+    .textContent();
   const chronicleDialogDiagnostics = await page.evaluate(() => {
     const dialog = document.querySelector('.chronicle-dialog');
     const rightPanel = document.querySelector('.right-panel');
@@ -785,6 +789,7 @@ try {
     countryIntelActionDiagnostics,
     countryIntelClosed,
     countrySelectionAfterClose,
+    chronicleHighlightLabel,
     chronicleDialogDiagnostics,
     chronicleDialogClosed,
     chronicleArchiveDiagnostics,
@@ -843,6 +848,7 @@ try {
     !countryIntelActionDiagnostics.operationPlanDiagnostics.hasDismissButton ||
     !countryIntelClosed ||
     countrySelectionAfterClose.selectedCount !== 0 ||
+    chronicleHighlightLabel !== 'Главное событие' ||
     !chronicleDialogDiagnostics.exists ||
     chronicleDialogDiagnostics.role !== 'dialog' ||
     chronicleDialogDiagnostics.modal !== 'true' ||

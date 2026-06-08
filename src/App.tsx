@@ -2891,6 +2891,7 @@ function RightPanel({
               >
                 {entry.flag ? <span className={`flag ${entry.flag}`} /> : <span className={`event-icon ${entry.tone}`}>{entry.icon}</span>}
                 <div>
+                  {entry.kind === 'world' ? <span className="timeline-kind">Главное событие</span> : null}
                   <h3>{entry.title}</h3>
                   <p>{entry.text}</p>
                 </div>
