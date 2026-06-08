@@ -7,6 +7,23 @@ function isStorageAvailable() {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 }
 
+function arrayOrDefault<T>(value: unknown, fallback: T[]): T[] {
+  return Array.isArray(value) ? (value as T[]) : fallback;
+}
+
+function objectOrDefault<T extends object>(value: unknown, fallback: T): T {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as T) : fallback;
+}
+
+function numberOrDefault(value: unknown, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function nullableObjectOrDefault<T extends object>(value: unknown, fallback: T | null): T | null {
+  if (value === null || value === undefined) return fallback;
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as T) : fallback;
+}
+
 export function loadGameState(): GameState {
   if (!isStorageAvailable()) return initialGameState;
 
@@ -20,6 +37,21 @@ export function loadGameState(): GameState {
     return {
       ...initialGameState,
       ...parsed,
+      resources: arrayOrDefault(parsed.resources, initialGameState.resources),
+      orders: arrayOrDefault(parsed.orders, initialGameState.orders),
+      operationPlans: arrayOrDefault(parsed.operationPlans, initialGameState.operationPlans),
+      timelineEvents: arrayOrDefault(parsed.timelineEvents, initialGameState.timelineEvents),
+      letters: arrayOrDefault(parsed.letters, initialGameState.letters),
+      diplomacy: arrayOrDefault(parsed.diplomacy, initialGameState.diplomacy),
+      nations: arrayOrDefault(parsed.nations, initialGameState.nations),
+      worldEvents: arrayOrDefault(parsed.worldEvents, initialGameState.worldEvents),
+      chatMessages: arrayOrDefault(parsed.chatMessages, initialGameState.chatMessages),
+      quickActionTurns: objectOrDefault(parsed.quickActionTurns, initialGameState.quickActionTurns),
+      selectedCountry: nullableObjectOrDefault(parsed.selectedCountry, initialGameState.selectedCountry),
+      turnNumber: numberOrDefault(parsed.turnNumber, initialGameState.turnNumber),
+      nextActionId: numberOrDefault(parsed.nextActionId, initialGameState.nextActionId),
+      worldTension: numberOrDefault(parsed.worldTension, initialGameState.worldTension),
+      lastTurnReport: nullableObjectOrDefault(parsed.lastTurnReport, initialGameState.lastTurnReport),
       actionStatus: { kind: 'idle', message: '' },
       lastNotice: null,
     };

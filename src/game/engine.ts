@@ -505,7 +505,17 @@ export function pushLetter(letters: Letter[], letter: Letter) {
   const latest = letters[0];
 
   if (latest?.from === letter.from && latest.subject === letter.subject) {
-    return [{ ...latest, time: letter.time }, ...letters.slice(1)];
+    const status = letter.status ?? 'open';
+    const mergedLetter: Letter = {
+      ...latest,
+      ...letter,
+      time: letter.time,
+      status,
+      answeredBy: status === 'answered' ? letter.answeredBy ?? latest.answeredBy : undefined,
+      responses: letter.responses ?? (status === 'answered' ? latest.responses : undefined),
+    };
+
+    return [mergedLetter, ...letters.slice(1)];
   }
 
   return [letter, ...letters].slice(0, MAX_LETTERS);
@@ -692,11 +702,7 @@ export function cancelOrder(state: GameState, id: string): GameState {
   return createNotice(
     {
       ...state,
-      orders: state.orders.map((item) =>
-        item.id === id
-          ? { ...item, status: 'Отменен', statusClass: 'cancelled', due: 'снят', remainingTurns: 0 }
-          : item,
-      ),
+      orders: state.orders.filter((item) => item.id !== id),
       resources: applyResourceDelta(state.resources, refund),
       timelineEvents: pushTimeline(state.timelineEvents, {
         icon: '×',
@@ -1490,7 +1496,7 @@ export function endTurn(state: GameState): GameState {
     {
       ...state,
       resources: applyResourceDelta(state.resources, preWorldResourceDelta),
-      diplomacy: applyDiplomacyDelta(state.diplomacy, preWorldDiplomacyDelta),
+      diplomacy: applyDiplomacyDeltaWithUpserts(state.diplomacy, preWorldDiplomacyDelta),
       nations: applyNationDeltaToNations(state.nations, preWorldNationDelta),
     },
     nextTurn,
@@ -1547,7 +1553,7 @@ export function endTurn(state: GameState): GameState {
       orders: activeOrders,
       operationPlans: activeOperationPlans,
       resources: applyResourceDelta(state.resources, totalResourceDelta),
-      diplomacy: applyDiplomacyDelta(state.diplomacy, totalDiplomacyDelta),
+      diplomacy: applyDiplomacyDeltaWithUpserts(state.diplomacy, totalDiplomacyDelta),
       nations: world.nations,
       worldEvents: mergeWorldEvents(state.worldEvents, world.events),
       worldTension: world.worldTension,
@@ -1606,7 +1612,7 @@ export function applyValidatedEffect(state: GameState, effect: EngineEffect): Ga
           };
         }
 
-        return { ...currentState, diplomacy: applyDiplomacyDelta(currentState.diplomacy, { [countryName]: delta }) };
+        return { ...currentState, diplomacy: applyDiplomacyDeltaWithUpserts(currentState.diplomacy, { [countryName]: delta }) };
       }, withResources)
     : withResources;
   const withLetter = effect.letter ? { ...withDiplomacy, letters: pushLetter(withDiplomacy.letters, effect.letter) } : withDiplomacy;

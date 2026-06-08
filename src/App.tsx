@@ -55,6 +55,7 @@ import type {
   CountryIntelActionId,
   DiplomacyRelation,
   Letter,
+  LetterResponseOption,
   NationProfile,
   OperationPlan,
   Order,
@@ -744,10 +745,6 @@ function diplomacyPressureLabel(value: number) {
   if (value >= 50) return 'Высокое давление';
   if (value >= 30) return 'Наблюдение';
   return 'Спокойный канал';
-}
-
-function getDiplomacyDossierId(name: string) {
-  return `diplomacy-dossier-${name.replace(/\s+/g, '-').toLowerCase()}`;
 }
 
 function buildFallbackNation(selected: SelectedCountry): NationProfile {
@@ -2213,7 +2210,8 @@ function OrdersPanel({
   onRunPlan: (id: string) => void;
   onDismissPlan: (id: string) => void;
 }) {
-  const activeOrderCount = orders.filter((order) => order.statusClass !== 'cancelled').length;
+  const visibleOrders = useMemo(() => orders.filter((order) => order.statusClass !== 'cancelled'), [orders]);
+  const activeOrderCount = visibleOrders.length;
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   return (
@@ -2275,7 +2273,7 @@ function OrdersPanel({
         </section>
       ) : null}
       <div className="orders-list">
-        {orders.map((order) => {
+        {visibleOrders.map((order) => {
           const Icon = orderIcons[order.iconKey];
           const isCancelled = order.statusClass === 'cancelled';
           const isExpanded = expandedOrderId === order.id;
@@ -2399,6 +2397,210 @@ function PendingActionDialog({
   );
 }
 
+type LetterEntry = {
+  letter: Letter;
+  index: number;
+  id: string;
+};
+
+function LetterDialog({
+  entry,
+  responses,
+  onRespond,
+  onClose,
+}: {
+  entry: LetterEntry;
+  responses: LetterResponseOption[];
+  onRespond: (letterId: string, responseId: string) => void;
+  onClose: () => void;
+}) {
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+  const { letter, id } = entry;
+  const isAnswered = letter.status === 'answered';
+  const statusLabel = isAnswered ? letter.answeredBy || 'решено' : 'ожидает ответа';
+
+  useEffect(() => {
+    closeRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        className={`letter-dialog framed-panel ${isAnswered ? 'answered' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="letterDialogTitle"
+        aria-describedby="letterDialogBody"
+      >
+        <header className="dialog-heading">
+          <CountryFlagMark
+            countryKey={countryKeyByLocalizedName[letter.from]}
+            countryName={letter.from}
+            fallbackFlag={countryKeyByLocalizedName[letter.from]}
+          />
+          <div>
+            <small>Входящее письмо</small>
+            <h2 id="letterDialogTitle">{letter.subject}</h2>
+            <p>{letter.from}</p>
+          </div>
+          <em>{statusLabel}</em>
+          <button ref={closeRef} type="button" className="dialog-close" aria-label="Закрыть письмо" onClick={onClose}>
+            <X aria-hidden="true" />
+          </button>
+        </header>
+        <div className="letter-dialog-body">
+          <p id="letterDialogBody">
+            {letter.body || `Канцелярия ждёт решения по письму "${letter.subject}". Выберите ответ, который реально изменит состояние партии.`}
+          </p>
+          <div className="letter-dialog-responses" aria-label="Варианты ответа на письмо">
+            {responses.map((response) => (
+              <button
+                key={response.id}
+                type="button"
+                className={`letter-dialog-response ${response.tone}`}
+                disabled={isAnswered}
+                aria-label={`Ответить на письмо: ${response.label}`}
+                onClick={() => onRespond(id, response.id)}
+              >
+                <span>{response.label}</span>
+                <small>{response.summary}</small>
+              </button>
+            ))}
+          </div>
+        </div>
+        <footer className="dialog-footer">
+          <span>{isAnswered ? 'Решение принято. Письмо останется в архиве входящих.' : 'Ответ сразу попадёт в хронику и изменит дипломатию или ресурсы.'}</span>
+          <button type="button" className="dialog-secondary" onClick={onClose}>
+            {isAnswered ? 'Готово' : 'Закрыть'}
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function DiplomacyDialog({ item, nation, onClose }: { item: DiplomacyRelation; nation?: NationProfile; onClose: () => void }) {
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+  const pressure = nation?.pressure ?? diplomacyFallbackPressure(item.score);
+  const threat = nation?.threat ?? clampStat(pressure + (item.score < -20 ? 12 : -8));
+  const stability = nation?.stability ?? clampStat(72 - Math.max(0, pressure - 32));
+  const pressureTone = diplomacyPressureTone(pressure);
+  const pressureStyle = { '--value': `${pressure}%` } as CSSProperties;
+  const intentView = nation
+    ? getVisibleIntent(nation.currentIntent, item.score, item.tone)
+    : {
+        tone: 'unknown',
+        label: 'Досье',
+        title: 'Сводка ожидает разведку',
+        summary: 'Канцелярия видит отношения, но точное давление и ближайшие цели пока не подтверждены.',
+        meta: 'нет донесения',
+      };
+
+  useEffect(() => {
+    closeRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        className={`diplomacy-dialog framed-panel ${pressureTone}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="diplomacyDialogTitle"
+        aria-describedby="diplomacyDialogBody"
+      >
+        <header className="dialog-heading diplomacy-dialog-heading">
+          <CountryFlagMark countryName={item.name} fallbackFlag={item.flag} />
+          <div>
+            <small>Дипломатическое досье</small>
+            <h2 id="diplomacyDialogTitle">{item.name}</h2>
+            <p>{item.status}</p>
+          </div>
+          <strong>{item.score > 0 ? `+${item.score}` : item.score}</strong>
+          <button ref={closeRef} type="button" className="dialog-close text-close" aria-label={`Закрыть досье: ${item.name}`} onClick={onClose}>
+            Закрыть досье
+          </button>
+        </header>
+        <div className="diplomacy-dialog-body" id="diplomacyDialogBody">
+          <section className="dialog-meter" aria-label={`Давление: ${pressure} из 100`}>
+            <div>
+              <span>{diplomacyPressureLabel(pressure)}</span>
+              <b>{pressure}/100</b>
+            </div>
+            <i style={pressureStyle} aria-hidden="true" />
+          </section>
+          <dl className="diplomacy-dialog-metrics">
+            <div>
+              <dt>Угроза</dt>
+              <dd>{threat}/100</dd>
+            </div>
+            <div>
+              <dt>Устойчивость</dt>
+              <dd>{stability}/100</dd>
+            </div>
+            <div>
+              <dt>Фокус</dt>
+              <dd>{nation ? focusLabels[nation.focus] : 'не раскрыт'}</dd>
+            </div>
+          </dl>
+          <p className="diplomacy-dialog-activity">
+            {nation?.lastAction || 'Открытых донесений пока мало: нужны дипломатия, торговля или разведка.'}
+          </p>
+          <section className={`diplomacy-dialog-intent ${intentView.tone}`}>
+            <small>{intentView.label}</small>
+            <h3>{intentView.title}</h3>
+            <p>{intentView.summary}</p>
+            <em>{intentView.meta}</em>
+          </section>
+          {nation?.goals.length ? (
+            <section className="diplomacy-dialog-goals">
+              <h3>Наблюдаемые цели</h3>
+              <ul aria-label={`Цели державы: ${item.name}`}>
+                {nation.goals.slice(0, 4).map((goal) => (
+                  <li key={goal}>{goal}</li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </div>
+        <footer className="dialog-footer note-only">
+          <span>Досье обновляется через игровые действия: дипломатия, разведка, торговля и завершение хода.</span>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
 function RightPanel({
   timeline,
   letters,
@@ -2419,33 +2621,34 @@ function RightPanel({
   showToast: (message: string) => void;
 }) {
   const latestWorldEvent = worldEvents[0];
-  const [selectedLetterId, setSelectedLetterId] = useState<string | null>(null);
-  const [expandedDiplomacyName, setExpandedDiplomacyName] = useState<string | null>(null);
-  const selectedLetterEntry =
-    letters
-      .map((letter, index) => ({
+  const [openLetterId, setOpenLetterId] = useState<string | null>(null);
+  const [openDiplomacyName, setOpenDiplomacyName] = useState<string | null>(null);
+  const letterEntries = useMemo<LetterEntry[]>(
+    () =>
+      letters.map((letter, index) => ({
         letter,
         index,
         id: getLetterRuntimeId(letter, index),
-      }))
-      .find((entry) => entry.id === selectedLetterId) ||
-    (letters[0]
-      ? {
-          letter: letters[0],
-          index: 0,
-          id: getLetterRuntimeId(letters[0], 0),
-        }
-      : null);
-  const selectedLetter = selectedLetterEntry?.letter || null;
-  const selectedResponses = selectedLetter ? getLetterResponseOptions(selectedLetter) : [];
-  const selectedLetterAnswered = selectedLetter?.status === 'answered';
+      })),
+    [letters],
+  );
+  const openLetterEntry = openLetterId ? letterEntries.find((entry) => entry.id === openLetterId) || null : null;
+  const openLetterResponses = openLetterEntry ? getLetterResponseOptions(openLetterEntry.letter) : [];
+  const openDiplomacyItem = openDiplomacyName ? diplomacy.find((item) => item.name === openDiplomacyName) || null : null;
+  const openDiplomacyNation = openDiplomacyItem ? nations.find((entry) => entry.name === openDiplomacyItem.name) : undefined;
 
   useEffect(() => {
-    if (!expandedDiplomacyName || diplomacy.some((item) => item.name === expandedDiplomacyName)) return;
-    setExpandedDiplomacyName(null);
-  }, [diplomacy, expandedDiplomacyName]);
+    if (!openLetterId || letterEntries.some((entry) => entry.id === openLetterId)) return;
+    setOpenLetterId(null);
+  }, [letterEntries, openLetterId]);
+
+  useEffect(() => {
+    if (!openDiplomacyName || diplomacy.some((item) => item.name === openDiplomacyName)) return;
+    setOpenDiplomacyName(null);
+  }, [diplomacy, openDiplomacyName]);
 
   return (
+    <>
     <motion.aside
       className="side-panel right-panel"
       initial={{ opacity: 0, x: 16 }}
@@ -2493,21 +2696,21 @@ function RightPanel({
           </button>
         </div>
         <div className="mail-list" aria-label="Список входящих писем">
-          {letters.map((letter, index) => {
-            const letterId = getLetterRuntimeId(letter, index);
-            const isSelected = selectedLetterEntry?.id === letterId;
+          {letterEntries.map(({ letter, id }) => {
+            const isSelected = openLetterId === id;
             const isAnswered = letter.status === 'answered';
 
             return (
               <article
-                key={letterId}
+                key={id}
                 className={`mail-item${isSelected ? ' selected' : ''}${isAnswered ? ' answered' : ''}`}
               >
                 <button
                   type="button"
                   className="mail-row-button"
-                  aria-pressed={isSelected}
-                  onClick={() => setSelectedLetterId(letterId)}
+                  aria-haspopup="dialog"
+                  aria-expanded={isSelected}
+                  onClick={() => setOpenLetterId(id)}
                 >
                   <span className={`letter-seal ${letter.tone}`}>✉</span>
                   <div>
@@ -2520,38 +2723,6 @@ function RightPanel({
             );
           })}
         </div>
-        {selectedLetter ? (
-          <section className={`letter-detail ${selectedLetterAnswered ? 'answered' : ''}`} aria-label={`Письмо: ${selectedLetter.subject}`}>
-            <header>
-              <CountryFlagMark
-                countryKey={countryKeyByLocalizedName[selectedLetter.from]}
-                countryName={selectedLetter.from}
-                fallbackFlag={countryKeyByLocalizedName[selectedLetter.from]}
-              />
-              <div>
-                <b>{selectedLetter.subject}</b>
-                <small>{selectedLetter.from}</small>
-              </div>
-              <em>{selectedLetterAnswered ? selectedLetter.answeredBy || 'решено' : 'ожидает ответа'}</em>
-            </header>
-            <p>{selectedLetter.body || `Канцелярия ждёт решения по письму "${selectedLetter.subject}".`}</p>
-            <div className="letter-response-list">
-              {selectedResponses.map((response) => (
-                <button
-                  key={response.id}
-                  type="button"
-                  className={`letter-response ${response.tone}`}
-                  disabled={selectedLetterAnswered}
-                  aria-label={`Ответить на письмо: ${response.label}`}
-                  onClick={() => selectedLetterEntry && onRespondLetter(selectedLetterEntry.id, response.id)}
-                >
-                  <span>{response.label}</span>
-                  <small>{response.summary}</small>
-                </button>
-              ))}
-            </div>
-          </section>
-        ) : null}
         <button className="show-all" type="button" onClick={() => showToast('Показать все письма')}>
           Показать все письма
         </button>
@@ -2567,93 +2738,48 @@ function RightPanel({
         <ul>
           {diplomacy.map((item) => {
             const nation = nations.find((entry) => entry.name === item.name);
-            const isExpanded = expandedDiplomacyName === item.name;
+            const isOpen = openDiplomacyName === item.name;
             const pressure = nation?.pressure ?? diplomacyFallbackPressure(item.score);
-            const threat = nation?.threat ?? clampStat(pressure + (item.score < -20 ? 12 : -8));
-            const stability = nation?.stability ?? clampStat(72 - Math.max(0, pressure - 32));
-            const intentView = nation
-              ? getVisibleIntent(nation.currentIntent, item.score, item.tone)
-              : {
-                  tone: 'unknown',
-                  label: 'Досье',
-                  title: 'Сводка ожидает разведку',
-                  summary: 'Канцелярия видит отношения, но точное давление и цели пока не подтверждены.',
-                  meta: 'нет донесения',
-                };
-            const pressureTone = diplomacyPressureTone(pressure);
-            const pressureStyle = { '--value': `${pressure}%` } as CSSProperties;
-            const dossierId = getDiplomacyDossierId(item.name);
 
             return (
-              <li key={item.name} className={isExpanded ? 'expanded' : ''}>
+              <li key={item.name} className={isOpen ? 'selected' : ''}>
                 <button
                   type="button"
                   className="diplomacy-row"
-                  aria-expanded={isExpanded}
-                  aria-controls={dossierId}
-                  onClick={() => setExpandedDiplomacyName((current) => (current === item.name ? null : item.name))}
+                  aria-haspopup="dialog"
+                  aria-expanded={isOpen}
+                  onClick={() => setOpenDiplomacyName(item.name)}
                 >
                   <CountryFlagMark countryName={item.name} fallbackFlag={item.flag} />
                   <b>{item.name}</b>
                   <em className={item.tone}>{item.status}</em>
-                  <strong>{item.score > 0 ? `+${item.score}` : item.score}</strong>
+                  <strong className={`relation-score ${item.tone}`} title={`Индекс отношений с Россией: ${item.score > 0 ? `+${item.score}` : item.score}`}>
+                    <span>Отн.</span>
+                    <b>{item.score > 0 ? `+${item.score}` : item.score}</b>
+                  </strong>
                   <small>
                     <span>{`Давление ${pressure}/100`}</span>
                     <i>{nation?.lastAction || 'Досье ожидает разведданных'}</i>
                   </small>
                 </button>
-                {isExpanded ? (
-                  <section
-                    id={dossierId}
-                    className={`diplomacy-dossier ${pressureTone}`}
-                    aria-label={`Дипломатическое досье: ${item.name}`}
-                  >
-                    <div className="dossier-meter">
-                      <span>{`${item.name}: ${diplomacyPressureLabel(pressure)}`}</span>
-                      <b>{pressure}/100</b>
-                      <button
-                        type="button"
-                        className="dossier-close"
-                        aria-label={`Свернуть досье: ${item.name}`}
-                        onClick={() => setExpandedDiplomacyName(null)}
-                      >
-                        <X size={14} aria-hidden="true" />
-                      </button>
-                      <i style={pressureStyle} aria-hidden="true" />
-                    </div>
-                    <div className="dossier-metrics">
-                      <span>
-                        Угроза <b>{threat}/100</b>
-                      </span>
-                      <span>
-                        Устойчивость <b>{stability}/100</b>
-                      </span>
-                      <span>
-                        Фокус <b>{nation ? focusLabels[nation.focus] : 'не раскрыт'}</b>
-                      </span>
-                    </div>
-                    <p className="dossier-activity">{nation?.lastAction || 'Открытых донесений пока мало: нужна дипломатия, торговля или разведка.'}</p>
-                    <div className={`dossier-intent ${intentView.tone}`}>
-                      <small>{intentView.label}</small>
-                      <b>{intentView.title}</b>
-                      <p>{intentView.summary}</p>
-                      <em>{intentView.meta}</em>
-                    </div>
-                    {nation?.goals.length ? (
-                      <ul className="dossier-goals" aria-label={`Цели державы: ${item.name}`}>
-                        {nation.goals.slice(0, 2).map((goal) => (
-                          <li key={goal}>{goal}</li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </section>
-                ) : null}
               </li>
             );
           })}
         </ul>
       </section>
     </motion.aside>
+    {openLetterEntry ? (
+      <LetterDialog
+        entry={openLetterEntry}
+        responses={openLetterResponses}
+        onRespond={onRespondLetter}
+        onClose={() => setOpenLetterId(null)}
+      />
+    ) : null}
+    {openDiplomacyItem ? (
+      <DiplomacyDialog item={openDiplomacyItem} nation={openDiplomacyNation} onClose={() => setOpenDiplomacyName(null)} />
+    ) : null}
+    </>
   );
 }
 

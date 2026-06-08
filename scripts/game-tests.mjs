@@ -11,9 +11,10 @@ const clone = (value) => structuredClone(value);
 try {
   const { initialGameState } = await server.ssrLoadModule('/src/game/initialState.ts');
   const { gameReducer } = await server.ssrLoadModule('/src/game/reducer.ts');
-  const { applyValidatedEffect, createStrategicOrder, endTurn, getLetterRuntimeId } = await server.ssrLoadModule(
+  const { applyValidatedEffect, createStrategicOrder, endTurn, getLetterRuntimeId, pushLetter } = await server.ssrLoadModule(
     '/src/game/engine.ts',
   );
+  const { loadGameState } = await server.ssrLoadModule('/src/game/storage.ts');
   const { buildMapSignals, filterMapSignalsForMode } = await server.ssrLoadModule('/src/game/mapIntel.ts');
   const { fallbackJudgeCouncilCommand, validateEngineEffect } = await server.ssrLoadModule(
     '/src/game/fallbackArbitrator.ts',
@@ -41,6 +42,16 @@ try {
 
     assert.equal(afterSecond.lastNotice.kind, 'error');
     assert.equal(afterSecond.orders.length, afterFirst.orders.length);
+  });
+
+  test('cancelled order is removed from active orders and logged', () => {
+    const state = clone(initialGameState);
+    const orderId = state.orders[0].id;
+    const next = gameReducer(state, { type: 'CANCEL_ORDER', id: orderId });
+
+    assert.equal(next.orders.some((order) => order.id === orderId), false);
+    assert.equal(next.lastNotice.kind, 'success');
+    assert.equal(next.timelineEvents[0].title, 'Приказ отменен');
   });
 
   test('end turn advances turn and unlocks quick actions', () => {
@@ -109,6 +120,23 @@ try {
     assert.ok(next.nations.some((nation) => nation.name === 'Аргентина'));
     assert.equal(next.letters[letterIndex].status, 'answered');
     assert.ok(next.resources.find((resource) => resource.id === 'gold').value > state.resources.find((resource) => resource.id === 'gold').value);
+  });
+
+  test('duplicate incoming letter reopens instead of keeping stale answered state', () => {
+    const answeredLetter = {
+      ...initialGameState.letters[0],
+      status: 'answered',
+      answeredBy: 'Проверочный ответ',
+      time: 'решено',
+    };
+    const reopened = pushLetter([answeredLetter, ...initialGameState.letters.slice(1)], {
+      ...initialGameState.letters[0],
+      time: 'только что',
+    });
+
+    assert.equal(reopened[0].status, 'open');
+    assert.equal(reopened[0].answeredBy, undefined);
+    assert.equal(reopened[0].time, 'только что');
   });
 
   test('diplomatic council command changes selected relation safely', () => {
@@ -511,6 +539,81 @@ try {
     assert.ok(next.lastTurnReport.warnings.length > 0);
     assert.ok(next.diplomacy.find((relation) => relation.name === 'Украина').score < -80);
     assert.equal(next.orders.length, 0);
+  });
+
+  test('completed order can add a new diplomacy target', () => {
+    const state = {
+      ...clone(initialGameState),
+      orders: [
+        {
+          id: 'test-new-diplomacy-target',
+          iconKey: 'mail',
+          title: 'Открыть канал с Алжиром',
+          owner: 'Канцелярия',
+          target: 'Алжир',
+          status: 'В пути',
+          statusClass: 'moving',
+          due: '1 день',
+          remainingTurns: 1,
+          totalTurns: 1,
+          reward: { gold: 10 },
+          diplomacyDelta: { Алжир: 18 },
+          completeText: 'Канцелярия открыла осторожный дипломатический канал с Алжиром.',
+          riskLevel: 'low',
+          successChance: 100,
+        },
+      ],
+    };
+
+    const next = endTurn(state);
+    const relation = next.diplomacy.find((item) => item.name === 'Алжир');
+
+    assert.ok(relation);
+    assert.equal(relation.score, 18);
+    assert.equal(next.orders.length, 0);
+  });
+
+  test('loadGameState repairs corrupted current-version save shapes', () => {
+    const previousWindow = globalThis.window;
+    const saved = JSON.stringify({
+      version: initialGameState.version,
+      resources: null,
+      letters: null,
+      diplomacy: null,
+      nations: null,
+      timelineEvents: null,
+      chatMessages: null,
+      quickActionTurns: [],
+      selectedCountry: [],
+      lastTurnReport: [],
+      turnNumber: '132',
+    });
+
+    globalThis.window = {
+      localStorage: {
+        getItem: () => saved,
+        setItem: () => undefined,
+        removeItem: () => undefined,
+      },
+    };
+
+    try {
+      const loaded = loadGameState();
+
+      assert.ok(Array.isArray(loaded.resources));
+      assert.ok(Array.isArray(loaded.letters));
+      assert.ok(Array.isArray(loaded.diplomacy));
+      assert.deepEqual(loaded.quickActionTurns, initialGameState.quickActionTurns);
+      assert.equal(loaded.selectedCountry, initialGameState.selectedCountry);
+      assert.equal(loaded.lastTurnReport, initialGameState.lastTurnReport);
+      assert.equal(loaded.turnNumber, initialGameState.turnNumber);
+    } finally {
+      if (previousWindow === undefined) {
+        delete globalThis.window;
+      } else {
+        globalThis.window = previousWindow;
+      }
+    }
   });
 
   console.log(JSON.stringify({ passed: results.length, tests: results }, null, 2));

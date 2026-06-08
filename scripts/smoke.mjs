@@ -239,37 +239,45 @@ try {
   if ((await diplomacyDossierRow.getAttribute('aria-expanded')) !== 'true') {
     await diplomacyDossierRow.click();
   }
-  await page.waitForSelector('.diplomacy-dossier');
+  await page.waitForSelector('.diplomacy-dialog');
   const diplomacyDossierDiagnostics = await page.evaluate(() => {
     const row = document.querySelector('.diplomacy-row[aria-expanded="true"]') || document.querySelector('.diplomacy-row');
-    const dossier = document.querySelector('.diplomacy-dossier');
-    const item = row?.closest('li');
-    const meter = dossier?.querySelector('.dossier-meter');
-    const activity = dossier?.querySelector('.dossier-activity');
-    const metrics = [...(dossier?.querySelectorAll('.dossier-metrics span') || [])].map((node) =>
+    const dialog = document.querySelector('.diplomacy-dialog');
+    const rightPanel = document.querySelector('.right-panel');
+    const meter = dialog?.querySelector('.dialog-meter');
+    const activity = dialog?.querySelector('.diplomacy-dialog-activity');
+    const metrics = [...(dialog?.querySelectorAll('.diplomacy-dialog-metrics dd') || [])].map((node) =>
       node.textContent?.replace(/\s+/g, ' ').trim(),
     );
-    const rowRect = row?.getBoundingClientRect();
-    const itemRect = item?.getBoundingClientRect();
-    const dossierRect = dossier?.getBoundingClientRect();
+    const dialogRect = dialog?.getBoundingClientRect();
+    const rightPanelRect = rightPanel?.getBoundingClientRect();
+    const textNodes = [...(dialog?.querySelectorAll('p, li, dd, button, small') || [])];
+    const smallTextNodes = textNodes.filter((node) => Number.parseFloat(getComputedStyle(node).fontSize) < 12);
+    const overflowingNodes = [...(dialog?.querySelectorAll('*') || [])].filter(
+      (node) => node.scrollWidth > node.clientWidth + 2,
+    );
 
     return {
-      exists: Boolean(dossier),
+      exists: Boolean(dialog),
+      role: dialog?.getAttribute('role') || '',
+      modal: dialog?.getAttribute('aria-modal') || '',
       rowExpanded: row?.getAttribute('aria-expanded') === 'true',
       meterText: meter?.textContent?.replace(/\s+/g, ' ').trim() || '',
       activityText: activity?.textContent?.replace(/\s+/g, ' ').trim() || '',
       metrics,
-      goalCount: dossier?.querySelectorAll('.dossier-goals li').length || 0,
-      visibleHeight: dossierRect?.height || 0,
-      itemHeight: itemRect?.height || 0,
-      rowHeight: rowRect?.height || 0,
-      closeButtonExists: Boolean(dossier?.querySelector('.dossier-close')),
+      goalCount: dialog?.querySelectorAll('.diplomacy-dialog-goals li').length || 0,
+      visibleHeight: dialogRect?.height || 0,
+      visibleWidth: dialogRect?.width || 0,
+      outsideRightPanel: Boolean(dialogRect && rightPanelRect && dialogRect.left < rightPanelRect.left - 12),
+      closeButtonExists: Boolean(dialog?.querySelector('.dialog-close')),
+      smallTextCount: smallTextNodes.length,
+      overflowCount: overflowingNodes.length,
     };
   });
-  await page.locator('.dossier-close').click();
-  await page.waitForFunction(() => document.querySelectorAll('.diplomacy-dossier').length === 0);
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => document.querySelectorAll('.diplomacy-dialog').length === 0);
   const diplomacyDossierCloseDiagnostics = {
-    closed: (await page.locator('.diplomacy-dossier').count()) === 0,
+    closed: (await page.locator('.diplomacy-dialog').count()) === 0,
     expandedRows: await page.locator('.diplomacy-row[aria-expanded="true"]').count(),
   };
 
@@ -298,28 +306,75 @@ try {
       allianceSelected: alliance?.getAttribute('aria-selected') === 'true',
     };
   });
-  const letterResponseBefore = await page.evaluate(() => ({
-    hasDetail: Boolean(document.querySelector('.letter-detail')),
-    responseCount: document.querySelectorAll('.letter-response').length,
-    firstResponse: document.querySelector('.letter-response span')?.textContent?.trim() || '',
-  }));
-  await page.locator('.letter-response').first().click();
+  await page.locator('.mail-row-button').first().click();
+  await page.waitForSelector('.letter-dialog');
+  const letterResponseBefore = await page.evaluate(() => {
+    const dialog = document.querySelector('.letter-dialog');
+    const rightPanel = document.querySelector('.right-panel');
+    const dialogRect = dialog?.getBoundingClientRect();
+    const rightPanelRect = rightPanel?.getBoundingClientRect();
+    const responseButtons = [...document.querySelectorAll('.letter-dialog-response')];
+    const textNodes = [...(dialog?.querySelectorAll('p, button, small, span') || [])];
+    const smallTextNodes = textNodes.filter((node) => Number.parseFloat(getComputedStyle(node).fontSize) < 12);
+    const overflowingNodes = [...(dialog?.querySelectorAll('*') || [])].filter(
+      (node) => node.scrollWidth > node.clientWidth + 2,
+    );
+
+    return {
+      hasDialog: Boolean(dialog),
+      role: dialog?.getAttribute('role') || '',
+      modal: dialog?.getAttribute('aria-modal') || '',
+      responseCount: responseButtons.length,
+      firstResponse: responseButtons[0]?.querySelector('span')?.textContent?.trim() || '',
+      visibleWidth: dialogRect?.width || 0,
+      visibleHeight: dialogRect?.height || 0,
+      outsideRightPanel: Boolean(dialogRect && rightPanelRect && dialogRect.left < rightPanelRect.left - 12),
+      closeButtonExists: Boolean(dialog?.querySelector('.dialog-close')),
+      smallTextCount: smallTextNodes.length,
+      overflowCount: overflowingNodes.length,
+    };
+  });
+  await page.locator('.letter-dialog-response').first().click();
   await page.waitForTimeout(120);
   const letterResponseAfter = await page.evaluate(() => ({
     answeredCount: document.querySelectorAll('.mail-item.answered').length,
-    selectedStatus: document.querySelector('.letter-detail em')?.textContent?.trim() || '',
+    selectedStatus: document.querySelector('.letter-dialog em')?.textContent?.trim() || '',
     timelineTop: document.querySelector('.timeline-panel article h3')?.textContent?.trim() || '',
     timelineHasResponse: [...document.querySelectorAll('.timeline-panel article h3')].some((node) =>
       node.textContent?.includes('Ответ отправлен') || node.textContent?.includes('торговый канал'),
     ),
-    responseDisabled: Boolean(document.querySelector('.letter-response')?.disabled),
+    responseDisabled: Boolean(document.querySelector('.letter-dialog-response')?.disabled),
   }));
+  await page.locator('.letter-dialog .dialog-close').click();
+  await page.waitForFunction(() => document.querySelectorAll('.letter-dialog').length === 0);
+  const letterDialogClosed = (await page.locator('.letter-dialog').count()) === 0;
 
-  await page.locator('.order-card').first().locator('button').last().click();
-  const cancelledStyle = await page.locator('.order-card').first().evaluate((node) => ({
-    opacity: getComputedStyle(node).opacity,
-    filter: getComputedStyle(node).filter,
+  const orderRemovalBefore = await page.evaluate(() => ({
+    count: document.querySelectorAll('.order-card').length,
+    heading: document.querySelector('.orders-panel .panel-heading h2 span')?.textContent || '',
+    firstTitle: document.querySelector('.order-card h3')?.textContent?.trim() || '',
   }));
+  await page.locator('.order-card').first().locator('button').last().click();
+  await page.waitForTimeout(120);
+  const orderRemovalAfter = await page.evaluate(() => ({
+    count: document.querySelectorAll('.order-card').length,
+    heading: document.querySelector('.orders-panel .panel-heading h2 span')?.textContent || '',
+    firstTitle: document.querySelector('.order-card h3')?.textContent?.trim() || '',
+    cancelledVisible: [...document.querySelectorAll('.order-card .status')].some((node) =>
+      node.textContent?.includes('Отмен'),
+    ),
+    timelineTop: document.querySelector('.timeline-panel article h3')?.textContent?.trim() || '',
+    timelineHasCancel: [...document.querySelectorAll('.timeline-panel article h3')].some((node) =>
+      node.textContent?.includes('Приказ отменен'),
+    ),
+  }));
+  const orderRemovalDiagnostics = {
+    before: orderRemovalBefore,
+    after: orderRemovalAfter,
+    removedFromList: orderRemovalAfter.count === Math.max(0, orderRemovalBefore.count - 1),
+    firstChanged: orderRemovalBefore.count <= 1 || orderRemovalAfter.firstTitle !== orderRemovalBefore.firstTitle,
+    logged: orderRemovalAfter.timelineHasCancel,
+  };
   await page.locator('.create-order').click();
   await page.waitForSelector('[role="dialog"]');
   const dialogOpened = await page.locator('[role="dialog"]').isVisible();
@@ -372,14 +427,13 @@ try {
     const mail = rect('.mail-panel');
     const diplomacy = rect('.diplomacy-panel');
     const mailList = rect('.mail-list');
-    const letter = rect('.letter-detail');
     const showAll = rect('.mail-panel .show-all');
     const timelinePanel = document.querySelector('.timeline-panel');
     const mailPanel = document.querySelector('.mail-panel');
 
     return {
       panelsStacked: ordered(timeline, mail) && ordered(mail, diplomacy),
-      mailPartsStacked: ordered(mailList, letter) && ordered(letter, showAll),
+      mailPartsStacked: ordered(mailList, showAll),
       showAllInsideMail: Boolean(showAll && mail && showAll.bottom <= mail.bottom + 1),
       timelineOverflowY: timelinePanel ? getComputedStyle(timelinePanel).overflowY : '',
       mailOverflowY: mailPanel ? getComputedStyle(mailPanel).overflowY : '',
@@ -388,19 +442,16 @@ try {
 
   const mailPanelReadabilityDiagnostics = await page.evaluate(() => {
     const list = document.querySelector('.mail-list');
-    const responseList = document.querySelector('.letter-response-list');
-    const detail = document.querySelector('.letter-detail');
-    if (!list || !responseList || !detail) {
+    const showAll = document.querySelector('.mail-panel .show-all');
+    const mailPanel = document.querySelector('.mail-panel');
+    if (!list || !showAll || !mailPanel) {
       return { exists: false };
     }
 
     const listRect = list.getBoundingClientRect();
-    const responseListRect = responseList.getBoundingClientRect();
+    const showAllRect = showAll.getBoundingClientRect();
+    const mailPanelRect = mailPanel.getBoundingClientRect();
     const rowBoxes = [...document.querySelectorAll('.mail-row-button')].map((node) => {
-      const box = node.getBoundingClientRect();
-      return { top: box.top, bottom: box.bottom, height: box.height };
-    });
-    const responseBoxes = [...document.querySelectorAll('.letter-response')].map((node) => {
       const box = node.getBoundingClientRect();
       return { top: box.top, bottom: box.bottom, height: box.height };
     });
@@ -409,21 +460,19 @@ try {
       return !next || row.bottom <= next.top + 1;
     });
     const fullyVisibleRows = rowBoxes.filter((row) => row.top >= listRect.top - 1 && row.bottom <= listRect.bottom + 1);
-    const fullyVisibleResponses = responseBoxes.filter(
-      (row) => row.top >= responseListRect.top - 1 && row.bottom <= responseListRect.bottom + 1,
-    );
 
     return {
       exists: true,
       listOverflowY: getComputedStyle(list).overflowY,
-      responseOverflowY: getComputedStyle(responseList).overflowY,
       rowCount: rowBoxes.length,
       minRowHeight: rowBoxes.reduce((min, row) => Math.min(min, row.height), Number.POSITIVE_INFINITY),
       orderedRows,
       fullyVisibleRowCount: fullyVisibleRows.length,
-      responseListHeight: responseListRect.height,
-      fullyVisibleResponseCount: fullyVisibleResponses.length,
-      detailHeight: detail.getBoundingClientRect().height,
+      hasInlineDetail: Boolean(document.querySelector('.mail-panel .letter-detail')),
+      hasInlineResponses: Boolean(document.querySelector('.mail-panel .letter-response-list')),
+      showAllInsidePanel: showAllRect.bottom <= mailPanelRect.bottom + 1,
+      listBeforeButton: listRect.bottom <= showAllRect.top + 1,
+      listHeight: listRect.height,
     };
   });
 
@@ -671,8 +720,9 @@ try {
     chatTabDiagnostics,
     letterResponseBefore,
     letterResponseAfter,
+    letterDialogClosed,
     chatAdded: chatText.includes('React smoke message'),
-    cancelledStyle,
+    orderRemovalDiagnostics,
     dialogOpened,
     orderCounterAfterDialog,
     composeAction,
@@ -722,23 +772,41 @@ try {
     !diplomacyScrollDiagnostics.canReachBottom ||
     !diplomacyScrollDiagnostics.contained ||
     !diplomacyDossierDiagnostics.exists ||
+    diplomacyDossierDiagnostics.role !== 'dialog' ||
+    diplomacyDossierDiagnostics.modal !== 'true' ||
     !diplomacyDossierDiagnostics.rowExpanded ||
     !diplomacyDossierDiagnostics.meterText.includes('/100') ||
     diplomacyDossierDiagnostics.activityText.length < 20 ||
     diplomacyDossierDiagnostics.metrics.length < 3 ||
-    diplomacyDossierDiagnostics.visibleHeight < 110 ||
-    diplomacyDossierDiagnostics.itemHeight <= diplomacyDossierDiagnostics.rowHeight + 40 ||
+    diplomacyDossierDiagnostics.visibleHeight < 360 ||
+    diplomacyDossierDiagnostics.visibleWidth < 680 ||
+    !diplomacyDossierDiagnostics.outsideRightPanel ||
     !diplomacyDossierDiagnostics.closeButtonExists ||
+    diplomacyDossierDiagnostics.smallTextCount > 0 ||
+    diplomacyDossierDiagnostics.overflowCount > 0 ||
     !diplomacyDossierCloseDiagnostics.closed ||
     diplomacyDossierCloseDiagnostics.expandedRows !== 0 ||
     !result.chatAdded ||
     chatTabDiagnostics.activeText !== 'Альянс' ||
     !chatTabDiagnostics.allianceSelected ||
-    !letterResponseBefore.hasDetail ||
+    !letterResponseBefore.hasDialog ||
+    letterResponseBefore.role !== 'dialog' ||
+    letterResponseBefore.modal !== 'true' ||
     letterResponseBefore.responseCount < 2 ||
+    letterResponseBefore.visibleHeight < 330 ||
+    letterResponseBefore.visibleWidth < 640 ||
+    !letterResponseBefore.outsideRightPanel ||
+    !letterResponseBefore.closeButtonExists ||
+    letterResponseBefore.smallTextCount > 0 ||
+    letterResponseBefore.overflowCount > 0 ||
     letterResponseAfter.answeredCount < 1 ||
     !letterResponseAfter.responseDisabled ||
     !letterResponseAfter.timelineHasResponse ||
+    !letterDialogClosed ||
+    !orderRemovalDiagnostics.removedFromList ||
+    !orderRemovalDiagnostics.firstChanged ||
+    orderRemovalDiagnostics.after.cancelledVisible ||
+    !orderRemovalDiagnostics.logged ||
     !dialogOpened ||
     !orderCounterAfterDialog?.includes('(3/5)') ||
     !composeAction.composeButtonDisabled ||
@@ -752,13 +820,14 @@ try {
     rightPanelLayoutDiagnostics.mailOverflowY === 'visible' ||
     !mailPanelReadabilityDiagnostics.exists ||
     !['auto', 'scroll'].includes(mailPanelReadabilityDiagnostics.listOverflowY) ||
-    !['auto', 'scroll'].includes(mailPanelReadabilityDiagnostics.responseOverflowY) ||
     mailPanelReadabilityDiagnostics.minRowHeight < 38 ||
     !mailPanelReadabilityDiagnostics.orderedRows ||
     mailPanelReadabilityDiagnostics.fullyVisibleRowCount < 2 ||
-    mailPanelReadabilityDiagnostics.responseListHeight < 72 ||
-    mailPanelReadabilityDiagnostics.fullyVisibleResponseCount < 2 ||
-    mailPanelReadabilityDiagnostics.detailHeight < 150 ||
+    mailPanelReadabilityDiagnostics.hasInlineDetail ||
+    mailPanelReadabilityDiagnostics.hasInlineResponses ||
+    !mailPanelReadabilityDiagnostics.showAllInsidePanel ||
+    !mailPanelReadabilityDiagnostics.listBeforeButton ||
+    mailPanelReadabilityDiagnostics.listHeight < 90 ||
     timelineRowDiagnostics.count < 3 ||
     timelineRowDiagnostics.minHeight < 50 ||
     !timelineRowDiagnostics.textFits ||
