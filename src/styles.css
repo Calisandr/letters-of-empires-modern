@@ -3413,6 +3413,29 @@ input:focus-visible,
   color: #df7469;
 }
 
+.chat-empty {
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+  align-content: center;
+  gap: 6px;
+  padding: 20px;
+  color: rgba(176, 196, 170, .84);
+  text-align: center;
+}
+
+.chat-empty b {
+  color: #f0d083;
+  font: 700 16px/1.1 var(--serif);
+}
+
+.chat-empty span {
+  max-width: 360px;
+  color: rgba(218, 209, 176, .78);
+  font-size: 13px;
+  line-height: 1.42;
+}
+
 .orders-empty {
   display: grid;
   place-items: center;

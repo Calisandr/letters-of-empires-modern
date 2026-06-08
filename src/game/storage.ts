@@ -1,5 +1,5 @@
 import { GAME_STATE_VERSION, initialGameState } from './initialState';
-import type { GameState } from './types';
+import type { ChatChannel, ChatMessage, GameState } from './types';
 
 const SAVE_KEY = 'letters-of-empires:game:v1';
 
@@ -24,6 +24,33 @@ function nullableObjectOrDefault<T extends object>(value: unknown, fallback: T |
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as T) : fallback;
 }
 
+function isChatChannel(value: unknown): value is ChatChannel {
+  return value === 'council' || value === 'world' || value === 'alliance';
+}
+
+function stringOrDefault(value: unknown, fallback: string) {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function inferChatChannel(message: Partial<ChatMessage>): ChatChannel {
+  if (isChatChannel(message.channel)) return message.channel;
+  if (message.id?.startsWith('world-chat-') || message.id?.startsWith('world-')) return 'world';
+  if (message.id?.startsWith('alliance-')) return 'alliance';
+  if (message.faction === 'Совет' || message.faction === 'Канцлер') return 'council';
+  return 'world';
+}
+
+function normalizeChatMessages(value: unknown) {
+  return arrayOrDefault<Partial<ChatMessage>>(value, initialGameState.chatMessages).map((message, index) => ({
+    id: stringOrDefault(message.id, `chat-repaired-${index}`),
+    channel: inferChatChannel(message),
+    time: stringOrDefault(message.time, '--:--'),
+    faction: stringOrDefault(message.faction, 'Неизвестно'),
+    flag: stringOrDefault(message.flag, 'neutral'),
+    text: stringOrDefault(message.text, ''),
+  }));
+}
+
 export function loadGameState(): GameState {
   if (!isStorageAvailable()) return initialGameState;
 
@@ -45,7 +72,7 @@ export function loadGameState(): GameState {
       diplomacy: arrayOrDefault(parsed.diplomacy, initialGameState.diplomacy),
       nations: arrayOrDefault(parsed.nations, initialGameState.nations),
       worldEvents: arrayOrDefault(parsed.worldEvents, initialGameState.worldEvents),
-      chatMessages: arrayOrDefault(parsed.chatMessages, initialGameState.chatMessages),
+      chatMessages: normalizeChatMessages(parsed.chatMessages),
       quickActionTurns: objectOrDefault(parsed.quickActionTurns, initialGameState.quickActionTurns),
       selectedCountry: nullableObjectOrDefault(parsed.selectedCountry, initialGameState.selectedCountry),
       turnNumber: numberOrDefault(parsed.turnNumber, initialGameState.turnNumber),

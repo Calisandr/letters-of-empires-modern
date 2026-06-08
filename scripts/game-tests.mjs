@@ -83,7 +83,7 @@ try {
 
     assert.equal(next.orders.length, state.orders.length + 1);
     assert.ok(next.timelineEvents[0].title.includes('Новый приказ'));
-    assert.ok(next.chatMessages.some((message) => message.faction === 'Совет'));
+    assert.ok(next.chatMessages.some((message) => message.faction === 'Совет' && message.channel === 'council'));
   });
 
   test('casual council chat does not create an accidental order', () => {
@@ -95,7 +95,40 @@ try {
     });
 
     assert.equal(next.orders.length, state.orders.length);
-    assert.ok(next.chatMessages.some((message) => message.faction === 'Совет'));
+    assert.ok(next.chatMessages.some((message) => message.faction === 'Совет' && message.channel === 'council'));
+  });
+
+  test('world chat publishes statements without creating council orders', () => {
+    const state = clone(initialGameState);
+    const next = gameReducer(state, {
+      type: 'SUBMIT_CHAT_MESSAGE',
+      channel: 'world',
+      text: 'Россия предлагает общий торговый коридор через Черное море',
+      time: '13:15',
+    });
+    const newMessages = next.chatMessages.slice(state.chatMessages.length);
+
+    assert.equal(next.orders.length, state.orders.length);
+    assert.ok(newMessages.every((message) => message.channel === 'world'));
+    assert.ok(newMessages.some((message) => message.faction === 'Россия'));
+    assert.ok(next.timelineEvents[0].title.includes('Публичное заявление'));
+  });
+
+  test('alliance chat stays private and gets an allied reply', () => {
+    const state = clone(initialGameState);
+    const next = gameReducer(state, {
+      type: 'SUBMIT_CHAT_MESSAGE',
+      channel: 'alliance',
+      text: 'Союзникам: согласовать защиту караванов',
+      time: '13:20',
+    });
+    const newMessages = next.chatMessages.slice(state.chatMessages.length);
+
+    assert.equal(next.orders.length, state.orders.length);
+    assert.ok(newMessages.every((message) => message.channel === 'alliance'));
+    assert.ok(newMessages.some((message) => message.faction === 'Россия'));
+    assert.ok(newMessages.some((message) => message.faction !== 'Россия'));
+    assert.equal(next.lastNotice.kind, 'success');
   });
 
   test('letter response applies diplomacy and marks the letter answered', () => {
@@ -348,6 +381,7 @@ try {
     assert.equal(next.lastTurnReport.turn, next.turnNumber);
     assert.ok(next.worldEvents.length > state.worldEvents.length);
     assert.ok(next.chatMessages.length > state.chatMessages.length);
+    assert.ok(next.chatMessages.slice(state.chatMessages.length).every((message) => message.channel === 'world'));
     assert.ok(next.worldTension >= 0 && next.worldTension <= 100);
   });
 
@@ -607,6 +641,51 @@ try {
       assert.equal(loaded.selectedCountry, initialGameState.selectedCountry);
       assert.equal(loaded.lastTurnReport, initialGameState.lastTurnReport);
       assert.equal(loaded.turnNumber, initialGameState.turnNumber);
+      assert.ok(loaded.chatMessages.every((message) => message.channel));
+    } finally {
+      if (previousWindow === undefined) {
+        delete globalThis.window;
+      } else {
+        globalThis.window = previousWindow;
+      }
+    }
+  });
+
+  test('loadGameState migrates legacy chat messages into channels', () => {
+    const previousWindow = globalThis.window;
+    const saved = JSON.stringify({
+      ...initialGameState,
+      chatMessages: [
+        {
+          id: 'world-chat-124-france-1',
+          time: '12:00',
+          flag: 'france',
+          faction: 'Франция',
+          text: 'Публичное старое сообщение',
+        },
+        {
+          id: 'legacy-council-message',
+          time: '12:01',
+          flag: 'neutral',
+          faction: 'Совет',
+          text: 'Старое сообщение совета',
+        },
+      ],
+    });
+
+    globalThis.window = {
+      localStorage: {
+        getItem: () => saved,
+        setItem: () => undefined,
+        removeItem: () => undefined,
+      },
+    };
+
+    try {
+      const loaded = loadGameState();
+
+      assert.equal(loaded.chatMessages[0].channel, 'world');
+      assert.equal(loaded.chatMessages[1].channel, 'council');
     } finally {
       if (previousWindow === undefined) {
         delete globalThis.window;

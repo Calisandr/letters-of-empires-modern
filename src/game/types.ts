@@ -28,6 +28,7 @@ export type StrategicResponseKind =
   | 'stabilize-realm'
   | 'industrial-contract'
   | 'recon-intent';
+export type ChatChannel = 'council' | 'world' | 'alliance';
 
 export type ResourceState = {
   id: ResourceId;
@@ -183,6 +184,7 @@ export type NationProfile = {
 
 export type ChatMessage = {
   id: string;
+  channel: ChatChannel;
   time: string;
   faction: string;
   flag: string;
@@ -299,6 +301,7 @@ export type AiArbitrationDecision = {
 export type GameAction =
   | { type: 'SELECT_COUNTRY'; country: SelectedCountry }
   | { type: 'CLEAR_SELECTED_COUNTRY' }
+  | { type: 'SUBMIT_CHAT_MESSAGE'; channel: ChatChannel; text: string; time: string }
   | { type: 'SUBMIT_COUNCIL_MESSAGE'; text: string; time: string }
   | { type: 'RUN_QUICK_ACTION'; id: QuickActionId }
   | { type: 'RUN_COUNTRY_INTEL_ACTION'; id: CountryIntelActionId; country: SelectedCountry }

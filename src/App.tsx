@@ -50,6 +50,7 @@ import { buildMapSignals, filterMapSignalsForMode, type MapModeId, type MapSigna
 import { gameReducer } from './game/reducer';
 import { loadGameState, saveGameState } from './game/storage';
 import type {
+  ChatChannel,
   ChatMessage,
   CountryIntelActionId,
   DiplomacyRelation,
@@ -70,6 +71,22 @@ import type {
 
 type ToastState = {
   message: string;
+};
+
+const chatChannelByTab = {
+  Совет: 'council',
+  Мир: 'world',
+  Альянс: 'alliance',
+} as const satisfies Record<string, ChatChannel>;
+
+type ChatTabLabel = keyof typeof chatChannelByTab;
+
+const chatTabs = Object.keys(chatChannelByTab) as ChatTabLabel[];
+
+const emptyChatToastByChannel: Record<ChatChannel, string> = {
+  council: 'Введите распоряжение совету',
+  world: 'Введите публичное заявление',
+  alliance: 'Введите сообщение союзникам',
 };
 
 type MapLayerId = 'borders' | 'labels' | 'capitals' | 'ports' | 'regions' | 'routes' | 'intel';
@@ -1112,7 +1129,7 @@ function App() {
   const [closedIntelKey, setClosedIntelKey] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [chatInput, setChatInput] = useState('');
-  const [activeChatTab, setActiveChatTab] = useState('Совет');
+  const [activeChatTab, setActiveChatTab] = useState<ChatTabLabel>('Совет');
   const [activeUtilityPanel, setActiveUtilityPanel] = useState<string | null>(null);
   const [pendingQuickAction, setPendingQuickAction] = useState<QuickActionId | null>(null);
   const [turnReportOpen, setTurnReportOpen] = useState(false);
@@ -1184,6 +1201,19 @@ function App() {
   }, [mapLayers]);
 
   const activeMapMode = mapModes[mapModeIndex];
+  const activeChatChannel = chatChannelByTab[activeChatTab];
+  const visibleChatMessages = useMemo(
+    () => chatMessages.filter((message) => message.channel === activeChatChannel),
+    [activeChatChannel, chatMessages],
+  );
+  const allianceNames = useMemo(
+    () =>
+      diplomacy
+        .filter((relation) => relation.tone === 'ally' || relation.score >= 100)
+        .map((relation) => relation.name)
+        .slice(0, 3),
+    [diplomacy],
+  );
   const mapSignals = useMemo(() => buildMapSignals(gameState, countryKeyByLocalizedName), [gameState]);
   const visibleMapSignals = useMemo(
     () => filterMapSignalsForMode(mapSignals, activeMapMode.id),
@@ -1231,7 +1261,7 @@ function App() {
   useEffect(() => {
     const messages = chatMessagesRef.current;
     if (messages) messages.scrollTop = messages.scrollHeight;
-  }, [chatMessages]);
+  }, [activeChatTab, visibleChatMessages]);
 
   const handleNavClick = (label: string) => {
     setActiveNav(label);
@@ -1531,7 +1561,7 @@ function App() {
     event.preventDefault();
     const text = chatInput.trim();
     if (!text) {
-      showToast('Введите сообщение совету');
+      showToast(emptyChatToastByChannel[activeChatChannel]);
       return;
     }
 
@@ -1540,7 +1570,7 @@ function App() {
       minute: '2-digit',
     }).format(new Date());
 
-    dispatchGame({ type: 'SUBMIT_COUNCIL_MESSAGE', text, time });
+    dispatchGame({ type: 'SUBMIT_CHAT_MESSAGE', channel: activeChatChannel, text, time });
     setChatInput('');
   };
 
@@ -1746,10 +1776,12 @@ function App() {
 
           <section className="bottom-dock">
             <ChatPanel
-              messages={chatMessages}
+              messages={visibleChatMessages}
               input={chatInput}
               activeTab={activeChatTab}
+              activeChannel={activeChatChannel}
               selectedCountryName={gameState.selectedCountry?.name || 'Россия'}
+              allianceNames={allianceNames}
               turnNumber={turnNumber}
               orderCount={orders.filter((order) => order.statusClass !== 'cancelled').length}
               worldTension={worldTension}
@@ -2134,7 +2166,9 @@ function ChatPanel({
   messages,
   input,
   activeTab,
+  activeChannel,
   selectedCountryName,
+  allianceNames,
   turnNumber,
   orderCount,
   worldTension,
@@ -2145,18 +2179,79 @@ function ChatPanel({
 }: {
   messages: ChatMessage[];
   input: string;
-  activeTab: string;
+  activeTab: ChatTabLabel;
+  activeChannel: ChatChannel;
   selectedCountryName: string;
+  allianceNames: string[];
   turnNumber: number;
   orderCount: number;
   worldTension: number;
   onInputChange: (value: string) => void;
-  onTabChange: (tab: string) => void;
+  onTabChange: (tab: ChatTabLabel) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   messagesRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  const tabs = ['Совет', 'Мир', 'Альянс'];
-  const councilPrompt = `Совет, подготовь приказ по цели "${selectedCountryName}"`;
+  const alliesLabel = allianceNames.length ? allianceNames.join(', ') : 'нет надежного союза';
+  const chatConfig: Record<
+    ChatChannel,
+    {
+      title: string;
+      aria: string;
+      placeholder: string;
+      prompt: string;
+      helperLabel: string;
+      emptyTitle: string;
+      emptyText: string;
+      context: Array<{ label: string; value: string | number; tone?: 'warn' | 'danger' }>;
+    }
+  > = {
+    council: {
+      title: 'Совет правителя',
+      aria: 'Контекст совета',
+      placeholder: 'Приказ совету: разведать Турцию, открыть торговлю, укрепить границу...',
+      prompt: `Совет, подготовь приказ по цели "${selectedCountryName}"`,
+      helperLabel: 'Вставить пример распоряжения совету',
+      emptyTitle: 'Совет ждёт распоряжения',
+      emptyText: 'Напишите действие обычным текстом, и совет оценит риск, ресурсы и последствия.',
+      context: [
+        { label: 'Цель', value: selectedCountryName },
+        { label: 'Ход', value: turnNumber },
+        { label: 'Приказы', value: `${orderCount}/5` },
+        { label: 'Мир', value: `${worldTension}/100`, tone: worldTension >= 65 ? 'danger' : worldTension >= 45 ? 'warn' : undefined },
+      ],
+    },
+    world: {
+      title: 'Мировой канал',
+      aria: 'Контекст мирового канала',
+      placeholder: 'Публичное заявление: Россия предлагает торговые гарантии...',
+      prompt: `Россия заявляет миру: готовы обсудить безопасный маршрут с целью "${selectedCountryName}"`,
+      helperLabel: 'Вставить пример публичного заявления',
+      emptyTitle: 'Мир пока молчит',
+      emptyText: 'Публичные сообщения видят все державы. Реакции появятся здесь и в хронике.',
+      context: [
+        { label: 'Видимость', value: 'все державы' },
+        { label: 'Ход', value: turnNumber },
+        { label: 'Фокус', value: selectedCountryName },
+        { label: 'Напряжение', value: `${worldTension}/100`, tone: worldTension >= 65 ? 'danger' : worldTension >= 45 ? 'warn' : undefined },
+      ],
+    },
+    alliance: {
+      title: 'Союзный канал',
+      aria: 'Контекст союзного канала',
+      placeholder: 'Союзникам: согласовать охрану караванов и обмен ресурсами...',
+      prompt: `Союзникам: согласовать закрытый план по цели "${selectedCountryName}"`,
+      helperLabel: 'Вставить пример союзного сообщения',
+      emptyTitle: 'Союзники ждут сигнала',
+      emptyText: 'Этот канал закрыт для нейтральных и враждебных держав. Используйте его для координации.',
+      context: [
+        { label: 'Канал', value: 'закрытый' },
+        { label: 'Союзники', value: alliesLabel },
+        { label: 'Ход', value: turnNumber },
+        { label: 'Приказы', value: `${orderCount}/5` },
+      ],
+    },
+  };
+  const config = chatConfig[activeChannel];
 
   return (
     <motion.section
@@ -2166,13 +2261,14 @@ function ChatPanel({
       transition={{ delay: 0.08, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
     >
       <div className="chat-tabs" role="tablist" aria-label="Каналы чата">
-        <b>Совет правителя</b>
-        {tabs.map((tab) => (
+        <b>{config.title}</b>
+        {chatTabs.map((tab) => (
           <button
             key={tab}
             type="button"
             role="tab"
             aria-selected={activeTab === tab}
+            aria-controls="chatMessages"
             className={activeTab === tab ? 'active' : ''}
             onClick={() => onTabChange(tab)}
           >
@@ -2180,40 +2276,40 @@ function ChatPanel({
           </button>
         ))}
       </div>
-      <div className="chat-context" aria-label="Контекст совета">
-        <span>
-          <b>Цель:</b> {selectedCountryName}
-        </span>
-        <span>
-          <b>Ход:</b> {turnNumber}
-        </span>
-        <span>
-          <b>Приказы:</b> {orderCount}/5
-        </span>
-        <span className={worldTension >= 65 ? 'danger' : worldTension >= 45 ? 'warn' : ''}>
-          <b>Мир:</b> {worldTension}/100
-        </span>
+      <div className="chat-context" aria-label={config.aria}>
+        {config.context.map((item) => (
+          <span key={item.label} className={item.tone || undefined}>
+            <b>{item.label}:</b> {item.value}
+          </span>
+        ))}
       </div>
       <div id="chatMessages" className="chat-messages" ref={messagesRef}>
-        {messages.map((message) => (
-          <p key={message.id}>
-            <time>{message.time}</time>
-            <span className={`flag ${message.flag}`} />
-            <b>{message.faction}:</b>
-            <span className="chat-text">{message.text}</span>
-          </p>
-        ))}
+        {messages.length ? (
+          messages.map((message) => (
+            <p key={message.id}>
+              <time>{message.time}</time>
+              <span className={`flag ${message.flag}`} />
+              <b>{message.faction}:</b>
+              <span className="chat-text">{message.text}</span>
+            </p>
+          ))
+        ) : (
+          <div className="chat-empty">
+            <b>{config.emptyTitle}</b>
+            <span>{config.emptyText}</span>
+          </div>
+        )}
       </div>
       <form id="chatForm" className="chat-input" onSubmit={onSubmit}>
         <input
           id="chatInput"
           type="text"
-          aria-label="Сообщение совету"
-          placeholder="Приказ совету: разведать Турцию, открыть торговлю, укрепить границу..."
+          aria-label={config.placeholder}
+          placeholder={config.placeholder}
           value={input}
           onChange={(event) => onInputChange(event.currentTarget.value)}
         />
-        <button className="emoji" type="button" aria-label="Вставить распоряжение совету" onClick={() => onInputChange(input.trim() ? input : councilPrompt)}>
+        <button className="emoji" type="button" aria-label={config.helperLabel} onClick={() => onInputChange(input.trim() ? input : config.prompt)}>
           <CircleHelp aria-hidden="true" />
         </button>
         <button className="send" type="submit" aria-label="Отправить">

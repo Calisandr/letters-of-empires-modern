@@ -53,6 +53,7 @@ function eventId(turn: number, actor: string, tag: string) {
 function makeChatMessage(turn: number, index: number, nation: NationProfile, text: string): ChatMessage {
   return {
     id: `world-chat-${turn}-${nation.id}-${index}`,
+    channel: 'world',
     time: actionTime(turn, index),
     flag: nation.flag,
     faction: nation.name,

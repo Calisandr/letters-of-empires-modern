@@ -1,5 +1,6 @@
 import { fallbackJudgeCouncilCommand, validateEngineEffect } from './fallbackArbitrator';
 import {
+  MAX_CHAT_MESSAGES,
   applyDiplomacyDelta,
   applyResourceDelta,
   applyValidatedEffect,
@@ -16,7 +17,7 @@ import {
   runOperationPlan,
   runStrategicResponse,
 } from './engine';
-import type { GameAction, GameState, OrderDraft, QuickActionId, ResourceDelta } from './types';
+import type { ChatMessage, GameAction, GameState, OrderDraft, QuickActionId, ResourceDelta } from './types';
 
 function markQuickAction(state: GameState, id: QuickActionId) {
   return { ...state.quickActionTurns, [id]: state.turnNumber };
@@ -28,6 +29,162 @@ function quickActionAlreadyUsed(state: GameState, id: QuickActionId) {
 
 function quickOrder(state: GameState, order: OrderDraft) {
   return createStrategicOrder(state, order);
+}
+
+function appendChatMessages(state: GameState, messages: ChatMessage[]) {
+  return {
+    ...state,
+    chatMessages: [...state.chatMessages, ...messages].slice(-MAX_CHAT_MESSAGES),
+    nextActionId: state.nextActionId + messages.length,
+  };
+}
+
+function flagForCountry(state: GameState, countryName: string, fallback = 'neutral') {
+  return (
+    state.nations.find((nation) => nation.name === countryName)?.flag ||
+    state.diplomacy.find((relation) => relation.name === countryName)?.flag ||
+    fallback
+  );
+}
+
+function submitCouncilMessage(state: GameState, text: string, time: string): GameState {
+  const withMessage = appendChatMessages(state, [
+    {
+      id: `chat-${state.nextActionId}`,
+      channel: 'council',
+      time,
+      flag: 'russia',
+      faction: 'Россия',
+      text,
+    },
+  ]);
+  const decision = fallbackJudgeCouncilCommand(text, withMessage);
+  const effect = validateEngineEffect(decision, withMessage);
+  const applied = applyValidatedEffect(withMessage, effect);
+
+  return appendChatMessages(applied, [
+    {
+      id: `chat-${applied.nextActionId}-advisor`,
+      channel: 'council',
+      time,
+      flag: 'neutral',
+      faction: 'Совет',
+      text: decision.playerFacingResult,
+    },
+  ]);
+}
+
+function pickWorldResponder(state: GameState) {
+  if (state.selectedCountry && state.selectedCountry.name !== 'Россия') {
+    return {
+      name: state.selectedCountry.name,
+      flag: flagForCountry(state, state.selectedCountry.name, state.selectedCountry.key),
+    };
+  }
+
+  const pressuredNation = [...state.nations]
+    .filter((nation) => nation.name !== 'Россия')
+    .sort((first, second) => second.pressure + second.threat - (first.pressure + first.threat))[0];
+
+  return {
+    name: pressuredNation?.name || 'Мировая канцелярия',
+    flag: pressuredNation?.flag || 'neutral',
+  };
+}
+
+function submitWorldMessage(state: GameState, text: string, time: string): GameState {
+  const responder = pickWorldResponder(state);
+  const withMessages = appendChatMessages(state, [
+    {
+      id: `world-chat-player-${state.nextActionId}`,
+      channel: 'world',
+      time,
+      flag: 'russia',
+      faction: 'Россия',
+      text,
+    },
+    {
+      id: `world-chat-reaction-${state.nextActionId + 1}`,
+      channel: 'world',
+      time,
+      flag: responder.flag,
+      faction: responder.name,
+      text: `${responder.name} отмечает публичное заявление России. Дальнейшая реакция будет зависеть от приказов, писем и следующего хода.`,
+    },
+  ]);
+
+  return createNotice(
+    {
+      ...withMessages,
+      timelineEvents: pushTimeline(withMessages.timelineEvents, {
+        icon: '☉',
+        tone: 'blue',
+        title: 'Публичное заявление России',
+        text: `Россия выступила в мировом канале: "${text}".`,
+      }),
+    },
+    'Заявление опубликовано в мировом канале',
+  );
+}
+
+function pickAllianceResponder(state: GameState) {
+  const ally = [...state.diplomacy]
+    .filter((relation) => relation.tone === 'ally' || relation.score >= 100)
+    .sort((first, second) => second.score - first.score)[0];
+
+  if (ally) {
+    return {
+      name: ally.name,
+      flag: flagForCountry(state, ally.name, ally.flag),
+      score: ally.score,
+    };
+  }
+
+  return {
+    name: 'Союзный секретариат',
+    flag: 'neutral',
+    score: 0,
+  };
+}
+
+function submitAllianceMessage(state: GameState, text: string, time: string): GameState {
+  const ally = pickAllianceResponder(state);
+  const allyText =
+    ally.score > 0
+      ? `${ally.name} получил закрытое сообщение России. Союзники ждут, подтвердите ли вы план приказом или дипломатическим письмом.`
+      : 'Закрытый канал сохранен, но надежных союзников мало. Сначала укрепите отношения через дипломатию или письма.';
+  const withMessages = appendChatMessages(state, [
+    {
+      id: `alliance-chat-player-${state.nextActionId}`,
+      channel: 'alliance',
+      time,
+      flag: 'russia',
+      faction: 'Россия',
+      text,
+    },
+    {
+      id: `alliance-chat-reply-${state.nextActionId + 1}`,
+      channel: 'alliance',
+      time,
+      flag: ally.flag,
+      faction: ally.name,
+      text: allyText,
+    },
+  ]);
+
+  return createNotice(
+    {
+      ...withMessages,
+      timelineEvents: pushTimeline(withMessages.timelineEvents, {
+        icon: '◌',
+        tone: ally.score > 0 ? 'green' : 'bronze',
+        title: 'Закрытая связь с союзниками',
+        text: `Россия отправила союзному каналу сообщение: "${text}".`,
+      }),
+    },
+    ally.score > 0 ? 'Сообщение отправлено союзникам' : 'Союзный канал требует дипломатической опоры',
+    ally.score > 0 ? 'success' : 'error',
+  );
 }
 
 function runQuickAction(state: GameState, id: QuickActionId): GameState {
@@ -165,52 +322,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
   }
 
   if (action.type === 'SUBMIT_COUNCIL_MESSAGE') {
-    const withMessage: GameState = {
-      ...state,
-      chatMessages: [
-        ...state.chatMessages,
-        {
-          id: `chat-${state.nextActionId}`,
-          time: action.time,
-          flag: 'russia',
-          faction: 'Россия',
-          text: action.text,
-        },
-      ],
-    };
-    const decision = fallbackJudgeCouncilCommand(action.text, withMessage);
-    const effect = validateEngineEffect(decision, withMessage);
-    const applied = applyValidatedEffect(withMessage, effect);
+    return submitCouncilMessage(state, action.text, action.time);
+  }
 
-    if (effect.kind === 'blocked') {
-      return {
-        ...applied,
-        chatMessages: [
-          ...applied.chatMessages,
-          {
-            id: `chat-${applied.nextActionId}-advisor`,
-            time: action.time,
-            flag: 'neutral',
-            faction: 'Совет',
-            text: decision.playerFacingResult,
-          },
-        ],
-      };
-    }
-
-    return {
-      ...applied,
-      chatMessages: [
-        ...applied.chatMessages,
-        {
-          id: `chat-${applied.nextActionId}-advisor`,
-          time: action.time,
-          flag: 'neutral',
-          faction: 'Совет',
-          text: decision.playerFacingResult,
-        },
-      ],
-    };
+  if (action.type === 'SUBMIT_CHAT_MESSAGE') {
+    if (action.channel === 'council') return submitCouncilMessage(state, action.text, action.time);
+    if (action.channel === 'world') return submitWorldMessage(state, action.text, action.time);
+    return submitAllianceMessage(state, action.text, action.time);
   }
 
   if (action.type === 'RUN_QUICK_ACTION') return runQuickAction(state, action.id);
