@@ -36,7 +36,6 @@ import {
   Search,
   Send,
   Shield,
-  Smile,
   Swords,
   X,
   ZoomIn,
@@ -106,12 +105,10 @@ const mapLayerOptions: Array<{ id: MapLayerId; label: string; description: strin
 
 const navItems = [
   { label: 'Карта мира', icon: MapIcon },
+  { label: 'Совет', icon: MessageSquare },
   { label: 'Письма', icon: Mail, badge: 6 },
   { label: 'Приказы', icon: Flag },
-  { label: 'Хроника', icon: MessageSquare },
-  { label: 'Договоры', icon: Landmark },
-  { label: 'Фракции', icon: Shield },
-  { label: 'Настройки', icon: CircleHelp },
+  { label: 'Архив', icon: Landmark },
 ];
 
 const mapModes: Array<{ id: MapModeId; title: string; className: string }> = [
@@ -380,12 +377,12 @@ const codeByFlagClass = Object.fromEntries(
 ) as Record<string, string>;
 
 const quickActions: Array<{ id: QuickActionId; label: string; icon: LucideIcon; toast?: string }> = [
-  { id: 'compose-letter', label: 'Написать письмо', icon: Mail },
-  { id: 'create-order', label: 'Создать приказ', icon: Flag },
-  { id: 'manage-lands', label: 'Управление землями', icon: Landmark },
-  { id: 'trade-routes', label: 'Торговые маршруты', icon: Anchor },
-  { id: 'recruit-army', label: 'Набор войск', icon: Shield },
-  { id: 'diplomacy', label: 'Дипломатия', icon: Handshake, toast: 'Дипломатические переговоры' },
+  { id: 'compose-letter', label: 'Письмо союзникам', icon: Mail },
+  { id: 'create-order', label: 'Черновик приказа', icon: Flag },
+  { id: 'manage-lands', label: 'Хозяйственный ход', icon: Landmark },
+  { id: 'trade-routes', label: 'Торговый план', icon: Anchor },
+  { id: 'recruit-army', label: 'Военный набор', icon: Shield },
+  { id: 'diplomacy', label: 'Дипломатический зонд', icon: Handshake, toast: 'Дипломатические переговоры' },
 ];
 
 const countryIntelActions: Array<{ id: CountryIntelActionId; label: string; icon: LucideIcon; tone: string }> = [
@@ -1115,7 +1112,7 @@ function App() {
   const [closedIntelKey, setClosedIntelKey] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [chatInput, setChatInput] = useState('');
-  const [activeChatTab, setActiveChatTab] = useState('Мировой чат');
+  const [activeChatTab, setActiveChatTab] = useState('Совет');
   const [activeUtilityPanel, setActiveUtilityPanel] = useState<string | null>(null);
   const [pendingQuickAction, setPendingQuickAction] = useState<QuickActionId | null>(null);
   const [turnReportOpen, setTurnReportOpen] = useState(false);
@@ -1752,6 +1749,10 @@ function App() {
               messages={chatMessages}
               input={chatInput}
               activeTab={activeChatTab}
+              selectedCountryName={gameState.selectedCountry?.name || 'Россия'}
+              turnNumber={turnNumber}
+              orderCount={orders.filter((order) => order.statusClass !== 'cancelled').length}
+              worldTension={worldTension}
               onInputChange={setChatInput}
               onTabChange={(tab) => {
                 setActiveChatTab(tab);
@@ -1915,6 +1916,10 @@ function UtilityPanel({
       text: 'Корона показывает власть правителя, текущую державу и состояние партии.',
       action: `Активных приказов: ${orderCount}/5. Входящих писем: ${mailCount}.`,
     },
+    Совет: {
+      text: `Совет принимает распоряжения обычным текстом и готовит действия с ценой, риском и сроком. Текущая цель: ${selectedCountryName}.`,
+      action: 'Напишите приказ в нижней панели или выберите страну на карте, чтобы совет предложил контекстный ход.',
+    },
     Почта: {
       text: `Во входящих сейчас ${mailCount} писем. Каждое важное письмо можно открыть и выбрать дипломатический ответ с последствиями.`,
       action: 'Кнопка "Написать" справа отправляет исходящее письмо через канцелярию.',
@@ -1950,6 +1955,10 @@ function UtilityPanel({
     Хроника: {
       text: 'Хроника показывает важные игровые последствия: письма, приказы, управление землями и начало нового хода.',
       action: 'Повторяющиеся события не спамят верх списка.',
+    },
+    Архив: {
+      text: 'Архив хранит хронику мира, старые решения и дипломатические следы партии.',
+      action: 'Сейчас подробные события открываются из правой сводки мира.',
     },
     Договоры: {
       text: 'Договоры будут расти из дипломатических действий и отношений стран.',
@@ -2047,7 +2056,6 @@ function EmpirePanel({
             <span>Напряжение мира</span>
             <b className={worldTension >= 70 ? 'danger' : worldTension >= 50 ? 'warn' : ''}>{worldTension}/100</b>
           </div>
-          <p>{russia?.lastAction || 'Совет ожидает распоряжений правителя.'}</p>
         </div>
         <div className="turn-info">
           <div>
@@ -2062,7 +2070,7 @@ function EmpirePanel({
             Завершить ход
           </button>
         </div>
-        <div className="section-title">Быстрые действия</div>
+        <div className="section-title">Предложения совета</div>
         <div className="quick-actions">
           {quickActions.map(({ id, label, icon: Icon, toast }) => {
             const isLocked = oncePerTurnQuickActions.has(id) && quickActionTurns[id] === turnNumber;
@@ -2126,6 +2134,10 @@ function ChatPanel({
   messages,
   input,
   activeTab,
+  selectedCountryName,
+  turnNumber,
+  orderCount,
+  worldTension,
   onInputChange,
   onTabChange,
   onSubmit,
@@ -2134,12 +2146,17 @@ function ChatPanel({
   messages: ChatMessage[];
   input: string;
   activeTab: string;
+  selectedCountryName: string;
+  turnNumber: number;
+  orderCount: number;
+  worldTension: number;
   onInputChange: (value: string) => void;
   onTabChange: (tab: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   messagesRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  const tabs = ['Мировой чат', 'Мировой', 'Альянс', 'Фракция', 'Личные'];
+  const tabs = ['Совет', 'Мир', 'Альянс'];
+  const councilPrompt = `Совет, подготовь приказ по цели "${selectedCountryName}"`;
 
   return (
     <motion.section
@@ -2149,7 +2166,7 @@ function ChatPanel({
       transition={{ delay: 0.08, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
     >
       <div className="chat-tabs" role="tablist" aria-label="Каналы чата">
-        <b>Чат империй</b>
+        <b>Совет правителя</b>
         {tabs.map((tab) => (
           <button
             key={tab}
@@ -2162,6 +2179,20 @@ function ChatPanel({
             {tab}
           </button>
         ))}
+      </div>
+      <div className="chat-context" aria-label="Контекст совета">
+        <span>
+          <b>Цель:</b> {selectedCountryName}
+        </span>
+        <span>
+          <b>Ход:</b> {turnNumber}
+        </span>
+        <span>
+          <b>Приказы:</b> {orderCount}/5
+        </span>
+        <span className={worldTension >= 65 ? 'danger' : worldTension >= 45 ? 'warn' : ''}>
+          <b>Мир:</b> {worldTension}/100
+        </span>
       </div>
       <div id="chatMessages" className="chat-messages" ref={messagesRef}>
         {messages.map((message) => (
@@ -2178,12 +2209,12 @@ function ChatPanel({
           id="chatInput"
           type="text"
           aria-label="Сообщение совету"
-          placeholder="Введите сообщение..."
+          placeholder="Приказ совету: разведать Турцию, открыть торговлю, укрепить границу..."
           value={input}
           onChange={(event) => onInputChange(event.currentTarget.value)}
         />
-        <button className="emoji" type="button" aria-label="Добавить эмодзи" onClick={() => onInputChange(`${input} ☺`.trimStart())}>
-          <Smile aria-hidden="true" />
+        <button className="emoji" type="button" aria-label="Вставить распоряжение совету" onClick={() => onInputChange(input.trim() ? input : councilPrompt)}>
+          <CircleHelp aria-hidden="true" />
         </button>
         <button className="send" type="submit" aria-label="Отправить">
           <Send aria-hidden="true" />
@@ -2223,7 +2254,7 @@ function OrdersPanel({
     >
       <div className="panel-heading">
         <h2>
-          Текущие приказы <span>({activeOrderCount}/5)</span>
+          Приказы совета <span>({activeOrderCount}/5)</span>
         </h2>
       </div>
       {operationPlans.length ? (
@@ -2273,6 +2304,13 @@ function OrdersPanel({
         </section>
       ) : null}
       <div className="orders-list">
+        {!visibleOrders.length && !operationPlans.length ? (
+          <article className="orders-empty" aria-label="Нет активных приказов">
+            <Flag aria-hidden="true" />
+            <h3>Нет активных приказов</h3>
+            <p>Напишите совету распоряжение или утвердите один из предложенных планов.</p>
+          </article>
+        ) : null}
         {visibleOrders.map((order) => {
           const Icon = orderIcons[order.iconKey];
           const isCancelled = order.statusClass === 'cancelled';
@@ -2348,7 +2386,7 @@ function OrdersPanel({
       </div>
       <button className="create-order" type="button" onClick={onCreateOrder}>
         <Plus aria-hidden="true" />
-        Создать приказ
+        Подготовить приказ
       </button>
     </motion.section>
   );
@@ -2874,7 +2912,7 @@ function RightPanel({
     >
       <section className="timeline-panel framed-panel compact">
         <div className="panel-heading">
-          <h2>Хроника мира</h2>
+          <h2>Сводка мира</h2>
           <button type="button" aria-haspopup="dialog" onClick={() => setIsChronicleArchiveOpen(true)}>
             Смотреть все
           </button>
@@ -2905,7 +2943,7 @@ function RightPanel({
       <section className="mail-panel framed-panel compact">
         <div className="panel-heading">
           <h2>
-            Входящие письма <span>{letters.length}</span>
+            Канцелярия <span>{letters.length}</span>
           </h2>
           <button type="button" aria-label="Написать письмо" onClick={onComposeLetter}>
             Написать
@@ -2946,7 +2984,7 @@ function RightPanel({
 
       <section className="diplomacy-panel framed-panel compact">
         <div className="panel-heading">
-          <h2>Дипломатия</h2>
+          <h2>Державы</h2>
           <button type="button" onClick={() => showToast('Смотреть все')}>
             Смотреть все
           </button>
