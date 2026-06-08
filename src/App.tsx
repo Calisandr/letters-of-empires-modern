@@ -1166,6 +1166,7 @@ function App() {
     clientY: number;
   } | null>(null);
   const chatMessagesRef = useRef<HTMLDivElement | null>(null);
+  const previousChatScrollRef = useRef<{ tab: ChatTabLabel; count: number } | null>(null);
   const turnLockRef = useRef(false);
   const seenTurnReportRef = useRef(lastTurnReport?.turn ?? null);
 
@@ -1260,8 +1261,13 @@ function App() {
 
   useEffect(() => {
     const messages = chatMessagesRef.current;
-    if (messages) messages.scrollTop = messages.scrollHeight;
-  }, [activeChatTab, visibleChatMessages]);
+    if (!messages) return;
+
+    const previous = previousChatScrollRef.current;
+    const hasNewMessageInSameTab = previous?.tab === activeChatTab && visibleChatMessages.length > previous.count;
+    messages.scrollTop = hasNewMessageInSameTab ? messages.scrollHeight : 0;
+    previousChatScrollRef.current = { tab: activeChatTab, count: visibleChatMessages.length };
+  }, [activeChatTab, visibleChatMessages.length]);
 
   const handleNavClick = (label: string) => {
     setActiveNav(label);

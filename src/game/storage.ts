@@ -47,7 +47,11 @@ function normalizeChatMessages(value: unknown) {
     time: stringOrDefault(message.time, '--:--'),
     faction: stringOrDefault(message.faction, 'Неизвестно'),
     flag: stringOrDefault(message.flag, 'neutral'),
-    text: stringOrDefault(message.text, ''),
+    text: stringOrDefault(
+      initialGameState.chatMessages.find((initialMessage) => initialMessage.id === message.id && message.id?.startsWith('council-'))?.text ||
+        message.text,
+      '',
+    ),
   }));
 }
 
