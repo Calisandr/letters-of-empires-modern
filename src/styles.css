@@ -4859,3 +4859,146 @@ input:focus-visible,
     font-size: 18px;
   }
 }
+
+/* Desktop interaction polish: buttons and clickable labels respond, chat copy stays calm. */
+@media (min-width: 901px) and (hover: hover) and (pointer: fine) {
+  .redesign-shell button:not(:disabled),
+  .redesign-shell .tool-select,
+  .redesign-shell .route-toggle,
+  .redesign-shell .timeline-row-button,
+  .redesign-shell .mail-row-button,
+  .redesign-shell .diplomacy-row,
+  .redesign-shell .operation-plan {
+    transition:
+      transform 180ms ease,
+      border-color 180ms ease,
+      background-color 180ms ease,
+      box-shadow 180ms ease,
+      color 180ms ease,
+      opacity 180ms ease,
+      filter 180ms ease;
+  }
+
+  .redesign-shell button:not(:disabled) svg,
+  .redesign-shell .timeline-row-button .event-icon,
+  .redesign-shell .mail-row-button .letter-seal,
+  .redesign-shell .diplomacy-row .flag {
+    transition:
+      transform 180ms ease,
+      filter 180ms ease,
+      opacity 180ms ease;
+  }
+
+  .redesign-shell .nav-link:not(.active):hover,
+  .redesign-shell .nav-link:not(.active):focus-visible,
+  .redesign-shell .icon-button:hover,
+  .redesign-shell .icon-button:focus-visible,
+  .redesign-shell .profile-chip:hover,
+  .redesign-shell .profile-chip:focus-visible,
+  .redesign-shell .quick-actions button:not(:disabled):hover,
+  .redesign-shell .quick-actions button:not(:disabled):focus-visible,
+  .redesign-shell .panel-heading button:hover,
+  .redesign-shell .panel-heading button:focus-visible,
+  .redesign-shell .show-all:hover,
+  .redesign-shell .show-all:focus-visible,
+  .redesign-shell .chat-tabs button:hover,
+  .redesign-shell .chat-tabs button:focus-visible,
+  .redesign-shell .map-controls button:hover,
+  .redesign-shell .map-controls button:focus-visible,
+  .redesign-shell .tool-select:hover,
+  .redesign-shell .route-toggle:hover {
+    transform: translateY(-1px);
+    color: #ffe29a;
+    text-shadow: 0 0 14px rgba(241, 205, 116, .2);
+    box-shadow:
+      0 10px 22px rgba(0, 0, 0, .24),
+      0 0 0 1px rgba(241, 205, 116, .2),
+      inset 0 1px 0 rgba(255, 232, 166, .08);
+  }
+
+  .redesign-shell .end-turn-button:hover,
+  .redesign-shell .end-turn-button:focus-visible,
+  .redesign-shell .create-order:hover,
+  .redesign-shell .create-order:focus-visible,
+  .redesign-shell .chat-input .send:hover,
+  .redesign-shell .chat-input .send:focus-visible,
+  .redesign-shell .letter-dialog-response:not(:disabled):hover,
+  .redesign-shell .letter-dialog-response:not(:disabled):focus-visible,
+  .redesign-shell .dialog-secondary:hover,
+  .redesign-shell .dialog-secondary:focus-visible,
+  .redesign-shell .plan-run:hover,
+  .redesign-shell .plan-run:focus-visible {
+    transform: translateY(-2px);
+    border-color: rgba(255, 221, 137, .68);
+    color: #ffe8a8;
+    text-shadow: 0 0 18px rgba(241, 205, 116, .26);
+    box-shadow:
+      0 14px 28px rgba(0, 0, 0, .3),
+      0 0 22px rgba(241, 205, 116, .12),
+      inset 0 1px 0 rgba(255, 235, 176, .16);
+  }
+
+  .redesign-shell .timeline-row-button:hover,
+  .redesign-shell .timeline-row-button:focus-visible,
+  .redesign-shell .mail-row-button:hover,
+  .redesign-shell .mail-row-button:focus-visible,
+  .redesign-shell .diplomacy-row:hover,
+  .redesign-shell .diplomacy-row:focus-visible,
+  .redesign-shell .operation-plan:hover,
+  .redesign-shell .operation-plan:focus-within {
+    transform: translateY(-1px);
+    border-color: rgba(241, 205, 116, .24);
+    background:
+      linear-gradient(90deg, rgba(241, 205, 116, .09), transparent 72%),
+      rgba(9, 20, 20, .58);
+    box-shadow:
+      0 12px 24px rgba(0, 0, 0, .22),
+      inset 0 1px 0 rgba(255, 232, 166, .06);
+  }
+
+  .redesign-shell button:not(:disabled):hover svg,
+  .redesign-shell button:not(:disabled):focus-visible svg,
+  .redesign-shell .timeline-row-button:hover .event-icon,
+  .redesign-shell .timeline-row-button:focus-visible .event-icon,
+  .redesign-shell .mail-row-button:hover .letter-seal,
+  .redesign-shell .mail-row-button:focus-visible .letter-seal,
+  .redesign-shell .diplomacy-row:hover .flag,
+  .redesign-shell .diplomacy-row:focus-visible .flag {
+    transform: translateY(-1px) scale(1.04);
+    filter: drop-shadow(0 0 8px rgba(241, 205, 116, .2));
+  }
+
+  .redesign-shell .chat-messages p,
+  .redesign-shell .chat-messages b,
+  .redesign-shell .chat-messages span,
+  .redesign-shell .chat-text {
+    transition: none;
+    transform: none;
+    text-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .redesign-shell button,
+  .redesign-shell .tool-select,
+  .redesign-shell .route-toggle,
+  .redesign-shell .timeline-row-button,
+  .redesign-shell .mail-row-button,
+  .redesign-shell .diplomacy-row,
+  .redesign-shell .operation-plan {
+    transition: none;
+  }
+
+  .redesign-shell button:hover,
+  .redesign-shell button:focus-visible,
+  .redesign-shell .timeline-row-button:hover,
+  .redesign-shell .timeline-row-button:focus-visible,
+  .redesign-shell .mail-row-button:hover,
+  .redesign-shell .mail-row-button:focus-visible,
+  .redesign-shell .diplomacy-row:hover,
+  .redesign-shell .diplomacy-row:focus-visible,
+  .redesign-shell .operation-plan:hover,
+  .redesign-shell .operation-plan:focus-within {
+    transform: none;
+  }
+}
