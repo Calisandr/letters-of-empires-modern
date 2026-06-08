@@ -1294,9 +1294,10 @@ input:focus-visible,
 }
 
 .diplomacy-row .relation-score {
-  display: grid;
-  justify-items: end;
-  gap: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
   min-width: 0;
   padding: 3px 5px;
   border: 1px solid rgba(205, 162, 85, .14);
@@ -1310,12 +1311,14 @@ input:focus-visible,
   color: rgba(166, 185, 162, .84);
   font-size: 10.5px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .diplomacy-row .relation-score b {
   color: currentColor;
   font-size: 13px;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .diplomacy-row .relation-score.ally,
