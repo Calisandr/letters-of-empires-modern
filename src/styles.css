@@ -1233,7 +1233,7 @@ input:focus-visible,
 .diplomacy-row {
   position: relative;
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 88px 42px;
+  grid-template-columns: 28px minmax(68px, .95fr) minmax(74px, .9fr) minmax(66px, max-content);
   align-items: center;
   gap: 2px 7px;
   width: 100%;
@@ -1296,15 +1296,16 @@ input:focus-visible,
 .diplomacy-row .relation-score {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 4px;
-  min-width: 0;
-  padding: 3px 5px;
+  min-width: 66px;
+  padding: 3px 6px;
   border: 1px solid rgba(205, 162, 85, .14);
   background: rgba(4, 10, 10, .42);
   color: #d2c7a3;
   font-weight: 700;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .diplomacy-row .relation-score span {
@@ -2430,6 +2431,7 @@ input:focus-visible,
 .operation-plan-list {
   display: grid;
   gap: 6px;
+  align-content: start;
   max-height: 188px;
   overflow: auto;
   padding-right: 2px;
@@ -2445,6 +2447,7 @@ input:focus-visible,
   align-items: start;
   min-height: 78px;
   padding: 8px;
+  overflow: hidden;
   border: 1px solid rgba(205, 162, 85, .16);
   background: rgba(3, 9, 10, .58);
 }
@@ -2999,7 +3002,7 @@ input:focus-visible,
   }
 
   .diplomacy-row {
-    grid-template-columns: 29px minmax(58px, .82fr) minmax(88px, 1fr) 58px;
+    grid-template-columns: 29px minmax(58px, .72fr) minmax(100px, 1.06fr) minmax(66px, max-content);
     gap: 7px;
   }
 
@@ -4513,6 +4516,8 @@ input:focus-visible,
   .redesign-shell .orders-panel {
     display: flex;
     flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .redesign-shell .panel-heading {
@@ -4595,12 +4600,21 @@ input:focus-visible,
   }
 
   .redesign-shell .operation-plans {
-    gap: 8px;
-    margin: 10px 14px 0;
-    padding: 10px;
-    border-color: rgba(215, 168, 87, .14);
-    border-radius: 7px;
-    background: rgba(3, 9, 10, .46);
+    display: contents;
+  }
+
+  .redesign-shell .operation-plans header {
+    display: none;
+  }
+
+  .redesign-shell .operation-plan-list {
+    flex: 0 0 auto;
+    max-height: 190px;
+    margin: 8px 14px 0;
+    overflow-y: auto;
+    padding-right: 5px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(205, 162, 85, .34) rgba(5, 12, 13, .66);
   }
 
   .redesign-shell .operation-plans header b {
@@ -4608,7 +4622,8 @@ input:focus-visible,
   }
 
   .redesign-shell .operation-plan {
-    min-height: 82px;
+    min-height: 88px;
+    padding: 8px;
     border-radius: 7px;
   }
 
@@ -4617,10 +4632,12 @@ input:focus-visible,
   }
 
   .redesign-shell .operation-plan p {
-    font-size: 11.8px;
+    display: -webkit-box;
+    font-size: 11.6px;
   }
 
   .redesign-shell .create-order {
+    flex: 0 0 auto;
     width: min(320px, calc(100% - 28px));
     min-height: 36px;
     margin: 4px auto 8px;
@@ -4737,7 +4754,8 @@ input:focus-visible,
   }
 
   .redesign-shell .diplomacy-row {
-    grid-template-columns: 32px minmax(62px, .82fr) minmax(82px, 1fr) 58px;
+    grid-template-columns: 32px minmax(64px, .72fr) minmax(108px, 1.08fr) minmax(70px, max-content);
+    gap: 7px;
     min-height: 58px;
     padding: 7px 9px;
   }
@@ -4752,7 +4770,9 @@ input:focus-visible,
   }
 
   .redesign-shell .relation-score {
+    min-width: 70px;
     min-height: 34px;
+    padding-inline: 7px;
     border-radius: 6px;
     border-color: rgba(215, 168, 87, .16);
     background: rgba(2, 7, 8, .58);

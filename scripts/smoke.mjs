@@ -771,6 +771,59 @@ try {
     };
   });
 
+  const diplomacyRelationBadgeDiagnostics = await page.evaluate(() => {
+    const badges = [...document.querySelectorAll('.diplomacy-row .relation-score')].map((node) => {
+      const box = node.getBoundingClientRect();
+      const label = node.querySelector('span')?.getBoundingClientRect();
+      const value = node.querySelector('b')?.getBoundingClientRect();
+
+      return {
+        width: box.width,
+        height: box.height,
+        text: node.textContent?.replace(/\s+/g, ' ').trim() || '',
+        labelAndValueInline: Boolean(label && value && Math.abs(label.top - value.top) < 3),
+        overflows: node.scrollWidth > node.clientWidth + 1,
+      };
+    });
+
+    return {
+      count: badges.length,
+      minWidth: badges.reduce((min, badge) => Math.min(min, badge.width), Number.POSITIVE_INFINITY),
+      maxHeight: badges.reduce((max, badge) => Math.max(max, badge.height), 0),
+      allInline: badges.every((badge) => badge.labelAndValueInline),
+      anyOverflow: badges.some((badge) => badge.overflows),
+      samples: badges.slice(0, 4),
+    };
+  });
+
+  const ordersProposalLayoutDiagnostics = await page.evaluate(() => {
+    const panel = document.querySelector('.orders-panel');
+    const create = document.querySelector('.orders-panel .create-order');
+    const list = document.querySelector('.operation-plan-list');
+    const plans = [...document.querySelectorAll('.operation-plan')].map((node) => {
+      const box = node.getBoundingClientRect();
+      return {
+        height: box.height,
+        actionCount: node.querySelectorAll('.operation-plan-actions button').length,
+        actionRowVisible: Boolean(node.querySelector('.operation-plan-actions')?.getBoundingClientRect().height),
+      };
+    });
+
+    const panelBox = panel?.getBoundingClientRect();
+    const createBox = create?.getBoundingClientRect();
+
+    return {
+      exists: Boolean(panel && create),
+      createInsidePanel: Boolean(panelBox && createBox && createBox.bottom <= panelBox.bottom + 1),
+      createVisibleHeight: createBox?.height || 0,
+      planCount: plans.length,
+      minPlanHeight: plans.reduce((min, plan) => Math.min(min, plan.height), Number.POSITIVE_INFINITY),
+      firstPlanHasActions: plans[0]?.actionCount === 3 && plans[0]?.actionRowVisible,
+      listOverflowY: list ? getComputedStyle(list).overflowY : '',
+      listCanScroll: list ? list.scrollHeight >= list.clientHeight : false,
+    };
+  });
+
   await page.screenshot({ path: screenshotPath, fullPage: true });
 
   const result = {
@@ -825,6 +878,8 @@ try {
     mailBadgeDiagnostics,
     empirePulseDiagnostics,
     quickActionsFitDiagnostics,
+    diplomacyRelationBadgeDiagnostics,
+    ordersProposalLayoutDiagnostics,
     consoleErrors,
     screenshot: screenshotPath,
   };
@@ -981,6 +1036,18 @@ try {
     !quickActionsFitDiagnostics.allButtonsInsideActions ||
     !quickActionsFitDiagnostics.actionsInsideCard ||
     quickActionsFitDiagnostics.actionsNeedScroll ||
+    diplomacyRelationBadgeDiagnostics.count < 3 ||
+    diplomacyRelationBadgeDiagnostics.minWidth < 68 ||
+    diplomacyRelationBadgeDiagnostics.maxHeight > 38 ||
+    !diplomacyRelationBadgeDiagnostics.allInline ||
+    diplomacyRelationBadgeDiagnostics.anyOverflow ||
+    !ordersProposalLayoutDiagnostics.exists ||
+    !ordersProposalLayoutDiagnostics.createInsidePanel ||
+    ordersProposalLayoutDiagnostics.createVisibleHeight < 32 ||
+    ordersProposalLayoutDiagnostics.planCount < 1 ||
+    ordersProposalLayoutDiagnostics.minPlanHeight < 68 ||
+    !ordersProposalLayoutDiagnostics.firstPlanHasActions ||
+    !['auto', 'scroll'].includes(ordersProposalLayoutDiagnostics.listOverflowY) ||
     buttonNameDiagnostics.unnamedCount !== 0 ||
     consoleErrors.length > 0;
 
