@@ -1861,7 +1861,8 @@ input:focus-visible,
 .letter-dialog,
 .diplomacy-dialog,
 .chronicle-dialog,
-.chronicle-archive-dialog {
+.chronicle-archive-dialog,
+.operation-plan-dialog {
   display: flex;
   flex-direction: column;
   width: min(780px, calc(100vw - 42px));
@@ -1876,6 +1877,10 @@ input:focus-visible,
 
 .diplomacy-dialog {
   width: min(820px, calc(100vw - 42px));
+}
+
+.operation-plan-dialog {
+  width: min(880px, calc(100vw - 42px));
 }
 
 .chronicle-dialog,
@@ -1901,6 +1906,28 @@ input:focus-visible,
 .dialog-heading .flag {
   --flag-w: 40px;
   --flag-h: 27px;
+}
+
+.plan-dossier-heading {
+  grid-template-columns: 48px minmax(0, 1fr) max-content 36px;
+}
+
+.plan-dossier-emblem {
+  display: inline-grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(226, 183, 100, .38);
+  border-radius: 9px;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(242, 190, 86, .22), transparent 58%),
+    rgba(10, 18, 17, .82);
+  color: #edcf7d;
+}
+
+.plan-dossier-emblem svg {
+  width: 22px;
+  height: 22px;
 }
 
 .dialog-heading > div {
@@ -1984,7 +2011,8 @@ input:focus-visible,
 .letter-dialog-body,
 .diplomacy-dialog-body,
 .chronicle-dialog-body,
-.chronicle-archive-list {
+.chronicle-archive-list,
+.operation-plan-dialog-body {
   min-height: 0;
   overflow: auto;
   padding: 14px;
@@ -1995,6 +2023,157 @@ input:focus-visible,
 .letter-dialog-body {
   display: grid;
   gap: 13px;
+}
+
+.operation-plan-dialog-body {
+  display: grid;
+  gap: 13px;
+}
+
+.plan-dossier-brief {
+  display: grid;
+  gap: 8px;
+  padding: 13px 14px;
+  border: 1px solid rgba(205, 162, 85, .2);
+  background:
+    linear-gradient(90deg, rgba(241, 205, 116, .08), transparent 72%),
+    rgba(5, 13, 13, .58);
+}
+
+.plan-dossier-brief p {
+  margin: 0;
+  color: rgba(226, 219, 188, .94);
+  font-size: 14px;
+  line-height: 1.42;
+}
+
+.plan-dossier-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.plan-dossier-metrics div,
+.plan-dossier-effects dl div {
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid rgba(205, 162, 85, .18);
+  background: rgba(4, 11, 11, .64);
+}
+
+.plan-dossier-metrics dt,
+.plan-dossier-effects dt {
+  color: rgba(174, 190, 165, .82);
+  font-size: 11.5px;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.plan-dossier-metrics dd,
+.plan-dossier-effects dd {
+  margin: 5px 0 0;
+  color: #f4d783;
+  font: 700 14px/1.2 var(--serif);
+  overflow-wrap: anywhere;
+}
+
+.plan-dossier-outcomes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.plan-dossier-outcomes article {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid rgba(126, 189, 128, .28);
+  background:
+    linear-gradient(180deg, rgba(18, 45, 30, .46), rgba(6, 14, 13, .66)),
+    rgba(5, 13, 13, .7);
+}
+
+.plan-dossier-outcomes article.warning {
+  border-color: rgba(226, 183, 100, .3);
+  background: rgba(36, 28, 13, .48);
+}
+
+.plan-dossier-outcomes article.danger {
+  border-color: rgba(219, 101, 88, .38);
+  background: rgba(45, 18, 16, .48);
+}
+
+.plan-dossier-outcomes span,
+.plan-dossier-source span {
+  color: rgba(174, 190, 165, .78);
+  font-size: 11px;
+  line-height: 1.1;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.plan-dossier-outcomes h3,
+.plan-dossier-effects h3 {
+  margin: 0;
+  color: #f4d783;
+  font: 700 16px/1.15 var(--serif);
+}
+
+.plan-dossier-outcomes p,
+.plan-dossier-source p {
+  margin: 0;
+  color: rgba(226, 219, 188, .92);
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+
+.plan-dossier-effects {
+  display: grid;
+  gap: 9px;
+}
+
+.plan-dossier-effects dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.plan-dossier-source {
+  display: grid;
+  gap: 6px;
+  padding: 11px 12px;
+  border: 1px solid rgba(205, 162, 85, .16);
+  background: rgba(4, 10, 10, .44);
+}
+
+.plan-dossier-actions {
+  align-items: flex-start;
+}
+
+.plan-dossier-actions > div {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.dialog-secondary.primary {
+  border-color: rgba(242, 190, 86, .72);
+  background: rgba(128, 86, 35, .48);
+  color: #ffe08d;
+}
+
+.dialog-secondary.muted {
+  border-color: rgba(205, 162, 85, .22);
+  background: rgba(8, 15, 15, .64);
+  color: rgba(218, 209, 176, .82);
+}
+
+.dialog-secondary:disabled {
+  cursor: default;
+  opacity: .48;
 }
 
 .letter-dialog-body > p,

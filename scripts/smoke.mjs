@@ -202,10 +202,49 @@ try {
           .join(' · '),
     };
   });
+  await page.locator('.council-priority .plan-run, .operation-plan .plan-run').first().click();
+  await page.waitForSelector('.operation-plan-dialog');
+  const operationPlanDossierDiagnostics = await page.evaluate(() => {
+    const dialog = document.querySelector('.operation-plan-dialog');
+    const dialogRect = dialog?.getBoundingClientRect();
+    const textNodes = [...(dialog?.querySelectorAll('p, dd, button, span, small') || [])];
+    const overflowingNodes = [...(dialog?.querySelectorAll('*') || [])].filter((node) => {
+      const box = node.getBoundingClientRect();
+      return box.width > 0 && dialogRect && box.right > dialogRect.right + 2;
+    });
+    const buttons = [...(dialog?.querySelectorAll('button') || [])].map((button) =>
+      button.textContent?.replace(/\s+/g, ' ').trim() || button.getAttribute('aria-label') || '',
+    );
+    const approveButton = [...(dialog?.querySelectorAll('button') || [])].find((button) =>
+      button.textContent?.includes('Утвердить приказ'),
+    );
+
+    return {
+      exists: Boolean(dialog),
+      role: dialog?.getAttribute('role') || '',
+      modal: dialog?.getAttribute('aria-modal') || '',
+      title: dialog?.querySelector('h2')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      readiness: dialog?.querySelector('.dialog-heading strong')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      metricCount: dialog?.querySelectorAll('.plan-dossier-metrics dd').length || 0,
+      outcomeCount: dialog?.querySelectorAll('.plan-dossier-outcomes article').length || 0,
+      effectCount: dialog?.querySelectorAll('.plan-dossier-effects dd').length || 0,
+      buttons,
+      approveDisabled: Boolean(approveButton?.disabled),
+      visibleWidth: dialogRect?.width || 0,
+      visibleHeight: dialogRect?.height || 0,
+      smallTextCount: textNodes.filter((node) => Number.parseFloat(getComputedStyle(node).fontSize) < 11).length,
+      overflowCount: overflowingNodes.length,
+    };
+  });
+  await page.locator('.operation-plan-dialog .dialog-close').click();
+  await page.waitForFunction(() => document.querySelectorAll('.operation-plan-dialog').length === 0);
+  const operationPlanDossierClosed = (await page.locator('.operation-plan-dialog').count()) === 0;
   const countryIntelActionDiagnostics = {
     beforeCountryIntelAction,
     afterCountryIntelAction,
     operationPlanDiagnostics,
+    operationPlanDossierDiagnostics,
+    operationPlanDossierClosed,
     diplomacyHasBrazil: afterCountryIntelAction.diplomacyNames.includes('Бразилия'),
     goldChanged: beforeCountryIntelAction.goldText !== afterCountryIntelAction.goldText,
     intelUpdated: afterCountryIntelAction.intelText.includes('Разведка'),
@@ -1044,6 +1083,19 @@ try {
     countryIntelActionDiagnostics.operationPlanDiagnostics.count < 1 ||
     !countryIntelActionDiagnostics.operationPlanDiagnostics.hasRunButton ||
     !countryIntelActionDiagnostics.operationPlanDiagnostics.hasDismissButton ||
+    !countryIntelActionDiagnostics.operationPlanDossierDiagnostics.exists ||
+    countryIntelActionDiagnostics.operationPlanDossierDiagnostics.role !== 'dialog' ||
+    countryIntelActionDiagnostics.operationPlanDossierDiagnostics.modal !== 'true' ||
+    countryIntelActionDiagnostics.operationPlanDossierDiagnostics.title.length < 8 ||
+    !countryIntelActionDiagnostics.operationPlanDossierDiagnostics.readiness ||
+    countryIntelActionDiagnostics.operationPlanDossierDiagnostics.metricCount < 6 ||
+    countryIntelActionDiagnostics.operationPlanDossierDiagnostics.outcomeCount < 2 ||
+    countryIntelActionDiagnostics.operationPlanDossierDiagnostics.effectCount < 4 ||
+    !countryIntelActionDiagnostics.operationPlanDossierDiagnostics.buttons.includes('Утвердить приказ') ||
+    !countryIntelActionDiagnostics.operationPlanDossierDiagnostics.buttons.includes('Уточнить план') ||
+    !countryIntelActionDiagnostics.operationPlanDossierClosed ||
+    countryIntelActionDiagnostics.operationPlanDossierDiagnostics.smallTextCount > 0 ||
+    countryIntelActionDiagnostics.operationPlanDossierDiagnostics.overflowCount > 0 ||
     !countryIntelClosed ||
     countrySelectionAfterClose.selectedCount !== 0 ||
     chronicleHighlightLabel !== 'Главное событие' ||

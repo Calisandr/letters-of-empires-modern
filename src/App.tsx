@@ -43,7 +43,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import worldMapSvg from './assets/world-map.svg?raw';
-import { getLetterResponseOptions, getLetterRuntimeId, oncePerTurnQuickActions } from './game/engine';
+import { canPay, getLetterResponseOptions, getLetterRuntimeId, oncePerTurnQuickActions } from './game/engine';
 import { formatClock, formatResourceTrend, formatResourceValue } from './game/formatters';
 import { playerCountry } from './game/initialState';
 import { buildMapSignals, filterMapSignalsForMode, type MapModeId, type MapSignal } from './game/mapIntel';
@@ -652,6 +652,17 @@ const resourceDeltaLabels: Record<keyof ResourceDelta, string> = {
   population: 'население',
 };
 
+const nationDeltaLabels: Record<string, string> = {
+  economy: 'экономика',
+  army: 'армия',
+  stability: 'стабильность',
+  treasury: 'казна',
+  grain: 'зерно',
+  relation: 'отношения',
+  threat: 'угроза',
+  pressure: 'давление',
+};
+
 function hashCountryName(name: string) {
   return [...name].reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) % 9973, 17);
 }
@@ -911,6 +922,50 @@ function formatCompactResourceCost(delta: ResourceDelta) {
   return `${parts[0]} +${parts.length - 1}`;
 }
 
+function formatSignedNumber(value: number) {
+  const rounded = Math.round(value);
+  return `${rounded > 0 ? '+' : ''}${rounded}`;
+}
+
+function formatDiplomacyDelta(delta: Record<string, number> = {}) {
+  const parts = Object.entries(delta)
+    .filter(([, value]) => value)
+    .map(([country, value]) => `${country} ${formatSignedNumber(value)}`);
+
+  return parts.length ? parts.join(', ') : 'без прямых изменений';
+}
+
+function formatNationDelta(delta: OperationPlan['nationDelta'] = {}) {
+  const parts = Object.entries(delta)
+    .map(([country, metrics]) => {
+      const metricText = Object.entries(metrics || {})
+        .filter(([, value]) => value)
+        .map(([metric, value]) => `${nationDeltaLabels[metric] || metric} ${formatSignedNumber(Number(value))}`)
+        .join(', ');
+
+      return metricText ? `${country}: ${metricText}` : '';
+    })
+    .filter(Boolean);
+
+  return parts.length ? parts.join('; ') : 'без открытых изменений';
+}
+
+function missingResourceText(resources: ResourceState[], cost: ResourceDelta = {}) {
+  const missing = resources
+    .map((resource) => {
+      const required = cost[resource.id] ?? 0;
+      const deficit = required - resource.value;
+      if (deficit <= 0) return '';
+
+      const label = resourceDeltaLabels[resource.id] || resource.label;
+      const formatted = resource.id === 'population' ? deficit.toFixed(1) : Math.ceil(deficit).toLocaleString('ru-RU');
+      return `${formatted} ${label}`;
+    })
+    .filter(Boolean);
+
+  return missing.length ? missing.join(', ') : '';
+}
+
 function planRiskLabel(risk: OperationPlan['riskLevel']) {
   if (risk === 'critical') return 'критический риск';
   if (risk === 'high') return 'высокий риск';
@@ -964,6 +1019,43 @@ function councilPriorityReason(plan: OperationPlan, activeOrderCount: number) {
   }
 
   return 'Совет считает этот план самым сбалансированным по шансу, сроку и риску.';
+}
+
+function operationPlanDoctrine(plan: OperationPlan) {
+  if (plan.riskLevel === 'critical') {
+    return 'Штаб считает приказ почти кризисным: утверждать стоит только если цель важнее потерь.';
+  }
+
+  if (plan.riskLevel === 'high') {
+    return 'План может дать сильный результат, но противник или логистика способны дорого сорвать исполнение.';
+  }
+
+  if (plan.successChance >= 90) {
+    return 'Совет видит устойчивое окно: приказ можно утверждать без долгой подготовки.';
+  }
+
+  if (plan.kind === 'diplomacy') {
+    return 'Дипломатический ход полезен, когда нужно выиграть время и снизить риск прямого столкновения.';
+  }
+
+  if (plan.kind === 'trade') {
+    return 'Торговый ход усиливает доход, но его лучше не откладывать, пока маршрут открыт.';
+  }
+
+  return 'План рабочий, но совет рекомендует сверить цену, срок и последствия перед утверждением.';
+}
+
+function operationPlanApprovalBlockReason(plan: OperationPlan, resources: ResourceState[], activeOrderCount: number) {
+  if (activeOrderCount >= 5) {
+    return 'Лимит активных приказов заполнен. Отмените или завершите один приказ перед утверждением.';
+  }
+
+  const missing = missingResourceText(resources, plan.cost);
+  if (missing) {
+    return `Не хватает ресурсов: ${missing}.`;
+  }
+
+  return '';
 }
 
 function CountryIntelPanel({
@@ -1403,6 +1495,7 @@ function App() {
   const [activeChatTab, setActiveChatTab] = useState<ChatTabLabel>('Совет');
   const [activeUtilityPanel, setActiveUtilityPanel] = useState<string | null>(null);
   const [pendingQuickAction, setPendingQuickAction] = useState<QuickActionId | null>(null);
+  const [pendingOperationPlanId, setPendingOperationPlanId] = useState<string | null>(null);
   const [turnReportOpen, setTurnReportOpen] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(18 * 3600 + 42 * 60 + 31);
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -1440,6 +1533,10 @@ function App() {
   const previousChatScrollRef = useRef<{ tab: ChatTabLabel; count: number } | null>(null);
   const turnLockRef = useRef(false);
   const seenTurnReportRef = useRef(lastTurnReport?.turn ?? null);
+  const pendingOperationPlan = useMemo(
+    () => operationPlans.find((plan) => plan.id === pendingOperationPlanId) || null,
+    [operationPlans, pendingOperationPlanId],
+  );
 
   const showToast = useCallback((message: string) => {
     const now = window.performance.now();
@@ -1517,6 +1614,12 @@ function App() {
   useEffect(() => {
     if (gameState.lastNotice) showToast(gameState.lastNotice.message);
   }, [gameState.lastNotice, showToast]);
+
+  useEffect(() => {
+    if (pendingOperationPlanId && !pendingOperationPlan) {
+      setPendingOperationPlanId(null);
+    }
+  }, [pendingOperationPlan, pendingOperationPlanId]);
 
   useEffect(() => {
     if (!lastTurnReport || lastTurnReport.turn === seenTurnReportRef.current) return;
@@ -1892,8 +1995,13 @@ function App() {
     dispatchGame({ type: 'CANCEL_ORDER', id });
   };
 
-  const runOperationPlan = (id: string) => {
+  const openOperationPlanDossier = (id: string) => {
+    setPendingOperationPlanId(id);
+  };
+
+  const confirmOperationPlan = (id: string) => {
     dispatchGame({ type: 'RUN_OPERATION_PLAN', id });
+    setPendingOperationPlanId(null);
   };
 
   const refineOperationPlan = (id: string) => {
@@ -1902,6 +2010,9 @@ function App() {
 
   const dismissOperationPlan = (id: string) => {
     dispatchGame({ type: 'DISMISS_OPERATION_PLAN', id });
+    if (pendingOperationPlanId === id) {
+      setPendingOperationPlanId(null);
+    }
   };
 
   const handleEndTurn = () => {
@@ -2084,7 +2195,7 @@ function App() {
                 showToast(`Канал "${tab}" открыт`);
               }}
               onSubmit={submitChat}
-              onRunPlan={runOperationPlan}
+              onRunPlan={openOperationPlanDossier}
               onRefinePlan={refineOperationPlan}
               onDismissPlan={dismissOperationPlan}
               messagesRef={chatMessagesRef}
@@ -2095,7 +2206,7 @@ function App() {
               currentTurn={turnNumber}
               onCancel={cancelOrder}
               onCreateOrder={() => handleQuickAction('create-order')}
-              onRunPlan={runOperationPlan}
+              onRunPlan={openOperationPlanDossier}
               onRefinePlan={refineOperationPlan}
               onDismissPlan={dismissOperationPlan}
             />
@@ -2119,6 +2230,19 @@ function App() {
           selectedCountryName={gameState.selectedCountry?.name || 'Москва'}
           onCancel={() => setPendingQuickAction(null)}
           onConfirm={confirmPendingQuickAction}
+        />
+      ) : null}
+
+      {pendingOperationPlan ? (
+        <OperationPlanDossierDialog
+          plan={pendingOperationPlan}
+          resources={resources}
+          activeOrderCount={orders.filter((order) => order.statusClass !== 'cancelled').length}
+          currentTurn={turnNumber}
+          onClose={() => setPendingOperationPlanId(null)}
+          onApprove={confirmOperationPlan}
+          onRefine={refineOperationPlan}
+          onDismiss={dismissOperationPlan}
         />
       ) : null}
 
@@ -3010,6 +3134,161 @@ function OrdersPanel({
         Подготовить приказ
       </button>
     </motion.section>
+  );
+}
+
+function OperationPlanDossierDialog({
+  plan,
+  resources,
+  activeOrderCount,
+  currentTurn,
+  onClose,
+  onApprove,
+  onRefine,
+  onDismiss,
+}: {
+  plan: OperationPlan;
+  resources: ResourceState[];
+  activeOrderCount: number;
+  currentTurn: number;
+  onClose: () => void;
+  onApprove: (id: string) => void;
+  onRefine: (id: string) => void;
+  onDismiss: (id: string) => void;
+}) {
+  const Icon = orderIcons[plan.iconKey];
+  const expiresIn = Math.max(0, plan.expiresTurn - currentTurn);
+  const refinements = plan.refinements || 0;
+  const blockReason = operationPlanApprovalBlockReason(plan, resources, activeOrderCount);
+  const canApprove = !blockReason && canPay(resources, plan.cost);
+  const readiness = canApprove ? 'Готов к утверждению' : 'Нужна подготовка';
+  const approvalHint = blockReason || 'После утверждения приказ появится в списке активных и начнёт выполняться со следующего хода.';
+
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section
+        className={`operation-plan-dialog framed-panel ${plan.riskLevel}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="operationPlanDossierTitle"
+      >
+        <header className="dialog-heading plan-dossier-heading">
+          <span className="plan-dossier-emblem" aria-hidden="true">
+            <Icon />
+          </span>
+          <div>
+            <small>Штабное досье приказа</small>
+            <h2 id="operationPlanDossierTitle">{plan.title}</h2>
+            <p>
+              Цель: {plan.target} · Исполнитель: {plan.advisor}
+            </p>
+          </div>
+          <strong>{readiness}</strong>
+          <button type="button" className="dialog-close" aria-label="Закрыть досье приказа" onClick={onClose}>
+            <X aria-hidden="true" />
+          </button>
+        </header>
+
+        <div className="operation-plan-dialog-body">
+          <section className="plan-dossier-brief">
+            <p>{plan.summary}</p>
+            <p>{operationPlanDoctrine(plan)}</p>
+          </section>
+
+          <dl className="plan-dossier-metrics">
+            <div>
+              <dt>Шанс</dt>
+              <dd>{plan.successChance}%</dd>
+            </div>
+            <div>
+              <dt>Риск</dt>
+              <dd>{planRiskLabel(plan.riskLevel)}</dd>
+            </div>
+            <div>
+              <dt>Срок</dt>
+              <dd>{plan.durationTurns} ход</dd>
+            </div>
+            <div>
+              <dt>Окно</dt>
+              <dd>{expiresIn} ход</dd>
+            </div>
+            <div>
+              <dt>Цена</dt>
+              <dd title={formatResourceCost(plan.cost)}>{formatResourceCost(plan.cost)}</dd>
+            </div>
+            <div>
+              <dt>Награда</dt>
+              <dd title={formatResourceCost(plan.reward || {})}>{formatResourceDelta(plan.reward || {})}</dd>
+            </div>
+          </dl>
+
+          <div className="plan-dossier-outcomes">
+            <article>
+              <span>Успех</span>
+              <h3>Ожидаемый результат</h3>
+              <p>{plan.completeText}</p>
+            </article>
+            <article className={plan.riskLevel === 'high' || plan.riskLevel === 'critical' ? 'danger' : 'warning'}>
+              <span>Провал</span>
+              <h3>Если приказ сорвётся</h3>
+              <p>{plan.failureText}</p>
+            </article>
+          </div>
+
+          <section className="plan-dossier-effects">
+            <h3>Что изменится</h3>
+            <dl>
+              <div>
+                <dt>Ресурсы при успехе</dt>
+                <dd>{formatResourceDelta(plan.reward || {})}</dd>
+              </div>
+              <div>
+                <dt>Ресурсы при провале</dt>
+                <dd>{formatResourceDelta(plan.failureCost || {})}</dd>
+              </div>
+              <div>
+                <dt>Дипломатия при успехе</dt>
+                <dd>{formatDiplomacyDelta(plan.diplomacyDelta)}</dd>
+              </div>
+              <div>
+                <dt>Дипломатия при провале</dt>
+                <dd>{formatDiplomacyDelta(plan.failureDiplomacyDelta)}</dd>
+              </div>
+              <div>
+                <dt>Досье при успехе</dt>
+                <dd>{formatNationDelta(plan.nationDelta)}</dd>
+              </div>
+              <div>
+                <dt>Досье при провале</dt>
+                <dd>{formatNationDelta(plan.failureNationDelta)}</dd>
+              </div>
+            </dl>
+          </section>
+
+          {plan.sourceText ? (
+            <aside className="plan-dossier-source">
+              <span>Основание</span>
+              <p>{plan.sourceText}</p>
+            </aside>
+          ) : null}
+        </div>
+
+        <footer className="dialog-footer plan-dossier-actions">
+          <span>{approvalHint}</span>
+          <div>
+            <button type="button" className="dialog-secondary" onClick={() => onRefine(plan.id)} disabled={refinements >= 2}>
+              {refinements >= 2 ? 'Уточнено' : 'Уточнить план'}
+            </button>
+            <button type="button" className="dialog-secondary muted" onClick={() => onDismiss(plan.id)}>
+              Отложить
+            </button>
+            <button type="button" className="dialog-secondary primary" onClick={() => onApprove(plan.id)} disabled={!canApprove}>
+              Утвердить приказ
+            </button>
+          </div>
+        </footer>
+      </section>
+    </div>
   );
 }
 
