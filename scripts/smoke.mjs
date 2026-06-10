@@ -367,9 +367,56 @@ try {
   await page.keyboard.press('Enter');
   await page.waitForSelector('.country-intel');
 
-  await page.locator('#chatInput').fill('React smoke message');
+  await page.locator('#chatInput').fill('Разведать Турцию');
   await page.locator('.chat-input .send').click();
+  await page.waitForSelector('.council-decision-card');
   const chatText = await page.locator('.chat-messages').innerText();
+  const councilDirectiveDiagnostics = await page.evaluate(() => {
+    const card = document.querySelector('.council-decision-card');
+    const planTitles = [...document.querySelectorAll('.operation-plan h3')].map((node) =>
+      node.textContent?.replace(/\s+/g, ' ').trim() || '',
+    );
+    const buttons = [...(card?.querySelectorAll('button') || [])].map((button) =>
+      button.textContent?.replace(/\s+/g, ' ').trim() || '',
+    );
+    const textNodes = [...(card?.querySelectorAll('h3, p, dt, dd, button, span, b') || [])];
+    const overflowingNodes = [...(card?.querySelectorAll('*') || [])].filter(
+      (node) => node.scrollWidth > node.clientWidth + 2 && node.tagName !== 'H3',
+    );
+    const cardBox = card?.getBoundingClientRect();
+    const chatPanelBox = document.querySelector('.chat-panel')?.getBoundingClientRect();
+
+    return {
+      exists: Boolean(card),
+      roleLabel: card?.getAttribute('aria-label') || '',
+      title: card?.querySelector('h3')?.textContent?.trim() || '',
+      summary: card?.querySelector('p')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      metrics: [...(card?.querySelectorAll('dd') || [])].map((node) => node.textContent?.trim() || ''),
+      buttons,
+      planTitles,
+      advisorReply: [...document.querySelectorAll('.chat-messages p')].at(-1)?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      contained: Boolean(cardBox && chatPanelBox && cardBox.top >= chatPanelBox.top - 1 && cardBox.bottom <= chatPanelBox.bottom + 1),
+      smallTextCount: textNodes.filter((node) => Number.parseFloat(getComputedStyle(node).fontSize) < 10.5).length,
+      overflowCount: overflowingNodes.length,
+      overflowSamples: overflowingNodes.slice(0, 4).map((node) => ({
+        tag: node.tagName,
+        className: node.className?.toString?.() || '',
+        text: node.textContent?.replace(/\s+/g, ' ').trim() || '',
+        scrollWidth: node.scrollWidth,
+        clientWidth: node.clientWidth,
+      })),
+    };
+  });
+  await page.locator('.council-decision-card .plan-dismiss').click();
+  await page.waitForFunction(() =>
+    ![...document.querySelectorAll('.operation-plan h3')].some((node) => node.textContent?.includes('Турция')),
+  );
+  const councilDirectiveDismissed = await page.evaluate(() => ({
+    planStillVisible: [...document.querySelectorAll('.operation-plan h3')].some((node) =>
+      node.textContent?.includes('Турция'),
+    ),
+    cardStillVisible: Boolean(document.querySelector('.council-decision-card h3')?.textContent?.includes('Турция')),
+  }));
   await page.locator('.chat-tabs button').filter({ hasText: 'Альянс' }).click();
   const chatTabDiagnostics = await page.evaluate(() => {
     const active = document.querySelector('.chat-tabs button.active');
@@ -893,11 +940,13 @@ try {
     diplomacyScrollDiagnostics,
     diplomacyDossierDiagnostics,
     diplomacyDossierCloseDiagnostics,
+    councilDirectiveDiagnostics,
+    councilDirectiveDismissed,
     chatTabDiagnostics,
     letterResponseBefore,
     letterResponseAfter,
     letterDialogClosed,
-    chatAdded: chatText.includes('React smoke message'),
+    chatAdded: chatText.includes('Разведать Турцию'),
     orderRemovalDiagnostics,
     orderCounterBeforeDialog,
     dialogOpened,
@@ -995,6 +1044,23 @@ try {
     !diplomacyDossierCloseDiagnostics.closed ||
     diplomacyDossierCloseDiagnostics.expandedRows !== 0 ||
     !result.chatAdded ||
+    !councilDirectiveDiagnostics.exists ||
+    councilDirectiveDiagnostics.roleLabel !== 'Решение Совета' ||
+    !councilDirectiveDiagnostics.title.includes('Турция') ||
+    councilDirectiveDiagnostics.summary.length < 30 ||
+    councilDirectiveDiagnostics.metrics.length < 4 ||
+    !councilDirectiveDiagnostics.metrics.some((metric) => metric.includes('%')) ||
+    !councilDirectiveDiagnostics.metrics.some((metric) => metric.includes('ход')) ||
+    !councilDirectiveDiagnostics.buttons.includes('Утвердить') ||
+    !councilDirectiveDiagnostics.buttons.includes('Уточнить') ||
+    !councilDirectiveDiagnostics.buttons.includes('Отложить') ||
+    !councilDirectiveDiagnostics.planTitles.some((title) => title.includes('Турция')) ||
+    !councilDirectiveDiagnostics.advisorReply.includes('подготовил предложение') ||
+    !councilDirectiveDiagnostics.contained ||
+    councilDirectiveDiagnostics.smallTextCount > 0 ||
+    councilDirectiveDiagnostics.overflowCount > 0 ||
+    councilDirectiveDismissed.planStillVisible ||
+    councilDirectiveDismissed.cardStillVisible ||
     chatTabDiagnostics.activeText !== 'Альянс' ||
     !chatTabDiagnostics.allianceSelected ||
     !letterResponseBefore.hasDialog ||

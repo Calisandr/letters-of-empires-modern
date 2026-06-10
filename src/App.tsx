@@ -839,6 +839,29 @@ function formatResourceCost(delta: ResourceDelta) {
   return parts.length ? parts.join(', ') : 'без затрат';
 }
 
+function formatCompactResourceCost(delta: ResourceDelta) {
+  const shortLabels: Record<keyof ResourceDelta, string> = {
+    gold: 'зол.',
+    wood: 'дер.',
+    stone: 'кам.',
+    iron: 'жел.',
+    grain: 'зер.',
+    population: 'нас.',
+  };
+  const parts = Object.entries(delta)
+    .filter(([, value]) => value)
+    .map(([key, value]) => {
+      const formatted =
+        key === 'population' ? Number(value).toFixed(1) : Math.round(Number(value)).toLocaleString('ru-RU');
+
+      return `${formatted} ${shortLabels[key as keyof ResourceDelta] || key}`;
+    });
+
+  if (!parts.length) return '0';
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} +${parts.length - 1}`;
+}
+
 function planRiskLabel(risk: OperationPlan['riskLevel']) {
   if (risk === 'critical') return 'критический риск';
   if (risk === 'high') return 'высокий риск';
@@ -1955,6 +1978,7 @@ function App() {
               input={chatInput}
               activeTab={activeChatTab}
               activeChannel={activeChatChannel}
+              operationPlans={operationPlans}
               selectedCountryName={gameState.selectedCountry?.name || 'Россия'}
               allianceNames={allianceNames}
               turnNumber={turnNumber}
@@ -1966,6 +1990,9 @@ function App() {
                 showToast(`Канал "${tab}" открыт`);
               }}
               onSubmit={submitChat}
+              onRunPlan={runOperationPlan}
+              onRefinePlan={refineOperationPlan}
+              onDismissPlan={dismissOperationPlan}
               messagesRef={chatMessagesRef}
             />
             <OrdersPanel
@@ -2360,11 +2387,77 @@ function MapLegend() {
   );
 }
 
+function CouncilDecisionCard({
+  plan,
+  currentTurn,
+  onRunPlan,
+  onRefinePlan,
+  onDismissPlan,
+}: {
+  plan: OperationPlan;
+  currentTurn: number;
+  onRunPlan: (id: string) => void;
+  onRefinePlan: (id: string) => void;
+  onDismissPlan: (id: string) => void;
+}) {
+  const Icon = orderIcons[plan.iconKey];
+  const expiresIn = Math.max(0, plan.expiresTurn - currentTurn);
+  const refinements = plan.refinements || 0;
+
+  return (
+    <section className={`council-decision-card ${plan.riskLevel}`} aria-label="Решение Совета">
+      <header>
+        <span>Штабное решение</span>
+        <b>{planRiskLabel(plan.riskLevel)}</b>
+      </header>
+      <div className="council-decision-main">
+        <span className="council-decision-icon" aria-hidden="true">
+          <Icon />
+        </span>
+        <div>
+          <h3>{plan.title}</h3>
+          <p>{plan.summary}</p>
+        </div>
+      </div>
+      <dl>
+        <div>
+          <dt>Шанс</dt>
+          <dd>{plan.successChance}%</dd>
+        </div>
+        <div>
+          <dt>Срок</dt>
+          <dd>{plan.durationTurns} ход</dd>
+        </div>
+        <div>
+          <dt>Цена</dt>
+          <dd title={formatResourceCost(plan.cost)}>{formatCompactResourceCost(plan.cost)}</dd>
+        </div>
+        <div>
+          <dt>Окно</dt>
+          <dd>{expiresIn} ход</dd>
+        </div>
+      </dl>
+      <div className="council-decision-actions">
+        <button type="button" className="plan-run" onClick={() => onRunPlan(plan.id)}>
+          Утвердить
+        </button>
+        <button type="button" className="plan-refine" onClick={() => onRefinePlan(plan.id)} disabled={refinements >= 2}>
+          {refinements >= 2 ? 'Уточнено' : 'Уточнить'}
+        </button>
+        <button type="button" className="plan-dismiss" onClick={() => onDismissPlan(plan.id)}>
+          Отложить
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function ChatPanel({
   messages,
   input,
   activeTab,
   activeChannel,
+  operationPlans,
   selectedCountryName,
   allianceNames,
   turnNumber,
@@ -2373,12 +2466,16 @@ function ChatPanel({
   onInputChange,
   onTabChange,
   onSubmit,
+  onRunPlan,
+  onRefinePlan,
+  onDismissPlan,
   messagesRef,
 }: {
   messages: ChatMessage[];
   input: string;
   activeTab: ChatTabLabel;
   activeChannel: ChatChannel;
+  operationPlans: OperationPlan[];
   selectedCountryName: string;
   allianceNames: string[];
   turnNumber: number;
@@ -2387,9 +2484,13 @@ function ChatPanel({
   onInputChange: (value: string) => void;
   onTabChange: (tab: ChatTabLabel) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onRunPlan: (id: string) => void;
+  onRefinePlan: (id: string) => void;
+  onDismissPlan: (id: string) => void;
   messagesRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const alliesLabel = allianceNames.length ? allianceNames.join(', ') : 'нет надежного союза';
+  const latestCouncilPlan = activeChannel === 'council' ? operationPlans[0] : null;
   const chatConfig: Record<
     ChatChannel,
     {
@@ -2480,6 +2581,17 @@ function ChatPanel({
             <b>{item.label}:</b> {item.value}
           </span>
         ))}
+      </div>
+      <div className={`council-decision-slot ${latestCouncilPlan ? 'active' : ''}`} aria-live="polite">
+        {latestCouncilPlan ? (
+          <CouncilDecisionCard
+            plan={latestCouncilPlan}
+            currentTurn={turnNumber}
+            onRunPlan={onRunPlan}
+            onRefinePlan={onRefinePlan}
+            onDismissPlan={onDismissPlan}
+          />
+        ) : null}
       </div>
       <div id="chatMessages" className="chat-messages" ref={messagesRef}>
         {messages.length ? (

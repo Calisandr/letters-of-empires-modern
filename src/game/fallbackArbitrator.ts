@@ -7,6 +7,70 @@ function includesAny(text: string, words: string[]) {
   return words.some((word) => text.includes(word));
 }
 
+function normalizeCouncilText(text: string) {
+  return text.toLowerCase().replaceAll('ё', 'е');
+}
+
+function aliasesForCountry(name: string) {
+  const normalized = normalizeCouncilText(name);
+  const aliases = new Set([normalized]);
+
+  if (normalized.endsWith('ия')) {
+    const stem = normalized.slice(0, -2);
+    aliases.add(`${stem}ию`);
+    aliases.add(`${stem}ии`);
+    aliases.add(`${stem}ией`);
+  }
+
+  if (normalized.endsWith('а')) {
+    const stem = normalized.slice(0, -1);
+    aliases.add(`${stem}у`);
+    aliases.add(`${stem}е`);
+    aliases.add(`${stem}ой`);
+  }
+
+  if (normalized.endsWith('й')) {
+    const stem = normalized.slice(0, -1);
+    aliases.add(`${stem}ю`);
+    aliases.add(`${stem}я`);
+    aliases.add(`${stem}ем`);
+  }
+
+  if (normalized === 'сша') {
+    aliases.add('америка');
+    aliases.add('соединенные штаты');
+    aliases.add('штаты');
+  }
+
+  if (normalized === 'юар') {
+    aliases.add('южная африка');
+    aliases.add('претория');
+  }
+
+  if (normalized === 'великобритания') {
+    aliases.add('британия');
+    aliases.add('англия');
+    aliases.add('лондон');
+  }
+
+  return [...aliases];
+}
+
+function resolveCouncilTarget(text: string, state: GameState) {
+  const normalized = normalizeCouncilText(text);
+  const candidates = [
+    ...state.nations.map((nation) => nation.name),
+    ...state.diplomacy.map((relation) => relation.name),
+    state.selectedCountry?.name,
+  ].filter((name): name is string => Boolean(name));
+  const uniqueCandidates = [...new Set(candidates)];
+  const explicitTarget = uniqueCandidates.find((name) =>
+    aliasesForCountry(name).some((alias) => normalized.includes(alias)),
+  );
+
+  return explicitTarget || state.selectedCountry?.name || 'Москва';
+}
+
 function clampDiplomacyDelta(delta: Record<string, number>) {
   return Object.fromEntries(
     Object.entries(delta).map(([name, value]) => [name, Math.max(-12, Math.min(8, Math.round(value)))]),
@@ -40,7 +104,25 @@ function attemptable(
 }
 
 function makeOrderFromText(text: string, target: string): OrderDraft {
-  const lower = text.toLowerCase();
+  const lower = normalizeCouncilText(text);
+
+  if (includesAny(lower, ['развед', 'шпион', 'досье', 'наблюд', 'оценить', 'проверить'])) {
+    return {
+      iconKey: 'mail',
+      title: `Разведать намерения: ${target}`,
+      owner: 'Разведывательная канцелярия',
+      target,
+      remainingTurns: 1,
+      totalTurns: 1,
+      cost: { gold: 240 },
+      reward: { gold: 80 },
+      nationDelta: target === 'Россия' ? { Россия: { pressure: -3 } } : { [target]: { pressure: -5, threat: -3 } },
+      completeText: `Разведка собрала досье по цели "${target}": совет видит намерения, риски и окно для следующего приказа.`,
+      failureText: `Разведка по цели "${target}" не дала полного результата: часть золота потрачена, а намерения остались неясными.`,
+      riskLevel: target === 'Россия' ? 'low' : 'medium',
+      successChance: target === 'Россия' ? 94 : 82,
+    };
+  }
 
   if (includesAny(lower, ['арм', 'войск', 'границ', 'защит', 'наступ', 'атака'])) {
     return {
@@ -87,8 +169,8 @@ function makeOrderFromText(text: string, target: string): OrderDraft {
 }
 
 export function fallbackJudgeCouncilCommand(text: string, state: GameState): AiArbitrationDecision {
-  const normalized = text.trim().toLowerCase();
-  const target = state.selectedCountry?.name || 'Москва';
+  const normalized = normalizeCouncilText(text.trim());
+  const target = resolveCouncilTarget(text, state);
 
   if (!normalized) return blocked('Сначала нужно написать приказ или сообщение совету.');
 
@@ -117,6 +199,10 @@ export function fallbackJudgeCouncilCommand(text: string, state: GameState): AiA
     'отправ',
     'укреп',
     'сформ',
+    'развед',
+    'шпион',
+    'досье',
+    'провер',
     'наб',
     'торг',
     'караван',

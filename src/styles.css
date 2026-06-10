@@ -3636,6 +3636,180 @@ input:focus-visible,
   color: #df7469;
 }
 
+.council-decision-slot {
+  height: 0;
+  overflow: hidden;
+}
+
+.council-decision-slot.active {
+  height: auto;
+  padding: 7px 12px 0;
+}
+
+.council-decision-card {
+  display: grid;
+  gap: 7px;
+  padding: 9px;
+  overflow: hidden;
+  border: 1px solid rgba(205, 162, 85, .2);
+  border-radius: 7px;
+  background:
+    linear-gradient(135deg, rgba(226, 183, 100, .08), transparent 58%),
+    rgba(3, 10, 11, .72);
+}
+
+.council-decision-card.medium {
+  border-color: rgba(224, 173, 76, .34);
+}
+
+.council-decision-card.high,
+.council-decision-card.critical {
+  border-color: rgba(219, 101, 88, .38);
+}
+
+.council-decision-card header,
+.council-decision-main,
+.council-decision-card dl,
+.council-decision-actions {
+  min-width: 0;
+}
+
+.council-decision-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.council-decision-card header span {
+  color: rgba(174, 190, 165, .82);
+  font-size: 10.8px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.council-decision-card header b {
+  color: #f2d27e;
+  font-size: 11px;
+}
+
+.council-decision-main {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+}
+
+.council-decision-main > div {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.council-decision-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid rgba(205, 162, 85, .28);
+  border-radius: 6px;
+  background: rgba(80, 57, 25, .28);
+  color: #e4bd66;
+}
+
+.council-decision-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.council-decision-card h3,
+.council-decision-card p {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.council-decision-card h3 {
+  color: #f4d783;
+  font: 700 13px/1.15 var(--serif);
+  white-space: nowrap;
+}
+
+.council-decision-card p {
+  display: -webkit-box;
+  margin-top: 2px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  color: rgba(218, 209, 176, .86);
+  font-size: 11.5px;
+  line-height: 1.25;
+}
+
+.council-decision-card dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0;
+}
+
+.council-decision-card dl div {
+  min-width: 0;
+  padding: 5px 6px;
+  border: 1px solid rgba(205, 162, 85, .12);
+  background: rgba(2, 7, 8, .48);
+}
+
+.council-decision-card dt,
+.council-decision-card dd {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.council-decision-card dt {
+  color: rgba(166, 185, 162, .78);
+  font-size: 10.5px;
+  text-transform: uppercase;
+}
+
+.council-decision-card dd {
+  color: #f2d27e;
+  font-size: 11.2px;
+  font-weight: 700;
+}
+
+.council-decision-actions {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(92px, .72fr) minmax(82px, .62fr);
+  gap: 6px;
+}
+
+.council-decision-actions button {
+  min-height: 30px;
+  border: 1px solid rgba(205, 162, 85, .3);
+  border-radius: 4px;
+  background: rgba(9, 17, 16, .78);
+  color: #d9bf77;
+  cursor: pointer;
+}
+
+.council-decision-actions .plan-run {
+  border-color: rgba(226, 183, 100, .44);
+  background: rgba(86, 56, 23, .44);
+  color: #ffe08d;
+  font: 700 11.4px/1 var(--serif);
+}
+
+.council-decision-actions .plan-refine,
+.council-decision-actions .plan-dismiss {
+  font-size: 10.8px;
+}
+
+.council-decision-actions button:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
 .chat-empty {
   display: grid;
   min-height: 100%;
@@ -3966,7 +4140,7 @@ input:focus-visible,
 
   .chat-panel {
     display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   }
 
   .chat-tabs {
@@ -4635,7 +4809,7 @@ input:focus-visible,
   }
 
   .redesign-shell .chat-panel {
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   }
 
   .redesign-shell .chat-tabs {
@@ -4671,6 +4845,78 @@ input:focus-visible,
     border-bottom-color: rgba(215, 168, 87, .09);
     color: rgba(173, 192, 168, .82);
     font-size: 12.8px;
+  }
+
+  .redesign-shell .council-decision-slot.active {
+    padding: 7px 14px 0;
+  }
+
+  .redesign-shell .council-decision-card {
+    grid-template-columns: minmax(0, 1fr) 138px;
+    grid-template-areas:
+      "head head"
+      "main actions"
+      "metrics actions";
+    gap: 5px;
+    padding: 8px;
+    border-color: rgba(215, 168, 87, .16);
+    background:
+      linear-gradient(135deg, rgba(241, 205, 116, .075), transparent 62%),
+      rgba(2, 8, 9, .72);
+  }
+
+  .redesign-shell .council-decision-card header {
+    grid-area: head;
+  }
+
+  .redesign-shell .council-decision-main {
+    grid-area: main;
+    grid-template-columns: 30px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .redesign-shell .council-decision-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .redesign-shell .council-decision-card h3 {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 13px;
+    line-height: 1.22;
+    white-space: normal;
+  }
+
+  .redesign-shell .council-decision-card p {
+    display: none;
+    font-size: 11.2px;
+  }
+
+  .redesign-shell .council-decision-card dl {
+    grid-area: metrics;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 3px;
+  }
+
+  .redesign-shell .council-decision-card dl div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 6px;
+  }
+
+  .redesign-shell .council-decision-actions button {
+    min-height: 24px;
+  }
+
+  .redesign-shell .council-decision-actions {
+    grid-area: actions;
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 
   .redesign-shell .chat-messages {
