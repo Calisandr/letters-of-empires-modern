@@ -121,7 +121,24 @@ try {
     };
   });
   await page.locator('.council-starter-prompts button').first().click();
+  await page.waitForFunction(() => document.activeElement?.id === 'chatInput');
+  await page.waitForTimeout(260);
   const starterPromptInserted = await page.locator('#chatInput').inputValue();
+  const starterInputFocusDiagnostics = await page.evaluate(() => {
+    const form = document.querySelector('#chatForm');
+    const input = document.querySelector('#chatInput');
+    const inputBox = input?.getBoundingClientRect();
+    const inputStyle = input ? getComputedStyle(input) : null;
+
+    return {
+      focused: document.activeElement === input,
+      primed: Boolean(form?.classList.contains('primed')),
+      valueLength: input instanceof HTMLInputElement ? input.value.length : 0,
+      inputHeight: inputBox?.height || 0,
+      inputFontSize: inputStyle ? Number.parseFloat(inputStyle.fontSize) : 0,
+      borderColor: inputStyle?.borderColor || '',
+    };
+  });
   await page.locator('#chatInput').fill('');
 
   await page.locator('#mapMode').click();
@@ -1190,6 +1207,7 @@ try {
     guideDialogClosed,
     councilStarterDiagnostics,
     starterPromptInserted,
+    starterInputFocusDiagnostics,
     countryCount,
     liveMapDiagnostics,
     liveMarkerClickSelectedUkraine,
@@ -1272,6 +1290,12 @@ try {
     councilStarterDiagnostics.minButtonHeight < 52 ||
     councilStarterDiagnostics.smallTextCount > 0 ||
     councilStarterDiagnostics.overflowCount > 0 ||
+    !starterInputFocusDiagnostics.focused ||
+    !starterInputFocusDiagnostics.primed ||
+    starterInputFocusDiagnostics.valueLength < 20 ||
+    starterInputFocusDiagnostics.inputHeight < 38 ||
+    starterInputFocusDiagnostics.inputFontSize < 13 ||
+    !starterInputFocusDiagnostics.borderColor.includes('241') ||
     !starterPromptInserted.includes('Совет') ||
     !starterPromptInserted.includes('цели') ||
     countryCount < 30 ||

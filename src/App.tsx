@@ -3390,9 +3390,38 @@ function ChatPanel({
   onDismissPlan: (id: string) => void;
   messagesRef: React.RefObject<HTMLDivElement | null>;
 }) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const primeTimerRef = useRef<number | null>(null);
+  const [inputPrimed, setInputPrimed] = useState(false);
   const alliesLabel = allianceNames.length ? allianceNames.join(', ') : 'нет надежного союза';
   const councilChoicePlans = useMemo(() => pickCouncilChoicePlans(operationPlans), [operationPlans]);
   const activeOrderCount = orderCount;
+  const primeCouncilInput = useCallback(
+    (value: string) => {
+      onInputChange(value);
+      setInputPrimed(true);
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+
+      if (primeTimerRef.current) {
+        window.clearTimeout(primeTimerRef.current);
+      }
+
+      primeTimerRef.current = window.setTimeout(() => {
+        setInputPrimed(false);
+        primeTimerRef.current = null;
+      }, 1400);
+    },
+    [onInputChange],
+  );
+
+  useEffect(
+    () => () => {
+      if (primeTimerRef.current) {
+        window.clearTimeout(primeTimerRef.current);
+      }
+    },
+    [],
+  );
   const chatConfig: Record<
     ChatChannel,
     {
@@ -3500,7 +3529,7 @@ function ChatPanel({
             worldTension={worldTension}
             currentTurn={turnNumber}
             activeOrderCount={activeOrderCount}
-            onInputChange={onInputChange}
+            onInputChange={primeCouncilInput}
             onRunPlan={onRunPlan}
             onRefinePlan={onRefinePlan}
             onDismissPlan={onDismissPlan}
@@ -3524,16 +3553,25 @@ function ChatPanel({
           </div>
         )}
       </div>
-      <form id="chatForm" className="chat-input" onSubmit={onSubmit}>
+      <form id="chatForm" className={`chat-input${inputPrimed ? ' primed' : ''}`} onSubmit={onSubmit}>
         <input
+          ref={inputRef}
           id="chatInput"
           type="text"
           aria-label={config.placeholder}
           placeholder={config.placeholder}
           value={input}
-          onChange={(event) => onInputChange(event.currentTarget.value)}
+          onChange={(event) => {
+            if (inputPrimed) setInputPrimed(false);
+            onInputChange(event.currentTarget.value);
+          }}
         />
-        <button className="emoji" type="button" aria-label={config.helperLabel} onClick={() => onInputChange(input.trim() ? input : config.prompt)}>
+        <button
+          className="emoji"
+          type="button"
+          aria-label={config.helperLabel}
+          onClick={() => primeCouncilInput(input.trim() ? input : config.prompt)}
+        >
           <CircleHelp aria-hidden="true" />
         </button>
         <button className="send" type="submit" aria-label="Отправить">
