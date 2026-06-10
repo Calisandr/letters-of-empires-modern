@@ -1077,13 +1077,25 @@ try {
     const create = document.querySelector('.orders-panel .create-order');
     const list = document.querySelector('.operation-plan-list');
     const priority = document.querySelector('.council-priority');
+    const brief = document.querySelector('.orders-panel-brief');
     const priorityBox = priority?.getBoundingClientRect();
     const plans = [...document.querySelectorAll('.operation-plan')].map((node) => {
       const box = node.getBoundingClientRect();
+      const metrics = [...node.querySelectorAll('.operation-plan-metrics span')].map(
+        (item) => item.textContent?.replace(/\s+/g, ' ').trim() || '',
+      );
+      const textNodes = [...node.querySelectorAll('h3, p, small, .operation-plan-metrics span')];
+
       return {
         height: box.height,
         actionCount: node.querySelectorAll('.operation-plan-actions button').length,
         actionRowVisible: Boolean(node.querySelector('.operation-plan-actions')?.getBoundingClientRect().height),
+        badge: node.querySelector('.plan-decision-badge')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+        role: node.querySelector('.operation-plan-head span')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+        effect: node.querySelector('.operation-plan-effect')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+        metrics,
+        textReadable: textNodes.every((item) => Number.parseFloat(getComputedStyle(item).fontSize) >= 10.5),
+        overflows: node.scrollWidth > node.clientWidth + 2,
       };
     });
 
@@ -1095,10 +1107,15 @@ try {
 
     return {
       exists: Boolean(panel && create),
+      briefExists: Boolean(brief),
+      briefText: brief?.textContent?.replace(/\s+/g, ' ').trim() || '',
       priorityExists: Boolean(priority),
       priorityLabel: priority?.getAttribute('aria-label') || '',
       priorityTitle: priority?.querySelector('h3')?.textContent?.replace(/\s+/g, ' ').trim() || '',
       priorityReason: priority?.querySelector('p')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      priorityDecision: priority?.querySelector('.plan-decision-badge')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      priorityGuidanceCount: priority?.querySelectorAll('.council-priority-guidance span').length || 0,
+      priorityGuidanceText: priority?.querySelector('.council-priority-guidance')?.textContent?.replace(/\s+/g, ' ').trim() || '',
       priorityMetricCount: priority?.querySelectorAll('.council-priority-facts li').length || 0,
       priorityButtons,
       priorityInsidePanel: Boolean(
@@ -1107,7 +1124,13 @@ try {
       createInsidePanel: Boolean(panelBox && createBox && createBox.bottom <= panelBox.bottom + 1),
       createVisibleHeight: createBox?.height || 0,
       planCount: plans.length + (priority ? 1 : 0),
+      listedPlanCount: plans.length,
       minPlanHeight: plans.reduce((min, plan) => Math.min(min, plan.height), Number.POSITIVE_INFINITY),
+      firstPlanBadge: plans[0]?.badge || '',
+      firstPlanRole: plans[0]?.role || '',
+      firstPlanEffect: plans[0]?.effect || '',
+      firstPlanMetricCount: plans[0]?.metrics.length || 0,
+      operationPlansReadable: plans.every((plan) => plan.textReadable && !plan.overflows && plan.effect.length >= 20),
       firstPlanHasActions: (plans[0]?.actionCount === 3 && plans[0]?.actionRowVisible) || priorityButtons.length >= 3,
       listOverflowY: list ? getComputedStyle(list).overflowY : '',
       listCanScroll: list ? list.scrollHeight >= list.clientHeight : false,
@@ -1423,11 +1446,18 @@ try {
     !diplomacyRelationBadgeDiagnostics.allInline ||
     diplomacyRelationBadgeDiagnostics.anyOverflow ||
     !ordersProposalLayoutDiagnostics.exists ||
+    !ordersProposalLayoutDiagnostics.briefExists ||
+    !ordersProposalLayoutDiagnostics.briefText.includes('Главное:') ||
+    !ordersProposalLayoutDiagnostics.briefText.includes('Очередь:') ||
     !ordersProposalLayoutDiagnostics.priorityExists ||
     ordersProposalLayoutDiagnostics.priorityLabel !== 'Рекомендация Совета' ||
     ordersProposalLayoutDiagnostics.priorityTitle.length < 8 ||
     ordersProposalLayoutDiagnostics.priorityReason.length < 20 ||
-    ordersProposalLayoutDiagnostics.priorityMetricCount < 4 ||
+    ordersProposalLayoutDiagnostics.priorityDecision.length < 6 ||
+    ordersProposalLayoutDiagnostics.priorityGuidanceCount < 2 ||
+    !ordersProposalLayoutDiagnostics.priorityGuidanceText.includes('Следующий шаг') ||
+    !ordersProposalLayoutDiagnostics.priorityGuidanceText.includes('Эффект') ||
+    ordersProposalLayoutDiagnostics.priorityMetricCount < 5 ||
     !ordersProposalLayoutDiagnostics.priorityButtons.includes('Утвердить') ||
     !ordersProposalLayoutDiagnostics.priorityButtons.includes('Уточнить') ||
     !ordersProposalLayoutDiagnostics.priorityButtons.includes('Отложить') ||
@@ -1436,6 +1466,12 @@ try {
     ordersProposalLayoutDiagnostics.createVisibleHeight < 32 ||
     ordersProposalLayoutDiagnostics.planCount < 1 ||
     ordersProposalLayoutDiagnostics.minPlanHeight < 68 ||
+    (ordersProposalLayoutDiagnostics.listedPlanCount > 0 &&
+      (!ordersProposalLayoutDiagnostics.firstPlanBadge ||
+        !ordersProposalLayoutDiagnostics.firstPlanRole ||
+        ordersProposalLayoutDiagnostics.firstPlanEffect.length < 20 ||
+        ordersProposalLayoutDiagnostics.firstPlanMetricCount < 5 ||
+        !ordersProposalLayoutDiagnostics.operationPlansReadable)) ||
     !ordersProposalLayoutDiagnostics.firstPlanHasActions ||
     !['auto', 'scroll'].includes(ordersProposalLayoutDiagnostics.listOverflowY) ||
     buttonNameDiagnostics.unnamedCount !== 0 ||

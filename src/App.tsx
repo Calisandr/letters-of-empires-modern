@@ -1021,6 +1021,108 @@ function councilPriorityReason(plan: OperationPlan, activeOrderCount: number) {
   return 'Совет считает этот план самым сбалансированным по шансу, сроку и риску.';
 }
 
+type PlanDecisionTone = 'safe' | 'watch' | 'risk' | 'blocked';
+
+function hasResourceDelta(delta: ResourceDelta = {}) {
+  return Object.values(delta).some((value) => Number(value) !== 0);
+}
+
+function firstPlanEffect(plan: OperationPlan) {
+  const reward = hasResourceDelta(plan.reward) ? formatResourceCost(plan.reward || {}) : '';
+  const diplomacy = formatDiplomacyDelta(plan.diplomacyDelta);
+  const nation = formatNationDelta(plan.nationDelta);
+
+  if (plan.kind === 'trade') {
+    return reward ? `Доход и маршрут: ${reward}.` : 'Открывает торговое окно и снижает цену следующих переговоров.';
+  }
+
+  if (plan.kind === 'diplomacy') {
+    return diplomacy !== 'без прямых изменений'
+      ? `Дипломатия: ${diplomacy}.`
+      : 'Дает безопасный канал для переговоров без немедленной эскалации.';
+  }
+
+  if (plan.kind === 'military' || plan.kind === 'countermeasure') {
+    return nation !== 'без открытых изменений'
+      ? `Военное досье: ${nation}.`
+      : 'Укрепляет позицию и снижает шанс чужого давления на приказ.';
+  }
+
+  if (plan.kind === 'infrastructure' || plan.kind === 'stability') {
+    return reward ? `Внутренний эффект: ${reward}.` : 'Усиливает устойчивость державы и разгружает следующий ход.';
+  }
+
+  if (reward) return `Эффект: ${reward}.`;
+  if (diplomacy !== 'без прямых изменений') return `Дипломатия: ${diplomacy}.`;
+  if (nation !== 'без открытых изменений') return `Досье: ${nation}.`;
+  return 'Эффект станет виден после исполнения приказа и реакции мира.';
+}
+
+function failurePreview(plan: OperationPlan) {
+  const failureCost = hasResourceDelta(plan.failureCost) ? formatResourceCost(plan.failureCost || {}) : '';
+
+  if (plan.riskLevel === 'critical') {
+    return failureCost ? `Провал дорогой: ${failureCost}.` : 'Провал может резко поднять давление вокруг цели.';
+  }
+
+  if (plan.riskLevel === 'high') {
+    return failureCost ? `При срыве потери: ${failureCost}.` : 'При срыве враги получат повод усилить давление.';
+  }
+
+  if (plan.riskLevel === 'medium') {
+    return 'Средний риск: лучше открыть досье, если цель уже напряжена.';
+  }
+
+  return 'Низкий риск: потери при срыве ограничены.';
+}
+
+function describePlanDecision(plan: OperationPlan, activeOrderCount: number, currentTurn: number) {
+  const expiresIn = Math.max(0, plan.expiresTurn - currentTurn);
+
+  if (activeOrderCount >= 5) {
+    return {
+      label: 'нужен слот',
+      tone: 'blocked' as PlanDecisionTone,
+      nextAction: 'Освободите один приказ, затем вернитесь к утверждению.',
+      reason: councilPriorityReason(plan, activeOrderCount),
+    };
+  }
+
+  if (plan.riskLevel === 'critical' || plan.riskLevel === 'high') {
+    return {
+      label: 'сначала досье',
+      tone: 'risk' as PlanDecisionTone,
+      nextAction: 'Откройте досье и уточните план, если цена провала слишком высока.',
+      reason: `${councilPriorityReason(plan, activeOrderCount)} ${failurePreview(plan)}`,
+    };
+  }
+
+  if (expiresIn <= 1) {
+    return {
+      label: 'решить сейчас',
+      tone: 'watch' as PlanDecisionTone,
+      nextAction: 'Окно почти закрыто: утвердите план или отложите его, чтобы очистить штаб.',
+      reason: councilPriorityReason(plan, activeOrderCount),
+    };
+  }
+
+  if (plan.successChance >= 88) {
+    return {
+      label: 'можно утверждать',
+      tone: 'safe' as PlanDecisionTone,
+      nextAction: 'План достаточно надежен: проверьте цену и утверждайте, если цель подходит.',
+      reason: councilPriorityReason(plan, activeOrderCount),
+    };
+  }
+
+  return {
+    label: 'проверить цену',
+    tone: 'watch' as PlanDecisionTone,
+    nextAction: 'Проверьте досье, цену и срок, затем решите: уточнять или утверждать.',
+    reason: councilPriorityReason(plan, activeOrderCount),
+  };
+}
+
 function pickCouncilChoicePlans(plans: OperationPlan[]) {
   return [...plans].sort((left, right) => scoreOperationPlan(right) - scoreOperationPlan(left)).slice(0, 3);
 }
@@ -3328,16 +3430,28 @@ function CouncilPriorityBrief({
   const expiresIn = Math.max(0, plan.expiresTurn - currentTurn);
   const refinements = plan.refinements || 0;
   const canApprove = activeOrderCount < 5;
+  const decision = describePlanDecision(plan, activeOrderCount, currentTurn);
+  const effect = firstPlanEffect(plan);
 
   return (
     <article className={`council-priority ${plan.riskLevel}`} aria-label="Рекомендация Совета">
       <header>
-        <span>Рекомендация Совета</span>
-        <b>{canApprove ? `окно: ${expiresIn} ход` : 'лимит приказов'}</b>
+        <span>Главная рекомендация</span>
+        <b className={`plan-decision-badge ${decision.tone}`}>{decision.label}</b>
       </header>
       <div className="council-priority-copy">
         <h3>{plan.title}</h3>
-        <p>{councilPriorityReason(plan, activeOrderCount)}</p>
+        <p>{decision.reason}</p>
+      </div>
+      <div className="council-priority-guidance" aria-label="Подсказка по рекомендованному плану">
+        <span>
+          <b>Следующий шаг</b>
+          {decision.nextAction}
+        </span>
+        <span>
+          <b>Эффект</b>
+          {effect}
+        </span>
       </div>
       <ul className="council-priority-facts" aria-label="Параметры рекомендованного плана">
         <li>
@@ -3355,6 +3469,10 @@ function CouncilPriorityBrief({
         <li title={formatResourceCost(plan.cost)}>
           <span>Цена</span>
           <b>{formatCompactResourceCost(plan.cost)}</b>
+        </li>
+        <li>
+          <span>Окно</span>
+          <b>{canApprove ? `${expiresIn} ход` : 'закрыто'}</b>
         </li>
       </ul>
       <div className="council-priority-actions">
@@ -3415,6 +3533,7 @@ function OrdersPanel({
     () => (recommendedPlan ? operationPlans.filter((plan) => plan.id !== recommendedPlan.id) : operationPlans),
     [operationPlans, recommendedPlan],
   );
+  const recommendedDecision = recommendedPlan ? describePlanDecision(recommendedPlan, activeOrderCount, currentTurn) : null;
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   return (
@@ -3429,159 +3548,185 @@ function OrdersPanel({
           Приказы совета <span>({activeOrderCount}/5)</span>
         </h2>
       </div>
-      {recommendedPlan ? (
-        <CouncilPriorityBrief
-          plan={recommendedPlan}
-          currentTurn={currentTurn}
-          activeOrderCount={activeOrderCount}
-          onRunPlan={onRunPlan}
-          onRefinePlan={onRefinePlan}
-          onDismissPlan={onDismissPlan}
-        />
-      ) : null}
-      {listedOperationPlans.length ? (
-        <section className="operation-plans" aria-label="Оперативные планы">
-          <header>
-            <b>Предложения Совета</b>
-            <small>{operationPlans.length}/4 ожидают решения</small>
-          </header>
-          <div className="operation-plan-list">
-            {listedOperationPlans.map((plan) => {
-              const Icon = orderIcons[plan.iconKey];
-              const expiresIn = Math.max(0, plan.expiresTurn - currentTurn);
-              const refinements = plan.refinements || 0;
-
-              return (
-                <article
-                  key={plan.id}
-                  className={`operation-plan ${plan.riskLevel}`}
-                  title={plan.sourceText ? `Основание: ${plan.sourceText}` : undefined}
-                >
-                  <span className="operation-plan-icon">
-                    <Icon aria-hidden="true" />
-                  </span>
-                  <div>
-                    <h3>{plan.title}</h3>
-                    <p>{plan.summary}</p>
-                    <small>
-                      {plan.advisor} · {formatResourceCost(plan.cost)} · шанс {plan.successChance}% · {planRiskLabel(plan.riskLevel)} · {expiresIn} ход.
-                    </small>
-                  </div>
-                  <div className="operation-plan-actions">
-                    <button
-                      type="button"
-                      className="plan-run"
-                      aria-label={`Утвердить предложение: ${plan.title}`}
-                      title={activeOrderCount >= 5 ? 'Лимит активных приказов заполнен' : undefined}
-                      onClick={() => onRunPlan(plan.id)}
-                      disabled={activeOrderCount >= 5}
-                    >
-                      Утвердить приказ
-                    </button>
-                    <button
-                      type="button"
-                      className="plan-refine"
-                      aria-label={`Уточнить предложение: ${plan.title}`}
-                      onClick={() => onRefinePlan(plan.id)}
-                      disabled={refinements >= 2}
-                    >
-                      {refinements >= 2 ? 'Уточнено' : 'Уточнить'}
-                    </button>
-                    <button
-                      type="button"
-                      className="plan-dismiss"
-                      aria-label={`Отложить предложение: ${plan.title}`}
-                      onClick={() => onDismissPlan(plan.id)}
-                    >
-                      Отложить
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
-      <div className="orders-list">
-        {!visibleOrders.length && !operationPlans.length ? (
-          <article className="orders-empty" aria-label="Нет активных приказов">
-            <Flag aria-hidden="true" />
-            <h3>Нет активных приказов</h3>
-            <p>Напишите совету распоряжение или утвердите один из предложенных планов.</p>
-          </article>
+      <div className="orders-panel-brief" aria-label="Состояние штаба">
+        <span>
+          <b>Главное:</b>{' '}
+          {recommendedPlan && recommendedDecision
+            ? `${recommendedDecision.label} · ${recommendedPlan.title}`
+            : activeOrderCount
+              ? 'наблюдать за активными приказами'
+              : 'дать Совету первый замысел'}
+        </span>
+        <span>
+          <b>Очередь:</b> {operationPlans.length ? `${operationPlans.length} план(а)` : 'нет планов'} · {activeOrderCount}/5 приказов
+        </span>
+      </div>
+      <div className="orders-decision-scroll">
+        {recommendedPlan ? (
+          <CouncilPriorityBrief
+            plan={recommendedPlan}
+            currentTurn={currentTurn}
+            activeOrderCount={activeOrderCount}
+            onRunPlan={onRunPlan}
+            onRefinePlan={onRefinePlan}
+            onDismissPlan={onDismissPlan}
+          />
         ) : null}
-        {visibleOrders.map((order) => {
-          const Icon = orderIcons[order.iconKey];
-          const isCancelled = order.statusClass === 'cancelled';
-          const isExpanded = expandedOrderId === order.id;
-          const chance = typeof order.successChance === 'number' ? Math.round(order.successChance) : null;
-          const counterMove = order.lastCounterMove;
-          const counterPressure = order.counterPressure || 0;
-          const hasCounterInfo = Boolean(counterMove || chance !== null || counterPressure > 0);
+        {listedOperationPlans.length ? (
+          <section className="operation-plans" aria-label="Оперативные планы">
+            <header>
+              <b>Предложения Совета</b>
+              <small>{operationPlans.length}/4 ожидают решения</small>
+            </header>
+            <div className="operation-plan-list">
+              {listedOperationPlans.map((plan) => {
+                const Icon = orderIcons[plan.iconKey];
+                const expiresIn = Math.max(0, plan.expiresTurn - currentTurn);
+                const refinements = plan.refinements || 0;
+                const decision = describePlanDecision(plan, activeOrderCount, currentTurn);
+                const effect = firstPlanEffect(plan);
 
-          return (
-            <article
-              key={order.id}
-              className={`order-card${isExpanded ? ' expanded' : ''}`}
-              style={isCancelled ? { opacity: 0.38, filter: 'grayscale(.55)' } : undefined}
-            >
-              <span className="order-icon">
-                <Icon aria-hidden="true" />
-              </span>
-              <div className="order-main">
-                <h3>{order.title}</h3>
-                <p>Исполнитель: {order.owner}</p>
-              </div>
-              <dl>
-                <dt>Цель</dt>
-                <dd>{order.target}</dd>
-                <dt>Статус</dt>
-                <dd className={`status ${order.statusClass}`}>{order.status}</dd>
-                <dt>Срок</dt>
-                <dd>{order.due}</dd>
-              </dl>
-              {hasCounterInfo ? (
-                <p
-                  className={`order-countermove ${counterMove?.severity || 'low'}${
-                    counterMove && counterMove.chanceDelta > 0 ? ' support' : ''
-                  }`}
-                >
-                  <span>{counterMove ? counterMove.title : 'Оценка штаба обновлена'}</span>
-                  {chance !== null ? <b>шанс {chance}%</b> : null}
-                  {counterPressure > 0 ? <em>давление {counterPressure}/100</em> : null}
-                </p>
-              ) : null}
-              {isExpanded ? (
-                <section className="order-expanded" aria-label={`Досье приказа: ${order.title}`}>
-                  <p>{counterMove?.text || order.completeText}</p>
-                  <small>
-                    Риск: {planRiskLabel(order.riskLevel || 'low')} · стоимость: {formatResourceCost(order.cost || {})} ·
-                    награда: {formatResourceCost(order.reward || {})}
-                  </small>
-                  {order.failureText ? <small>Провал: {order.failureText}</small> : null}
-                </section>
-              ) : null}
-              <button
-                type="button"
-                title={isExpanded ? 'Скрыть досье' : 'Посмотреть'}
-                aria-label={`Посмотреть приказ: ${order.title}`}
-                aria-expanded={isExpanded}
-                onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
-              >
-                <Eye aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                title="Отменить"
-                aria-label={`Отменить приказ: ${order.title}`}
-                onClick={() => onCancel(order.id)}
-                disabled={isCancelled}
-              >
-                <X aria-hidden="true" />
-              </button>
+                return (
+                  <article
+                    key={plan.id}
+                    className={`operation-plan ${plan.riskLevel}`}
+                    title={plan.sourceText ? `Основание: ${plan.sourceText}` : undefined}
+                  >
+                    <span className="operation-plan-icon">
+                      <Icon aria-hidden="true" />
+                    </span>
+                    <div>
+                      <div className="operation-plan-head">
+                        <span>{councilChoiceRole(plan)}</span>
+                        <b className={`plan-decision-badge ${decision.tone}`}>{decision.label}</b>
+                      </div>
+                      <h3>{plan.title}</h3>
+                      <p>{decision.nextAction}</p>
+                      <small className="operation-plan-effect">{effect}</small>
+                      <div className="operation-plan-metrics" aria-label={`Параметры плана: ${plan.title}`}>
+                        <span title={plan.advisor}>{plan.advisor}</span>
+                        <span>шанс {plan.successChance}%</span>
+                        <span>{planRiskLabel(plan.riskLevel)}</span>
+                        <span title={formatResourceCost(plan.cost)}>{formatCompactResourceCost(plan.cost)}</span>
+                        <span>окно {expiresIn} ход</span>
+                      </div>
+                    </div>
+                    <div className="operation-plan-actions">
+                      <button
+                        type="button"
+                        className="plan-run"
+                        aria-label={`Утвердить предложение: ${plan.title}`}
+                        title={activeOrderCount >= 5 ? 'Лимит активных приказов заполнен' : undefined}
+                        onClick={() => onRunPlan(plan.id)}
+                        disabled={activeOrderCount >= 5}
+                      >
+                        Утвердить приказ
+                      </button>
+                      <button
+                        type="button"
+                        className="plan-refine"
+                        aria-label={`Уточнить предложение: ${plan.title}`}
+                        onClick={() => onRefinePlan(plan.id)}
+                        disabled={refinements >= 2}
+                      >
+                        {refinements >= 2 ? 'Уточнено' : 'Уточнить'}
+                      </button>
+                      <button
+                        type="button"
+                        className="plan-dismiss"
+                        aria-label={`Отложить предложение: ${plan.title}`}
+                        onClick={() => onDismissPlan(plan.id)}
+                      >
+                        Отложить
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+        <div className="orders-list">
+          {!visibleOrders.length && !operationPlans.length ? (
+            <article className="orders-empty" aria-label="Нет активных приказов">
+              <Flag aria-hidden="true" />
+              <h3>Нет активных приказов</h3>
+              <p>Напишите совету распоряжение или утвердите один из предложенных планов.</p>
             </article>
-          );
-        })}
+          ) : null}
+          {visibleOrders.map((order) => {
+            const Icon = orderIcons[order.iconKey];
+            const isCancelled = order.statusClass === 'cancelled';
+            const isExpanded = expandedOrderId === order.id;
+            const chance = typeof order.successChance === 'number' ? Math.round(order.successChance) : null;
+            const counterMove = order.lastCounterMove;
+            const counterPressure = order.counterPressure || 0;
+            const hasCounterInfo = Boolean(counterMove || chance !== null || counterPressure > 0);
+
+            return (
+              <article
+                key={order.id}
+                className={`order-card${isExpanded ? ' expanded' : ''}`}
+                style={isCancelled ? { opacity: 0.38, filter: 'grayscale(.55)' } : undefined}
+              >
+                <span className="order-icon">
+                  <Icon aria-hidden="true" />
+                </span>
+                <div className="order-main">
+                  <h3>{order.title}</h3>
+                  <p>Исполнитель: {order.owner}</p>
+                </div>
+                <dl>
+                  <dt>Цель</dt>
+                  <dd>{order.target}</dd>
+                  <dt>Статус</dt>
+                  <dd className={`status ${order.statusClass}`}>{order.status}</dd>
+                  <dt>Срок</dt>
+                  <dd>{order.due}</dd>
+                </dl>
+                {hasCounterInfo ? (
+                  <p
+                    className={`order-countermove ${counterMove?.severity || 'low'}${
+                      counterMove && counterMove.chanceDelta > 0 ? ' support' : ''
+                    }`}
+                  >
+                    <span>{counterMove ? counterMove.title : 'Оценка штаба обновлена'}</span>
+                    {chance !== null ? <b>шанс {chance}%</b> : null}
+                    {counterPressure > 0 ? <em>давление {counterPressure}/100</em> : null}
+                  </p>
+                ) : null}
+                {isExpanded ? (
+                  <section className="order-expanded" aria-label={`Досье приказа: ${order.title}`}>
+                    <p>{counterMove?.text || order.completeText}</p>
+                    <small>
+                      Риск: {planRiskLabel(order.riskLevel || 'low')} · стоимость: {formatResourceCost(order.cost || {})} ·
+                      награда: {formatResourceCost(order.reward || {})}
+                    </small>
+                    {order.failureText ? <small>Провал: {order.failureText}</small> : null}
+                  </section>
+                ) : null}
+                <button
+                  type="button"
+                  title={isExpanded ? 'Скрыть досье' : 'Посмотреть'}
+                  aria-label={`Посмотреть приказ: ${order.title}`}
+                  aria-expanded={isExpanded}
+                  onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
+                >
+                  <Eye aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  title="Отменить"
+                  aria-label={`Отменить приказ: ${order.title}`}
+                  onClick={() => onCancel(order.id)}
+                  disabled={isCancelled}
+                >
+                  <X aria-hidden="true" />
+                </button>
+              </article>
+            );
+          })}
+        </div>
       </div>
       <button className="create-order" type="button" onClick={onCreateOrder}>
         <Plus aria-hidden="true" />
