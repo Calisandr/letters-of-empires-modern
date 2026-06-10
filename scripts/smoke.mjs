@@ -175,7 +175,7 @@ try {
   );
   await page.getByRole('button', { name: 'Разведка: Бразилия' }).click();
   await page.waitForTimeout(120);
-  await page.waitForSelector('.operation-plan');
+  await page.waitForSelector('.council-priority, .operation-plan');
   const afterCountryIntelAction = await page.evaluate(() => ({
     goldText: [...document.querySelectorAll('.resource-list li')].find((node) =>
       node.textContent?.includes('Золото'),
@@ -187,7 +187,7 @@ try {
     timelineTop: document.querySelector('.timeline-panel article h3')?.textContent?.trim() || '',
   }));
   const operationPlanDiagnostics = await page.evaluate(() => {
-    const plans = [...document.querySelectorAll('.operation-plan')];
+    const plans = [...document.querySelectorAll('.council-priority, .operation-plan')];
     const first = plans[0];
 
     return {
@@ -195,7 +195,11 @@ try {
       title: first?.querySelector('h3')?.textContent?.trim() || '',
       hasRunButton: Boolean(first?.querySelector('.plan-run')?.textContent?.includes('Утвердить')),
       hasDismissButton: Boolean(first?.querySelector('.plan-dismiss')),
-      meta: first?.querySelector('small')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      meta:
+        first?.querySelector('small')?.textContent?.replace(/\s+/g, ' ').trim() ||
+        [...(first?.querySelectorAll('.council-priority-facts b') || [])]
+          .map((node) => node.textContent?.trim() || '')
+          .join(' · '),
     };
   });
   const countryIntelActionDiagnostics = {
@@ -373,7 +377,7 @@ try {
   const chatText = await page.locator('.chat-messages').innerText();
   const councilDirectiveDiagnostics = await page.evaluate(() => {
     const card = document.querySelector('.council-decision-card');
-    const planTitles = [...document.querySelectorAll('.operation-plan h3')].map((node) =>
+    const planTitles = [...document.querySelectorAll('.council-priority h3, .operation-plan h3')].map((node) =>
       node.textContent?.replace(/\s+/g, ' ').trim() || '',
     );
     const buttons = [...(card?.querySelectorAll('button') || [])].map((button) =>
@@ -409,10 +413,12 @@ try {
   });
   await page.locator('.council-decision-card .plan-dismiss').click();
   await page.waitForFunction(() =>
-    ![...document.querySelectorAll('.operation-plan h3')].some((node) => node.textContent?.includes('Турция')),
+    ![...document.querySelectorAll('.council-priority h3, .operation-plan h3')].some((node) =>
+      node.textContent?.includes('Турция'),
+    ),
   );
   const councilDirectiveDismissed = await page.evaluate(() => ({
-    planStillVisible: [...document.querySelectorAll('.operation-plan h3')].some((node) =>
+    planStillVisible: [...document.querySelectorAll('.council-priority h3, .operation-plan h3')].some((node) =>
       node.textContent?.includes('Турция'),
     ),
     cardStillVisible: Boolean(document.querySelector('.council-decision-card h3')?.textContent?.includes('Турция')),
@@ -498,15 +504,15 @@ try {
     logged: orderRemovalAfter.timelineHasCancel,
   };
   const orderCounterBeforeDialog = await page.locator('.orders-panel .panel-heading h2 span').textContent();
-  const proposalCountBeforeDialog = await page.locator('.operation-plan').count();
+  const proposalCountBeforeDialog = await page.locator('.council-priority, .operation-plan').count();
   await page.locator('.create-order').click();
   await page.waitForSelector('[role="dialog"]');
   const dialogOpened = await page.locator('[role="dialog"]').isVisible();
   await page.locator('[role="dialog"]').getByRole('button', { name: 'Подтвердить приказ' }).click();
   await page.waitForTimeout(120);
   const orderCounterAfterDialog = await page.locator('.orders-panel .panel-heading h2 span').textContent();
-  const proposalCountAfterDialog = await page.locator('.operation-plan').count();
-  const proposalTitleAfterDialog = await page.locator('.operation-plan h3').first().textContent();
+  const proposalCountAfterDialog = await page.locator('.council-priority, .operation-plan').count();
+  const proposalTitleAfterDialog = await page.locator('.council-priority h3, .operation-plan h3').first().textContent();
 
   const readRightPanelState = () =>
     page.evaluate(() => ({
@@ -517,7 +523,7 @@ try {
         node.textContent?.replace(/\s+/g, ' ').trim(),
       ),
       mailCount: document.querySelectorAll('.mail-panel article').length,
-      operationPlanTitles: [...document.querySelectorAll('.operation-plan h3')].map((node) =>
+      operationPlanTitles: [...document.querySelectorAll('.council-priority h3, .operation-plan h3')].map((node) =>
         node.textContent?.replace(/\s+/g, ' ').trim(),
       ),
     }));
@@ -666,8 +672,8 @@ try {
       turn: document.querySelector('.turn-info strong')?.textContent || '',
       timelineTop: document.querySelector('.timeline-panel article h3')?.textContent || '',
       orderCounter: document.querySelector('.orders-panel .panel-heading h2 span')?.textContent || '',
-      operationPlanCount: document.querySelectorAll('.operation-plan').length,
-      operationPlanTop: document.querySelector('.operation-plan h3')?.textContent?.trim() || '',
+      operationPlanCount: document.querySelectorAll('.council-priority, .operation-plan').length,
+      operationPlanTop: document.querySelector('.council-priority h3, .operation-plan h3')?.textContent?.trim() || '',
     }));
 
   const beforeGameAction = await readGameState();
@@ -910,6 +916,8 @@ try {
     const panel = document.querySelector('.orders-panel');
     const create = document.querySelector('.orders-panel .create-order');
     const list = document.querySelector('.operation-plan-list');
+    const priority = document.querySelector('.council-priority');
+    const priorityBox = priority?.getBoundingClientRect();
     const plans = [...document.querySelectorAll('.operation-plan')].map((node) => {
       const box = node.getBoundingClientRect();
       return {
@@ -921,14 +929,26 @@ try {
 
     const panelBox = panel?.getBoundingClientRect();
     const createBox = create?.getBoundingClientRect();
+    const priorityButtons = [...(priority?.querySelectorAll('button') || [])].map((node) =>
+      node.textContent?.replace(/\s+/g, ' ').trim() || '',
+    );
 
     return {
       exists: Boolean(panel && create),
+      priorityExists: Boolean(priority),
+      priorityLabel: priority?.getAttribute('aria-label') || '',
+      priorityTitle: priority?.querySelector('h3')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      priorityReason: priority?.querySelector('p')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      priorityMetricCount: priority?.querySelectorAll('.council-priority-facts li').length || 0,
+      priorityButtons,
+      priorityInsidePanel: Boolean(
+        panelBox && priorityBox && priorityBox.top >= panelBox.top - 1 && priorityBox.bottom <= panelBox.bottom + 1,
+      ),
       createInsidePanel: Boolean(panelBox && createBox && createBox.bottom <= panelBox.bottom + 1),
       createVisibleHeight: createBox?.height || 0,
-      planCount: plans.length,
+      planCount: plans.length + (priority ? 1 : 0),
       minPlanHeight: plans.reduce((min, plan) => Math.min(min, plan.height), Number.POSITIVE_INFINITY),
-      firstPlanHasActions: plans[0]?.actionCount === 3 && plans[0]?.actionRowVisible,
+      firstPlanHasActions: (plans[0]?.actionCount === 3 && plans[0]?.actionRowVisible) || priorityButtons.length >= 3,
       listOverflowY: list ? getComputedStyle(list).overflowY : '',
       listCanScroll: list ? list.scrollHeight >= list.clientHeight : false,
     };
@@ -1191,6 +1211,15 @@ try {
     !diplomacyRelationBadgeDiagnostics.allInline ||
     diplomacyRelationBadgeDiagnostics.anyOverflow ||
     !ordersProposalLayoutDiagnostics.exists ||
+    !ordersProposalLayoutDiagnostics.priorityExists ||
+    ordersProposalLayoutDiagnostics.priorityLabel !== 'Рекомендация Совета' ||
+    ordersProposalLayoutDiagnostics.priorityTitle.length < 8 ||
+    ordersProposalLayoutDiagnostics.priorityReason.length < 20 ||
+    ordersProposalLayoutDiagnostics.priorityMetricCount < 4 ||
+    !ordersProposalLayoutDiagnostics.priorityButtons.includes('Утвердить') ||
+    !ordersProposalLayoutDiagnostics.priorityButtons.includes('Уточнить') ||
+    !ordersProposalLayoutDiagnostics.priorityButtons.includes('Отложить') ||
+    !ordersProposalLayoutDiagnostics.priorityInsidePanel ||
     !ordersProposalLayoutDiagnostics.createInsidePanel ||
     ordersProposalLayoutDiagnostics.createVisibleHeight < 32 ||
     ordersProposalLayoutDiagnostics.planCount < 1 ||

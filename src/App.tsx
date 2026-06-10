@@ -918,6 +918,54 @@ function planRiskLabel(risk: OperationPlan['riskLevel']) {
   return 'низкий риск';
 }
 
+const planRiskScore: Record<OperationPlan['riskLevel'], number> = {
+  low: 0,
+  medium: 1,
+  high: 2,
+  critical: 3,
+};
+
+function scoreOperationPlan(plan: OperationPlan) {
+  const urgency = Math.max(0, 3 - (plan.expiresTurn - plan.createdTurn));
+  const speed = Math.max(0, 4 - plan.durationTurns) * 3;
+  const riskPenalty = planRiskScore[plan.riskLevel] * 14;
+  const councilBonus = plan.origin === 'council' ? 5 : 0;
+
+  return plan.successChance + speed + urgency + councilBonus - riskPenalty;
+}
+
+function pickCouncilPriorityPlan(plans: OperationPlan[]) {
+  return [...plans].sort((left, right) => scoreOperationPlan(right) - scoreOperationPlan(left))[0] || null;
+}
+
+function councilPriorityReason(plan: OperationPlan, activeOrderCount: number) {
+  if (activeOrderCount >= 5) {
+    return 'Лимит приказов заполнен: сначала завершите или отмените один активный приказ, затем утверждайте новый план.';
+  }
+
+  if (plan.successChance >= 90 && plan.durationTurns <= 1) {
+    return 'Лучший первый выбор: быстрый приказ с высоким шансом и понятной ценой.';
+  }
+
+  if (plan.riskLevel === 'high' || plan.riskLevel === 'critical') {
+    return 'План сильный, но опасный: совет рекомендует сначала уточнить маршрут или подготовить ресурсы.';
+  }
+
+  if (plan.kind === 'military') {
+    return 'Военный план укрепит позицию державы, но займет время и свяжет ресурсы.';
+  }
+
+  if (plan.kind === 'trade') {
+    return 'Торговый план дает доход и улучшает связи, если окно маршрута не закрыть промедлением.';
+  }
+
+  if (plan.kind === 'diplomacy') {
+    return 'Дипломатический план стоит утвердить, если нужен ответ без прямой войны и лишнего давления.';
+  }
+
+  return 'Совет считает этот план самым сбалансированным по шансу, сроку и риску.';
+}
+
 function CountryIntelPanel({
   selectedCountry,
   nations,
@@ -2684,6 +2732,85 @@ function ChatPanel({
   );
 }
 
+function CouncilPriorityBrief({
+  plan,
+  currentTurn,
+  activeOrderCount,
+  onRunPlan,
+  onRefinePlan,
+  onDismissPlan,
+}: {
+  plan: OperationPlan;
+  currentTurn: number;
+  activeOrderCount: number;
+  onRunPlan: (id: string) => void;
+  onRefinePlan: (id: string) => void;
+  onDismissPlan: (id: string) => void;
+}) {
+  const expiresIn = Math.max(0, plan.expiresTurn - currentTurn);
+  const refinements = plan.refinements || 0;
+  const canApprove = activeOrderCount < 5;
+
+  return (
+    <article className={`council-priority ${plan.riskLevel}`} aria-label="Рекомендация Совета">
+      <header>
+        <span>Рекомендация Совета</span>
+        <b>{canApprove ? `окно: ${expiresIn} ход` : 'лимит приказов'}</b>
+      </header>
+      <div className="council-priority-copy">
+        <h3>{plan.title}</h3>
+        <p>{councilPriorityReason(plan, activeOrderCount)}</p>
+      </div>
+      <ul className="council-priority-facts" aria-label="Параметры рекомендованного плана">
+        <li>
+          <span>Шанс</span>
+          <b>{plan.successChance}%</b>
+        </li>
+        <li>
+          <span>Риск</span>
+          <b>{planRiskLabel(plan.riskLevel)}</b>
+        </li>
+        <li>
+          <span>Срок</span>
+          <b>{plan.durationTurns} ход</b>
+        </li>
+        <li title={formatResourceCost(plan.cost)}>
+          <span>Цена</span>
+          <b>{formatCompactResourceCost(plan.cost)}</b>
+        </li>
+      </ul>
+      <div className="council-priority-actions">
+        <button
+          type="button"
+          className="plan-run"
+          aria-label={`Утвердить рекомендованный план: ${plan.title}`}
+          onClick={() => onRunPlan(plan.id)}
+          disabled={!canApprove}
+        >
+          Утвердить
+        </button>
+        <button
+          type="button"
+          className="plan-refine"
+          aria-label={`Уточнить рекомендованный план: ${plan.title}`}
+          onClick={() => onRefinePlan(plan.id)}
+          disabled={refinements >= 2}
+        >
+          {refinements >= 2 ? 'Уточнено' : 'Уточнить'}
+        </button>
+        <button
+          type="button"
+          className="plan-dismiss"
+          aria-label={`Отложить рекомендованный план: ${plan.title}`}
+          onClick={() => onDismissPlan(plan.id)}
+        >
+          Отложить
+        </button>
+      </div>
+    </article>
+  );
+}
+
 function OrdersPanel({
   orders,
   operationPlans,
@@ -2705,11 +2832,16 @@ function OrdersPanel({
 }) {
   const visibleOrders = useMemo(() => orders.filter((order) => order.statusClass !== 'cancelled'), [orders]);
   const activeOrderCount = visibleOrders.length;
+  const recommendedPlan = useMemo(() => pickCouncilPriorityPlan(operationPlans), [operationPlans]);
+  const listedOperationPlans = useMemo(
+    () => (recommendedPlan ? operationPlans.filter((plan) => plan.id !== recommendedPlan.id) : operationPlans),
+    [operationPlans, recommendedPlan],
+  );
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   return (
     <motion.section
-      className="orders-panel framed-panel"
+      className={`orders-panel framed-panel${operationPlans.length ? ' has-operation-plans' : ''}`}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.14, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
@@ -2719,14 +2851,24 @@ function OrdersPanel({
           Приказы совета <span>({activeOrderCount}/5)</span>
         </h2>
       </div>
-      {operationPlans.length ? (
+      {recommendedPlan ? (
+        <CouncilPriorityBrief
+          plan={recommendedPlan}
+          currentTurn={currentTurn}
+          activeOrderCount={activeOrderCount}
+          onRunPlan={onRunPlan}
+          onRefinePlan={onRefinePlan}
+          onDismissPlan={onDismissPlan}
+        />
+      ) : null}
+      {listedOperationPlans.length ? (
         <section className="operation-plans" aria-label="Оперативные планы">
           <header>
             <b>Предложения Совета</b>
             <small>{operationPlans.length}/4 ожидают решения</small>
           </header>
           <div className="operation-plan-list">
-            {operationPlans.map((plan) => {
+            {listedOperationPlans.map((plan) => {
               const Icon = orderIcons[plan.iconKey];
               const expiresIn = Math.max(0, plan.expiresTurn - currentTurn);
               const refinements = plan.refinements || 0;
@@ -2752,7 +2894,9 @@ function OrdersPanel({
                       type="button"
                       className="plan-run"
                       aria-label={`Утвердить предложение: ${plan.title}`}
+                      title={activeOrderCount >= 5 ? 'Лимит активных приказов заполнен' : undefined}
                       onClick={() => onRunPlan(plan.id)}
+                      disabled={activeOrderCount >= 5}
                     >
                       Утвердить приказ
                     </button>
