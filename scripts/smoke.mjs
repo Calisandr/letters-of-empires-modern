@@ -51,6 +51,42 @@ try {
     };
   });
 
+  await page.getByRole('button', { name: 'Помощь' }).click();
+  await page.waitForSelector('.guide-dialog');
+  const guideDialogDiagnostics = await page.evaluate(() => {
+    const dialog = document.querySelector('.guide-dialog');
+    const dialogRect = dialog?.getBoundingClientRect();
+    const textNodes = [...(dialog?.querySelectorAll('p, dd, dt, button, span, small, b') || [])].filter((node) => {
+      const text = node.textContent?.trim() || '';
+      return text.length > 0;
+    });
+    const smallTextNodes = textNodes.filter((node) => parseFloat(getComputedStyle(node).fontSize) < 12);
+    const overflowingNodes = [...(dialog?.querySelectorAll('*') || [])].filter((node) => {
+      const box = node.getBoundingClientRect();
+      return box.width > 0 && dialogRect && box.right > dialogRect.right + 2;
+    });
+
+    return {
+      exists: Boolean(dialog),
+      role: dialog?.getAttribute('role') || '',
+      modal: dialog?.getAttribute('aria-modal') || '',
+      title: dialog?.querySelector('h2')?.textContent?.trim() || '',
+      currentText: dialog?.querySelector('.guide-current p')?.textContent?.trim() || '',
+      cycleCount: dialog?.querySelectorAll('.guide-cycle article').length || 0,
+      channelCount: dialog?.querySelectorAll('.guide-channels article').length || 0,
+      actionCount: dialog?.querySelectorAll('.guide-actions dl div').length || 0,
+      activeChannelCount: dialog?.querySelectorAll('.guide-channels article.active').length || 0,
+      visibleWidth: dialogRect?.width || 0,
+      visibleHeight: dialogRect?.height || 0,
+      smallTextCount: smallTextNodes.length,
+      overflowCount: overflowingNodes.length,
+      closeText: dialog?.querySelector('.dialog-close')?.textContent?.trim() || '',
+    };
+  });
+  await page.locator('.guide-dialog .dialog-close').click();
+  await page.waitForFunction(() => document.querySelectorAll('.guide-dialog').length === 0);
+  const guideDialogClosed = (await page.locator('.guide-dialog').count()) === 0;
+
   await page.locator('#mapMode').click();
   await page.locator('.map-mode-menu button').nth(1).click();
   await page.waitForFunction(() => document.querySelector('.app-shell')?.classList.contains('trade-mode'));
@@ -1000,6 +1036,8 @@ try {
     initialTitle,
     legacyScriptLoaded,
     legacyScriptResponse,
+    guideDialogDiagnostics,
+    guideDialogClosed,
     countryCount,
     liveMapDiagnostics,
     liveMarkerClickSelectedUkraine,
@@ -1059,6 +1097,21 @@ try {
   const failed =
     legacyScriptLoaded ||
     legacyScriptResponse.servesLegacyJs ||
+    !guideDialogDiagnostics.exists ||
+    guideDialogDiagnostics.role !== 'dialog' ||
+    guideDialogDiagnostics.modal !== 'true' ||
+    guideDialogDiagnostics.title !== 'Как вести ход' ||
+    guideDialogDiagnostics.currentText.length < 40 ||
+    guideDialogDiagnostics.cycleCount < 4 ||
+    guideDialogDiagnostics.channelCount < 3 ||
+    guideDialogDiagnostics.actionCount < 4 ||
+    guideDialogDiagnostics.activeChannelCount !== 1 ||
+    guideDialogDiagnostics.visibleWidth < 760 ||
+    guideDialogDiagnostics.visibleHeight < 520 ||
+    guideDialogDiagnostics.smallTextCount > 0 ||
+    guideDialogDiagnostics.overflowCount > 0 ||
+    guideDialogDiagnostics.closeText !== 'Закрыть устав' ||
+    !guideDialogClosed ||
     countryCount < 30 ||
     liveMapDiagnostics.markerCount < 3 ||
     liveMapDiagnostics.linkCount < 1 ||

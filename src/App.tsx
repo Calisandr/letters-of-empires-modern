@@ -1494,6 +1494,7 @@ function App() {
   const [chatInput, setChatInput] = useState('');
   const [activeChatTab, setActiveChatTab] = useState<ChatTabLabel>('Совет');
   const [activeUtilityPanel, setActiveUtilityPanel] = useState<string | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [pendingQuickAction, setPendingQuickAction] = useState<QuickActionId | null>(null);
   const [pendingOperationPlanId, setPendingOperationPlanId] = useState<string | null>(null);
   const [turnReportOpen, setTurnReportOpen] = useState(false);
@@ -1663,6 +1664,12 @@ function App() {
   };
 
   const openUtilityPanel = (label: string) => {
+    if (label === 'Помощь') {
+      setGuideOpen(true);
+      setActiveUtilityPanel(null);
+      return;
+    }
+
     setActiveUtilityPanel(label);
     showToast(`${label}: панель открыта`);
   };
@@ -2246,6 +2253,21 @@ function App() {
         />
       ) : null}
 
+      {guideOpen ? (
+        <GuideDialog
+          activeChatTab={activeChatTab}
+          diplomacy={diplomacy}
+          letters={letters}
+          operationPlans={operationPlans}
+          orders={orders}
+          selectedCountryName={gameState.selectedCountry?.name || 'Россия'}
+          turnNumber={turnNumber}
+          turnObjective={turnObjective}
+          worldTension={worldTension}
+          onClose={() => setGuideOpen(false)}
+        />
+      ) : null}
+
       {turnReportOpen && lastTurnReport ? (
         <TurnReportDialog
           report={lastTurnReport}
@@ -2438,6 +2460,219 @@ function UtilityPanel({
         <X aria-hidden="true" />
       </button>
     </section>
+  );
+}
+
+function GuideDialog({
+  activeChatTab,
+  diplomacy,
+  letters,
+  operationPlans,
+  orders,
+  selectedCountryName,
+  turnNumber,
+  turnObjective,
+  worldTension,
+  onClose,
+}: {
+  activeChatTab: ChatTabLabel;
+  diplomacy: DiplomacyRelation[];
+  letters: Letter[];
+  operationPlans: OperationPlan[];
+  orders: Order[];
+  selectedCountryName: string;
+  turnNumber: number;
+  turnObjective: TurnObjective;
+  worldTension: number;
+  onClose: () => void;
+}) {
+  const activeOrders = orders.filter((order) => order.statusClass !== 'cancelled');
+  const openLetters = letters.filter((letter) => letter.status !== 'answered');
+  const strongestPlan = [...operationPlans].sort((left, right) => right.successChance - left.successChance)[0];
+  const closestOrder = [...activeOrders].sort((left, right) => left.remainingTurns - right.remainingTurns)[0];
+  const tenseRelation = [...diplomacy].sort((left, right) => left.score - right.score)[0];
+  const alliedCount = diplomacy.filter((relation) => relation.tone === 'ally' || relation.score >= 100).length;
+
+  const nextAction = (() => {
+    if (openLetters.length) {
+      const urgentLetter = openLetters.find((letter) => letter.tone === 'red' || letter.tone === 'bronze') || openLetters[0];
+
+      return {
+        title: 'Разберите канцелярские письма',
+        text: `${urgentLetter.from} ждёт решения по теме "${urgentLetter.subject}". Ответ может изменить отношения, ресурсы или создать новый повод для приказа.`,
+        tone: urgentLetter.tone === 'red' ? 'warning' : 'opportunity',
+      };
+    }
+
+    if (strongestPlan) {
+      return {
+        title: 'Проверьте предложение Совета',
+        text: `${strongestPlan.title}: шанс ${strongestPlan.successChance}%, риск "${planRiskLabel(strongestPlan.riskLevel)}". Откройте досье, чтобы понять цену, награду и последствия провала.`,
+        tone: strongestPlan.riskLevel === 'high' || strongestPlan.riskLevel === 'critical' ? 'warning' : 'opportunity',
+      };
+    }
+
+    if (closestOrder) {
+      return {
+        title: 'Дайте приказам продвинуться',
+        text: `${closestOrder.title} завершится через ${closestOrder.remainingTurns} ход. Если писем и новых планов нет, завершение хода двинет экономику, арбитра мира и статусы приказов.`,
+        tone: closestOrder.riskLevel === 'high' || closestOrder.riskLevel === 'critical' ? 'warning' : 'steady',
+      };
+    }
+
+    if (selectedCountryName !== playerCountry.name) {
+      return {
+        title: `Сформулируйте ход по цели "${selectedCountryName}"`,
+        text: 'Напишите распоряжение в Совет или используйте действие из досье страны. Совет вернёт план с ценой, сроком, шансом и последствиями.',
+        tone: 'opportunity',
+      };
+    }
+
+    return {
+      title: 'Выберите замысел на ход',
+      text: 'Начните с цели: страна на карте, письмо, торговый маршрут, оборона или разведка. Совет превращает обычный текст в проверяемый игровой приказ.',
+      tone: worldTension >= 55 ? 'warning' : 'steady',
+    };
+  })();
+
+  const channelGuide: Array<{ title: ChatTabLabel; status: string; text: string; icon: LucideIcon }> = [
+    {
+      title: 'Совет',
+      status: activeChatTab === 'Совет' ? 'открыт сейчас' : 'приватный канал',
+      text: 'Главный канал игрока и нейросети. Здесь пишутся распоряжения, а Совет оценивает риск, цену, цель и возможные последствия.',
+      icon: CircleHelp,
+    },
+    {
+      title: 'Мир',
+      status: 'видят все державы',
+      text: 'Публичные заявления: гарантии, угрозы, торговые предложения. Они могут менять дипломатическое давление и попадать в хронику.',
+      icon: MessageSquare,
+    },
+    {
+      title: 'Альянс',
+      status: alliedCount ? `${alliedCount} союзн.` : 'нужны союзники',
+      text: 'Закрытая координация с союзниками. Полезна для совместной обороны, маршрутов, поставок и осторожных политических сигналов.',
+      icon: Handshake,
+    },
+  ];
+
+  const actionGuide = [
+    {
+      title: 'Письма',
+      value: `${openLetters.length} открыто`,
+      text: 'Это не почта для вида: ответы меняют дипломатию, хронику, ресурсы и иногда создают новые планы Совета.',
+    },
+    {
+      title: 'Приказы',
+      value: `${activeOrders.length}/5`,
+      text: 'Приказ начинает тратить ресурсы и двигаться по ходам только после утверждения досье. Отмена убирает его из активного списка.',
+    },
+    {
+      title: 'Завершить ход',
+      value: `ход ${turnNumber}`,
+      text: 'Нажимайте, когда письма и планы разобраны. Тогда начисляются ресурсы, мир реагирует, а приказы приближаются к результату.',
+    },
+    {
+      title: 'Досье державы',
+      value: tenseRelation ? `${tenseRelation.name} ${tenseRelation.score > 0 ? '+' : ''}${tenseRelation.score}` : 'нет данных',
+      text: 'Выбор страны на карте показывает её фокус, давление, угрозу и доступные действия. Это лучший вход для точечных распоряжений.',
+    },
+  ];
+
+  const cycleGuide = [
+    { title: '1. Цель', text: 'Выберите страну, письмо или проблему на карте.' },
+    { title: '2. Замысел', text: 'Напишите Совету обычным текстом, что хотите сделать.' },
+    { title: '3. Досье', text: 'Проверьте шанс, цену, срок и риск провала.' },
+    { title: '4. Ход', text: 'Утвердите приказ и завершите ход, чтобы мир ответил.' },
+  ];
+
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="guide-dialog framed-panel" role="dialog" aria-modal="true" aria-labelledby="guideDialogTitle">
+        <header className="dialog-heading guide-dialog-heading">
+          <span className="guide-emblem" aria-hidden="true">
+            <CircleHelp />
+          </span>
+          <div>
+            <small>Полевой устав Совета</small>
+            <h2 id="guideDialogTitle">Как вести ход</h2>
+            <p>
+              Ход {turnNumber} · цель: {selectedCountryName} · канал: {activeChatTab}
+            </p>
+          </div>
+          <strong>
+            {turnObjective.metricLabel}: {turnObjective.metricValue}
+          </strong>
+          <button type="button" className="dialog-close text-close" onClick={onClose}>
+            Закрыть устав
+          </button>
+        </header>
+
+        <div className="guide-dialog-body">
+          <section className={`guide-current ${nextAction.tone}`} aria-label="Текущая рекомендация">
+            <div>
+              <span>Сейчас важно</span>
+              <h3>{nextAction.title}</h3>
+              <p>{nextAction.text}</p>
+            </div>
+            <div className="guide-current-meter">
+              <span>Цель хода</span>
+              <b>{turnObjective.title}</b>
+              <i aria-hidden="true">
+                <em style={{ width: `${turnObjective.progress}%` }} />
+              </i>
+              <small>{turnObjective.action}</small>
+            </div>
+          </section>
+
+          <section className="guide-cycle" aria-label="Игровой цикл">
+            {cycleGuide.map((item) => (
+              <article key={item.title}>
+                <b>{item.title}</b>
+                <p>{item.text}</p>
+              </article>
+            ))}
+          </section>
+
+          <section className="guide-channels" aria-label="Каналы общения">
+            <header>
+              <h3>Куда писать</h3>
+              <p>Основные действия проходят через чат, а панели помогают быстро проверить последствия.</p>
+            </header>
+            <div>
+              {channelGuide.map(({ title, status, text, icon: Icon }) => (
+                <article key={title} className={activeChatTab === title ? 'active' : undefined}>
+                  <Icon aria-hidden="true" />
+                  <div>
+                    <b>{title}</b>
+                    <span>{status}</span>
+                    <p>{text}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="guide-actions" aria-label="Смысл основных кнопок">
+            <header>
+              <h3>Что значат главные кнопки</h3>
+              <p>Кнопки нужны не вместо Совета, а чтобы не терять важные решения и быстро подтверждать понятные действия.</p>
+            </header>
+            <dl>
+              {actionGuide.map((item) => (
+                <div key={item.title}>
+                  <dt>
+                    <span>{item.title}</span>
+                    <b>{item.value}</b>
+                  </dt>
+                  <dd>{item.text}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        </div>
+      </section>
+    </div>
   );
 }
 
