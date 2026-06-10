@@ -70,6 +70,101 @@ input:focus-visible,
   background: rgba(138, 94, 42, .32);
 }
 
+.turn-objective {
+  display: grid;
+  gap: 5px;
+  margin: 7px 0 6px;
+  padding: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(205, 162, 85, .18);
+  border-radius: 6px;
+  background:
+    linear-gradient(90deg, rgba(226, 183, 100, .08), transparent 72%),
+    rgba(3, 9, 10, .5);
+}
+
+.turn-objective header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.turn-objective header span {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(174, 190, 165, .82);
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.turn-objective header b {
+  flex: 0 0 auto;
+  color: #f1cf76;
+  font-size: 10.8px;
+  line-height: 1;
+}
+
+.turn-objective h2 {
+  margin: 0;
+  overflow: hidden;
+  color: #f5d783;
+  font: 700 13.4px/1.14 var(--serif);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.turn-objective p,
+.turn-objective small {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  color: rgba(226, 219, 188, .9);
+  font-size: 11.2px;
+  line-height: 1.25;
+}
+
+.turn-objective p {
+  -webkit-line-clamp: 2;
+}
+
+.turn-objective small {
+  -webkit-line-clamp: 2;
+  color: rgba(166, 185, 162, .86);
+}
+
+.turn-objective-meter {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(2, 7, 8, .72);
+}
+
+.turn-objective-meter i {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(126, 189, 128, .76), rgba(241, 205, 116, .92));
+}
+
+.turn-objective.warning .turn-objective-meter i {
+  background: linear-gradient(90deg, rgba(226, 183, 100, .88), rgba(237, 129, 88, .88));
+}
+
+.turn-objective.danger .turn-objective-meter i {
+  background: linear-gradient(90deg, rgba(205, 73, 63, .82), rgba(246, 188, 91, .92));
+}
+
+.turn-objective.opportunity {
+  border-color: rgba(126, 189, 128, .2);
+}
+
 .quick-actions button:disabled {
   cursor: default;
   opacity: .5;
@@ -4370,6 +4465,38 @@ input:focus-visible,
     font-size: 13px;
   }
 
+  .redesign-shell .turn-objective {
+    flex: 0 0 auto;
+    gap: 5px;
+    margin: 0 0 8px;
+    padding: 9px;
+    border-color: rgba(215, 168, 87, .14);
+    background:
+      linear-gradient(135deg, rgba(241, 205, 116, .09), transparent 62%),
+      rgba(2, 8, 9, .58);
+  }
+
+  .redesign-shell .turn-objective header span {
+    color: rgba(174, 190, 165, .84);
+    font-size: 10.2px;
+  }
+
+  .redesign-shell .turn-objective header b {
+    color: #f5d783;
+    font-size: 11px;
+  }
+
+  .redesign-shell .turn-objective h2 {
+    color: #ffe08d;
+    font-size: 13.8px;
+  }
+
+  .redesign-shell .turn-objective p,
+  .redesign-shell .turn-objective small {
+    font-size: 11.4px;
+    line-height: 1.25;
+  }
+
   .redesign-shell .turn-info {
     grid-template-columns: 1fr 1fr;
     gap: 8px;
@@ -4944,51 +5071,53 @@ input:focus-visible,
   .redesign-shell .empire-card {
     min-height: auto;
     height: calc(100vh - 86px);
-    padding: 14px 20px 10px;
+    padding: 12px 20px 8px;
     overflow: hidden;
   }
 
   .redesign-shell .empire-card h1 {
-    margin: 0 0 8px;
-    font-size: 26px;
+    margin: 0 0 6px;
+    font-size: 25px;
   }
 
   .redesign-shell .state-flag {
-    height: 72px;
-    margin-bottom: 7px;
+    height: 68px;
+    margin-bottom: 6px;
   }
 
   .redesign-shell .state-flag .flag {
-    --flag-w: 122px;
-    --flag-h: 70px;
+    --flag-w: 116px;
+    --flag-h: 66px;
   }
 
   .redesign-shell .ruler-block {
-    min-height: 48px;
-    padding: 7px 0;
+    min-height: 42px;
+    margin-bottom: 6px;
+    padding: 5px 0;
   }
 
   .redesign-shell .ruler-avatar {
-    width: 38px;
-    height: 38px;
+    width: 34px;
+    height: 34px;
   }
 
   .redesign-shell .meta-line {
-    min-height: 27px;
+    min-height: 24px;
   }
 
   .redesign-shell .section-title {
-    margin: 8px 0 4px;
+    margin: 6px 0 3px;
+    font-size: 11.8px;
   }
 
   .redesign-shell .resource-list li {
-    min-height: 21px;
-    padding: 2px 0;
-    font-size: 12.4px;
+    min-height: 19px;
+    padding: 1px 0;
+    font-size: 12.2px;
   }
 
   .redesign-shell .resource-list b {
-    font-size: 12.5px;
+    font-size: 12.3px;
   }
 
   .redesign-shell .resource-list em {
@@ -4997,13 +5126,13 @@ input:focus-visible,
 
   .redesign-shell .empire-pulse div,
   .redesign-shell .empire-pulse div:nth-of-type(-n+2) {
-    min-height: 46px;
-    padding: 6px;
+    min-height: 36px;
+    padding: 4px 6px;
   }
 
   .redesign-shell .empire-pulse div:nth-of-type(3) {
-    min-height: 32px;
-    padding: 6px 8px;
+    min-height: 25px;
+    padding: 4px 7px;
   }
 
   .redesign-shell .empire-pulse span {
@@ -5014,30 +5143,52 @@ input:focus-visible,
     font-size: 12px;
   }
 
+  .redesign-shell .turn-objective {
+    gap: 2px;
+    margin-bottom: 4px;
+    padding: 6px;
+  }
+
+  .redesign-shell .turn-objective h2 {
+    font-size: 12.6px;
+  }
+
+  .redesign-shell .turn-objective p,
+  .redesign-shell .turn-objective small {
+    font-size: 10.6px;
+    line-height: 1.16;
+    -webkit-line-clamp: 1;
+  }
+
+  .redesign-shell .turn-objective-meter {
+    height: 3px;
+  }
+
   .redesign-shell .turn-info {
-    gap: 6px;
-    padding-top: 7px;
+    gap: 4px;
+    padding-top: 4px;
   }
 
   .redesign-shell .turn-info strong {
-    font-size: 21px;
+    font-size: 19px;
   }
 
   .redesign-shell .turn-info #turnClock {
-    font-size: 13.5px;
+    font-size: 12.8px;
   }
 
   .redesign-shell .end-turn-button {
-    min-height: 36px;
+    min-height: 30px;
   }
 
   .redesign-shell .quick-actions {
-    gap: 5px;
+    gap: 3px;
   }
 
   .redesign-shell .quick-actions button {
-    min-height: 28px;
-    font-size: 11.8px;
+    min-height: 24px;
+    padding: 0 8px;
+    font-size: 11.2px;
   }
 
   .redesign-shell .main-area {

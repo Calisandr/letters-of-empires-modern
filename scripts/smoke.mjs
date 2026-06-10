@@ -739,6 +739,42 @@ try {
       hasInlineNote: Boolean(pulse?.querySelector('p')),
     };
   });
+  const turnObjectiveDiagnostics = await page.evaluate(() => {
+    const card = document.querySelector('.empire-card');
+    const objective = document.querySelector('.turn-objective');
+    const title = objective?.querySelector('h2');
+    const summary = objective?.querySelector('p');
+    const action = objective?.querySelector('small');
+    const meter = objective?.querySelector('.turn-objective-meter i');
+    const objectiveBox = objective?.getBoundingClientRect();
+    const cardBox = card?.getBoundingClientRect();
+    const textNodes = [title, summary, action].filter(Boolean);
+
+    return {
+      exists: Boolean(objective),
+      title: title?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      summary: summary?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      action: action?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      aria: objective?.getAttribute('aria-label') || '',
+      tone:
+        objective?.classList.contains('danger')
+          ? 'danger'
+          : objective?.classList.contains('warning')
+            ? 'warning'
+            : objective?.classList.contains('opportunity')
+              ? 'opportunity'
+              : objective?.classList.contains('steady')
+                ? 'steady'
+                : '',
+      meterWidth: meter?.getBoundingClientRect().width || 0,
+      height: objectiveBox?.height || 0,
+      contained: Boolean(cardBox && objectiveBox && objectiveBox.top >= cardBox.top - 1 && objectiveBox.bottom <= cardBox.bottom + 1),
+      textReadable: textNodes.every((node) => Number.parseFloat(getComputedStyle(node).fontSize) >= 10.5),
+      overflowCount: [...(objective?.querySelectorAll('*') || [])].filter(
+        (node) => node.scrollWidth > node.clientWidth + 2 && node.tagName !== 'H2',
+      ).length,
+    };
+  });
   const quickActionsFitDiagnostics = await page.evaluate(() => {
     const card = document.querySelector('.empire-card');
     const actions = document.querySelector('.quick-actions');
@@ -877,6 +913,7 @@ try {
     toastDiagnostics,
     mailBadgeDiagnostics,
     empirePulseDiagnostics,
+    turnObjectiveDiagnostics,
     quickActionsFitDiagnostics,
     diplomacyRelationBadgeDiagnostics,
     ordersProposalLayoutDiagnostics,
@@ -1029,6 +1066,17 @@ try {
     empirePulseDiagnostics.rowCount < 3 ||
     empirePulseDiagnostics.hasInlineNote ||
     empirePulseDiagnostics.rows.some((row) => row.height < 20 || row.labelFontSize < 11 || row.valueFontSize < 11.8) ||
+    !turnObjectiveDiagnostics.exists ||
+    turnObjectiveDiagnostics.title.length < 8 ||
+    turnObjectiveDiagnostics.summary.length < 20 ||
+    turnObjectiveDiagnostics.action.length < 20 ||
+    turnObjectiveDiagnostics.aria !== 'Цель текущего хода' ||
+    !['danger', 'warning', 'opportunity', 'steady'].includes(turnObjectiveDiagnostics.tone) ||
+    turnObjectiveDiagnostics.meterWidth < 8 ||
+    turnObjectiveDiagnostics.height < 66 ||
+    !turnObjectiveDiagnostics.contained ||
+    !turnObjectiveDiagnostics.textReadable ||
+    turnObjectiveDiagnostics.overflowCount > 0 ||
     !quickActionsFitDiagnostics.exists ||
     quickActionsFitDiagnostics.buttonCount < 6 ||
     quickActionsFitDiagnostics.minButtonHeight < 24 ||

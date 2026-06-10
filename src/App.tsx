@@ -952,6 +952,157 @@ function CountryIntelPanel({
   );
 }
 
+type TurnObjectiveTone = 'danger' | 'warning' | 'opportunity' | 'steady';
+
+type TurnObjective = {
+  eyebrow: string;
+  title: string;
+  summary: string;
+  action: string;
+  metricLabel: string;
+  metricValue: string;
+  progress: number;
+  tone: TurnObjectiveTone;
+};
+
+function buildTurnObjective({
+  diplomacy,
+  letters,
+  nations,
+  operationPlans,
+  orders,
+  selectedCountry,
+  worldTension,
+}: {
+  diplomacy: DiplomacyRelation[];
+  letters: Letter[];
+  nations: NationProfile[];
+  operationPlans: OperationPlan[];
+  orders: Order[];
+  selectedCountry: SelectedCountry | null;
+  worldTension: number;
+}): TurnObjective {
+  const activeOrders = orders.filter((order) => order.statusClass !== 'cancelled');
+  const openLetters = letters.filter((letter) => letter.status !== 'answered');
+  const relationByName = new Map(diplomacy.map((relation) => [relation.name, relation]));
+  const selectedNation = selectedCountry
+    ? nations.find((nation) => nation.name === selectedCountry.name)
+    : null;
+
+  if (selectedCountry && selectedCountry.name !== playerCountry.name) {
+    const selectedRelation = relationByName.get(selectedCountry.name);
+    const pressure = selectedNation?.pressure ?? diplomacyFallbackPressure(selectedRelation?.score ?? 0);
+    const relationScore = selectedRelation?.score ?? selectedNation?.relation ?? 0;
+
+    return {
+      eyebrow: 'Цель хода',
+      title: `${selectedCountry.name}: оценить ход`,
+      summary: selectedNation?.focus
+        ? `Фокус: ${focusLabels[selectedNation.focus]}. Давление видно.`
+        : 'Совет готов оценить риск и лучший приказ.',
+      action: 'Совет или действие в досье.',
+      metricLabel: 'Давление',
+      metricValue: `${pressure}/100`,
+      progress: pressure,
+      tone: relationScore < -30 || pressure >= 55 ? 'warning' : 'opportunity',
+    };
+  }
+
+  const threatCandidate = nations
+    .filter((nation) => nation.id !== 'russia')
+    .map((nation) => {
+      const relation = relationByName.get(nation.name);
+      const relationPenalty = relation && relation.score < 0 ? Math.abs(relation.score) / 2 : 0;
+
+      return {
+        nation,
+        relation,
+        priority: nation.pressure + nation.threat + relationPenalty,
+      };
+    })
+    .sort((left, right) => right.priority - left.priority)[0];
+
+  if (
+    threatCandidate &&
+    (threatCandidate.priority >= 95 ||
+      threatCandidate.nation.pressure >= 50 ||
+      threatCandidate.nation.threat >= 55 ||
+      threatCandidate.relation?.tone === 'hostile')
+  ) {
+    const pressure = Math.max(threatCandidate.nation.pressure, threatCandidate.nation.threat);
+
+    return {
+      eyebrow: 'Главная цель',
+      title: `${threatCandidate.nation.name}: снизить риск`,
+      summary: `Фокус: ${focusLabels[threatCandidate.nation.focus]}. Риск растёт.`,
+      action: 'Совет: разведка или оборона.',
+      metricLabel: 'Риск',
+      metricValue: `${pressure}/100`,
+      progress: pressure,
+      tone: pressure >= 70 ? 'danger' : 'warning',
+    };
+  }
+
+  const urgentLetter = openLetters.find((letter) => letter.tone === 'red' || letter.tone === 'bronze') || openLetters[0];
+
+  if (urgentLetter) {
+    return {
+      eyebrow: 'Канцелярия',
+      title: `${urgentLetter.from}: ждёт ответа`,
+      summary: `Тема: ${urgentLetter.subject}. Решение изменит отношения.`,
+      action: 'Откройте письмо и выберите ответ.',
+      metricLabel: 'Писем',
+      metricValue: String(openLetters.length),
+      progress: clampStat(openLetters.length * 18),
+      tone: urgentLetter.tone === 'red' ? 'warning' : 'opportunity',
+    };
+  }
+
+  if (operationPlans.length) {
+    const bestPlan = [...operationPlans].sort((left, right) => right.successChance - left.successChance)[0];
+
+    return {
+      eyebrow: 'Цель совета',
+      title: bestPlan.title,
+      summary: `${bestPlan.owner}: шанс ${bestPlan.successChance}%, ${planRiskLabel(bestPlan.riskLevel)}.`,
+      action: 'Утвердите или уточните план.',
+      metricLabel: 'Шанс',
+      metricValue: `${bestPlan.successChance}%`,
+      progress: bestPlan.successChance,
+      tone: bestPlan.riskLevel === 'high' || bestPlan.riskLevel === 'critical' ? 'warning' : 'opportunity',
+    };
+  }
+
+  if (activeOrders.length) {
+    const closestOrder = [...activeOrders].sort((left, right) => left.remainingTurns - right.remainingTurns)[0];
+    const progress = clampStat(
+      Math.round(((closestOrder.totalTurns - closestOrder.remainingTurns + 1) / closestOrder.totalTurns) * 100),
+    );
+
+    return {
+      eyebrow: 'Приказы',
+      title: closestOrder.title,
+      summary: `Исполнитель: ${closestOrder.owner}. Цель: ${closestOrder.target}.`,
+      action: 'Завершите ход или откройте досье.',
+      metricLabel: 'Прогресс',
+      metricValue: `${progress}%`,
+      progress,
+      tone: closestOrder.riskLevel === 'high' || closestOrder.riskLevel === 'critical' ? 'warning' : 'steady',
+    };
+  }
+
+  return {
+    eyebrow: 'Цель хода',
+    title: 'Дать задачу Совету',
+    summary: 'Выберите страну на карте или напишите распоряжение.',
+    action: 'Совет: граница, торговля, разведка.',
+    metricLabel: 'Мир',
+    metricValue: `${worldTension}/100`,
+    progress: worldTension,
+    tone: worldTension >= 55 ? 'warning' : 'steady',
+  };
+}
+
 function responseToneLabel(tone: NonNullable<TurnReport['strategicResponses']>[number]['tone']) {
   if (tone === 'danger') return 'Угроза';
   if (tone === 'warning') return 'Осторожно';
@@ -1223,6 +1374,19 @@ function App() {
   const mapSignalByKey = useMemo(() => {
     return new Map(mapSignals.map((signal) => [signal.countryKey, signal]));
   }, [mapSignals]);
+  const turnObjective = useMemo(
+    () =>
+      buildTurnObjective({
+        diplomacy,
+        letters,
+        nations,
+        operationPlans,
+        orders,
+        selectedCountry: gameState.selectedCountry,
+        worldTension,
+      }),
+    [diplomacy, gameState.selectedCountry, letters, nations, operationPlans, orders, worldTension],
+  );
 
   const activeIntelKey = gameState.selectedCountry?.key || 'Russia';
 
@@ -1658,6 +1822,7 @@ function App() {
           clock={formatClock(secondsLeft)}
           resources={resources}
           nations={nations}
+          turnObjective={turnObjective}
           worldTension={worldTension}
           quickActionTurns={quickActionTurns}
           turnNumber={turnNumber}
@@ -2031,10 +2196,30 @@ function UtilityPanel({
   );
 }
 
+function TurnObjectiveCard({ objective }: { objective: TurnObjective }) {
+  return (
+    <section className={`turn-objective ${objective.tone}`} aria-label="Цель текущего хода">
+      <header>
+        <span>{objective.eyebrow}</span>
+        <b>
+          {objective.metricLabel}: {objective.metricValue}
+        </b>
+      </header>
+      <h2>{objective.title}</h2>
+      <p>{objective.summary}</p>
+      <div className="turn-objective-meter" aria-hidden="true">
+        <i style={{ width: `${objective.progress}%` }} />
+      </div>
+      <small>{objective.action}</small>
+    </section>
+  );
+}
+
 function EmpirePanel({
   clock,
   resources,
   nations,
+  turnObjective,
   worldTension,
   quickActionTurns,
   turnNumber,
@@ -2044,6 +2229,7 @@ function EmpirePanel({
   clock: string;
   resources: ResourceState[];
   nations: NationProfile[];
+  turnObjective: TurnObjective;
   worldTension: number;
   quickActionTurns: Partial<Record<QuickActionId, number>>;
   turnNumber: number;
@@ -2100,6 +2286,7 @@ function EmpirePanel({
             <b className={worldTension >= 70 ? 'danger' : worldTension >= 50 ? 'warn' : ''}>{worldTension}/100</b>
           </div>
         </div>
+        <TurnObjectiveCard objective={turnObjective} />
         <div className="turn-info">
           <div>
             <small>Текущий ход</small>
