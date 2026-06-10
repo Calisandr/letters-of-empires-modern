@@ -4233,6 +4233,206 @@ input:focus-visible,
   padding: 7px 12px 0;
 }
 
+.council-choice-board {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.council-choice-board.empty {
+  padding: 10px;
+  border: 1px solid rgba(205, 162, 85, .18);
+  border-radius: 7px;
+  background:
+    linear-gradient(135deg, rgba(95, 138, 90, .08), transparent 62%),
+    rgba(3, 10, 11, .68);
+}
+
+.council-choice-board.empty header,
+.council-next-steps header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.council-choice-board.empty header span,
+.council-next-steps header span,
+.council-next-step span {
+  color: rgba(174, 190, 165, .84);
+  font-size: 12px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.council-choice-board.empty header b,
+.council-next-steps header b {
+  color: #f1cf76;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.council-choice-board.empty > p,
+.council-choice-note {
+  margin: 0;
+  color: rgba(226, 219, 188, .9);
+  font-size: 13px;
+  line-height: 1.38;
+}
+
+.council-starter-prompts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.council-starter-prompts button {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  min-height: 58px;
+  padding: 9px;
+  border: 1px solid rgba(205, 162, 85, .2);
+  border-radius: 6px;
+  background: rgba(5, 13, 13, .7);
+  color: rgba(226, 219, 188, .9);
+  text-align: left;
+  cursor: pointer;
+}
+
+.council-starter-prompts button b {
+  color: #f4d783;
+  font: 700 13.5px/1.12 var(--serif);
+}
+
+.council-starter-prompts button span {
+  color: rgba(177, 194, 169, .86);
+  font-size: 12.2px;
+  line-height: 1.28;
+}
+
+.council-next-steps {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 7px;
+  border: 1px solid rgba(205, 162, 85, .14);
+  border-radius: 7px;
+  background: rgba(4, 11, 12, .48);
+}
+
+.council-next-step {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px 120px;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 7px;
+  border: 1px solid rgba(205, 162, 85, .12);
+  border-radius: 6px;
+  background: rgba(3, 9, 10, .54);
+}
+
+.council-next-step.high,
+.council-next-step.critical {
+  border-color: rgba(219, 101, 88, .28);
+}
+
+.council-next-step > div,
+.council-next-step dl,
+.council-next-actions {
+  min-width: 0;
+}
+
+.council-next-step h4,
+.council-next-step p,
+.council-next-step dl {
+  margin: 0;
+}
+
+.council-next-step h4 {
+  overflow: hidden;
+  color: #f4d783;
+  font: 700 13.6px/1.15 var(--serif);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.council-next-step p {
+  display: -webkit-box;
+  margin-top: 2px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  color: rgba(218, 209, 176, .84);
+  font-size: 12.2px;
+  line-height: 1.25;
+}
+
+.council-next-step dl {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 3px;
+}
+
+.council-next-step dl div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  padding: 3px 5px;
+  border: 1px solid rgba(205, 162, 85, .12);
+  background: rgba(2, 7, 8, .42);
+}
+
+.council-next-step dt,
+.council-next-step dd {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.council-next-step dt {
+  color: rgba(166, 185, 162, .78);
+  font-size: 11.2px;
+}
+
+.council-next-step dd {
+  color: #f2d27e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.council-next-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.council-next-actions button {
+  min-height: 28px;
+  border: 1px solid rgba(205, 162, 85, .28);
+  border-radius: 4px;
+  background: rgba(9, 17, 16, .78);
+  color: #d9bf77;
+  cursor: pointer;
+}
+
+.council-next-actions .plan-run {
+  border-color: rgba(226, 183, 100, .44);
+  background: rgba(86, 56, 23, .44);
+  color: #ffe08d;
+  font: 700 11.8px/1 var(--serif);
+}
+
+.council-next-actions button:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
 .council-decision-card {
   display: grid;
   gap: 7px;

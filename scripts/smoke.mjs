@@ -87,6 +87,43 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('.guide-dialog').length === 0);
   const guideDialogClosed = (await page.locator('.guide-dialog').count()) === 0;
 
+  const councilStarterDiagnostics = await page.evaluate(() => {
+    const board = document.querySelector('.council-choice-board.empty');
+    const buttons = [...document.querySelectorAll('.council-starter-prompts button')].map((node) => {
+      const box = node.getBoundingClientRect();
+
+      return {
+        label: node.querySelector('b')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+        detail: node.querySelector('span')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+        height: box.height,
+        aria: node.getAttribute('aria-label') || node.textContent?.replace(/\s+/g, ' ').trim() || '',
+      };
+    });
+    const textNodes = [...(board?.querySelectorAll('p, button, span, b') || [])].filter((node) => {
+      const text = node.textContent?.trim() || '';
+      return text.length > 0;
+    });
+    const smallTextNodes = textNodes.filter((node) => parseFloat(getComputedStyle(node).fontSize) < 12);
+    const boardBox = board?.getBoundingClientRect();
+    const overflowingNodes = [...(board?.querySelectorAll('*') || [])].filter((node) => {
+      const box = node.getBoundingClientRect();
+      return box.width > 0 && boardBox && box.right > boardBox.right + 2;
+    });
+
+    return {
+      exists: Boolean(board),
+      title: board?.querySelector('header span')?.textContent?.trim() || '',
+      promptCount: buttons.length,
+      labels: buttons.map((button) => button.label),
+      minButtonHeight: buttons.reduce((min, button) => Math.min(min, button.height), Number.POSITIVE_INFINITY),
+      smallTextCount: smallTextNodes.length,
+      overflowCount: overflowingNodes.length,
+    };
+  });
+  await page.locator('.council-starter-prompts button').first().click();
+  const starterPromptInserted = await page.locator('#chatInput').inputValue();
+  await page.locator('#chatInput').fill('');
+
   await page.locator('#mapMode').click();
   await page.locator('.map-mode-menu button').nth(1).click();
   await page.waitForFunction(() => document.querySelector('.app-shell')?.classList.contains('trade-mode'));
@@ -452,6 +489,17 @@ try {
   const chatText = await page.locator('.chat-messages').innerText();
   const councilDirectiveDiagnostics = await page.evaluate(() => {
     const card = document.querySelector('.council-decision-card');
+    const choiceBoard = document.querySelector('.council-choice-board.has-plans');
+    const alternatives = [...document.querySelectorAll('.council-next-step')].map((node) => {
+      const box = node.getBoundingClientRect();
+
+      return {
+        title: node.querySelector('h4')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+        role: node.querySelector('span')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+        buttonCount: node.querySelectorAll('button').length,
+        height: box.height,
+      };
+    });
     const planTitles = [...document.querySelectorAll('.council-priority h3, .operation-plan h3')].map((node) =>
       node.textContent?.replace(/\s+/g, ' ').trim() || '',
     );
@@ -472,6 +520,9 @@ try {
       summary: card?.querySelector('p')?.textContent?.replace(/\s+/g, ' ').trim() || '',
       metrics: [...(card?.querySelectorAll('dd') || [])].map((node) => node.textContent?.trim() || ''),
       buttons,
+      choiceBoardExists: Boolean(choiceBoard),
+      alternativeCount: alternatives.length,
+      alternatives,
       planTitles,
       advisorReply: [...document.querySelectorAll('.chat-messages p')].at(-1)?.textContent?.replace(/\s+/g, ' ').trim() || '',
       contained: Boolean(cardBox && chatPanelBox && cardBox.top >= chatPanelBox.top - 1 && cardBox.bottom <= chatPanelBox.bottom + 1),
@@ -1038,6 +1089,8 @@ try {
     legacyScriptResponse,
     guideDialogDiagnostics,
     guideDialogClosed,
+    councilStarterDiagnostics,
+    starterPromptInserted,
     countryCount,
     liveMapDiagnostics,
     liveMarkerClickSelectedUkraine,
@@ -1112,6 +1165,14 @@ try {
     guideDialogDiagnostics.overflowCount > 0 ||
     guideDialogDiagnostics.closeText !== 'Закрыть устав' ||
     !guideDialogClosed ||
+    !councilStarterDiagnostics.exists ||
+    councilStarterDiagnostics.title !== 'Штабной выбор' ||
+    councilStarterDiagnostics.promptCount < 3 ||
+    councilStarterDiagnostics.minButtonHeight < 52 ||
+    councilStarterDiagnostics.smallTextCount > 0 ||
+    councilStarterDiagnostics.overflowCount > 0 ||
+    !starterPromptInserted.includes('Совет') ||
+    !starterPromptInserted.includes('цели') ||
     countryCount < 30 ||
     liveMapDiagnostics.markerCount < 3 ||
     liveMapDiagnostics.linkCount < 1 ||
@@ -1206,6 +1267,9 @@ try {
     !councilDirectiveDiagnostics.buttons.includes('Утвердить') ||
     !councilDirectiveDiagnostics.buttons.includes('Уточнить') ||
     !councilDirectiveDiagnostics.buttons.includes('Отложить') ||
+    !councilDirectiveDiagnostics.choiceBoardExists ||
+    councilDirectiveDiagnostics.alternativeCount < 1 ||
+    !councilDirectiveDiagnostics.alternatives.every((item) => item.buttonCount >= 2 && item.height >= 54) ||
     !councilDirectiveDiagnostics.planTitles.some((title) => title.includes('Турция')) ||
     !councilDirectiveDiagnostics.advisorReply.includes('подготовил предложение') ||
     !councilDirectiveDiagnostics.contained ||
