@@ -822,6 +822,40 @@ try {
     };
   });
   await page.waitForSelector('.strategic-response');
+  const turnReportCauseDiagnostics = await page.evaluate(() => {
+    const report = document.querySelector('.turn-report');
+    const causality = document.querySelector('.report-causality');
+    const rows = [...document.querySelectorAll('.report-causality li')].map((node) => {
+      const box = node.getBoundingClientRect();
+      const title = node.querySelector('b')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+      const cause = node.querySelector('span')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+      const effect = node.querySelector('p')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+
+      return {
+        title,
+        cause,
+        effect,
+        height: box.height,
+        overflows: node.scrollWidth > node.clientWidth + 2,
+        smallText: [...node.querySelectorAll('b, span, p')].some(
+          (item) => Number.parseFloat(getComputedStyle(item).fontSize) < 12,
+        ),
+      };
+    });
+    const reportBox = report?.getBoundingClientRect();
+    const causalityBox = causality?.getBoundingClientRect();
+
+    return {
+      exists: Boolean(causality),
+      heading: causality?.querySelector('h3')?.textContent?.trim() || '',
+      rowCount: rows.length,
+      rows,
+      insideReport: Boolean(reportBox && causalityBox && causalityBox.top >= reportBox.top - 1 && causalityBox.bottom <= reportBox.bottom + 1),
+      noOverflow: rows.every((row) => !row.overflows),
+      noDuplicateActorTitle: rows.every((row) => !/^([^:]+): \1:/.test(row.title)),
+      readable: rows.every((row) => !row.smallText && row.cause.length > 20 && row.effect.length > 20),
+    };
+  });
   const strategicResponseBefore = await page.evaluate(() => {
     const responses = [...document.querySelectorAll('.strategic-response')];
 
@@ -1136,6 +1170,7 @@ try {
     mailPanelReadabilityDiagnostics,
     timelineRowDiagnostics,
     gameCycle,
+    turnReportCauseDiagnostics,
     toastDiagnostics,
     mailBadgeDiagnostics,
     empirePulseDiagnostics,
@@ -1334,6 +1369,14 @@ try {
     !gameCycle.proposalChangedAfterAction ||
     !gameCycle.turnAdvanced ||
     !gameCycle.resourcesChangedAfterTurn ||
+    !turnReportCauseDiagnostics.exists ||
+    turnReportCauseDiagnostics.heading !== 'Почему так вышло' ||
+    turnReportCauseDiagnostics.rowCount < 2 ||
+    !turnReportCauseDiagnostics.insideReport ||
+    !turnReportCauseDiagnostics.noOverflow ||
+    !turnReportCauseDiagnostics.noDuplicateActorTitle ||
+    !turnReportCauseDiagnostics.readable ||
+    !turnReportCauseDiagnostics.rows.some((row) => row.title.includes('Казна')) ||
     gameCycle.orderCounterMoveDiagnostics.count < 1 ||
     !gameCycle.orderCounterMoveDiagnostics.hasChance ||
     !gameCycle.orderDetailsVisible ||

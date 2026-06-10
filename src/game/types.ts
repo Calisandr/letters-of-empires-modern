@@ -243,6 +243,15 @@ export type CompletedOrderReport = {
   text: string;
 };
 
+export type TurnCauseTone = 'success' | 'warning' | 'danger' | 'neutral';
+
+export type TurnCause = {
+  title: string;
+  cause: string;
+  effect: string;
+  tone: TurnCauseTone;
+};
+
 export type TurnReport = {
   turn: number;
   summary: string;
@@ -252,6 +261,7 @@ export type TurnReport = {
   diplomacyDelta: Record<string, number>;
   warnings: string[];
   opportunities: string[];
+  causeLog: TurnCause[];
   strategicResponses?: StrategicResponse[];
 };
 

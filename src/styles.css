@@ -1656,11 +1656,116 @@ input:focus-visible,
   line-height: 1.38;
 }
 
+.report-causality {
+  display: grid;
+  gap: 9px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(205, 162, 85, .18);
+  background:
+    linear-gradient(90deg, rgba(241, 205, 116, .055), transparent 74%),
+    rgba(4, 11, 12, .38);
+}
+
+.report-causality > div {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.report-causality h3 {
+  margin: 0;
+  color: #f0cf78;
+  font: 700 15px/1 var(--serif);
+  letter-spacing: .06em;
+}
+
+.report-causality small {
+  max-width: 430px;
+  color: rgba(166, 185, 162, .86);
+  font-size: 12px;
+  line-height: 1.25;
+  text-align: right;
+}
+
+.report-causality ol {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.report-causality li {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  min-height: 96px;
+  padding: 10px 10px 10px 32px;
+  border: 1px solid rgba(205, 162, 85, .16);
+  background: rgba(5, 13, 13, .58);
+}
+
+.report-causality li::before {
+  content: counter(list-item);
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border: 1px solid rgba(205, 162, 85, .3);
+  color: #f1cf76;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.report-causality li.success {
+  border-color: rgba(126, 189, 128, .26);
+}
+
+.report-causality li.warning {
+  border-color: rgba(224, 173, 76, .3);
+}
+
+.report-causality li.danger {
+  border-color: rgba(219, 101, 88, .34);
+  background: rgba(42, 16, 15, .28);
+}
+
+.report-causality b {
+  overflow: hidden;
+  color: #f4d783;
+  font: 700 13.5px/1.15 var(--serif);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-causality span,
+.report-causality p {
+  margin: 0;
+  color: rgba(226, 219, 188, .9);
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+
+.report-causality p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: rgba(166, 185, 162, .88);
+}
+
 .report-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  max-height: 360px;
+  max-height: 270px;
   overflow: auto;
   padding: 12px 14px;
 }

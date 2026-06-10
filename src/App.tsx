@@ -1372,6 +1372,39 @@ function responseToneLabel(tone: NonNullable<TurnReport['strategicResponses']>[n
   return 'Возможность';
 }
 
+function buildFallbackTurnCauseLog(report: TurnReport): TurnReport['causeLog'] {
+  const causeLog: TurnReport['causeLog'] = [];
+  const firstOrder = report.completedOrders[0];
+  const firstEvent = report.worldEvents[0];
+
+  if (firstOrder) {
+    causeLog.push({
+      title: firstOrder.succeeded ? 'Приказ дал результат' : 'Приказ дал сбой',
+      cause: `Срок приказа "${firstOrder.title}" закончился на этом ходу.`,
+      effect: firstOrder.text,
+      tone: firstOrder.succeeded ? 'success' : 'danger',
+    });
+  }
+
+  if (firstEvent) {
+    causeLog.push({
+      title: firstEvent.title.startsWith(`${firstEvent.actor}:`) ? firstEvent.title : `${firstEvent.actor}: ${firstEvent.title}`,
+      cause: 'Мир отреагировал на текущие намерения держав и последствия российских решений.',
+      effect: firstEvent.text,
+      tone: firstEvent.tone === 'red' ? 'danger' : firstEvent.tone === 'bronze' ? 'warning' : firstEvent.tone === 'green' ? 'success' : 'neutral',
+    });
+  }
+
+  causeLog.push({
+    title: 'Баланс хода',
+    cause: 'После завершения хода применены доходы, расходы и дипломатические сдвиги.',
+    effect: `Ресурсы: ${formatResourceDelta(report.resourceDelta)}. Дипломатия: ${formatDiplomacyDelta(report.diplomacyDelta)}.`,
+    tone: report.warnings.length ? 'warning' : 'neutral',
+  });
+
+  return causeLog.slice(0, 4);
+}
+
 function TurnReportDialog({
   report,
   onClose,
@@ -1382,6 +1415,7 @@ function TurnReportDialog({
   onRunResponse: (id: string) => void;
 }) {
   const responses = report.strategicResponses || [];
+  const causeLog = report.causeLog?.length ? report.causeLog : buildFallbackTurnCauseLog(report);
 
   return (
     <div className="modal-backdrop" role="presentation">
@@ -1393,6 +1427,21 @@ function TurnReportDialog({
           </button>
         </div>
         <p className="report-summary">{report.summary}</p>
+        <section className="report-causality" aria-label="Почему изменился ход">
+          <div>
+            <h3>Почему так вышло</h3>
+            <small>Короткая цепочка причин: что сработало, что ответил мир и чем это изменило партию.</small>
+          </div>
+          <ol>
+            {causeLog.map((item, index) => (
+              <li key={`${item.title}-${index}`} className={item.tone}>
+                <b>{item.title}</b>
+                <span>{item.cause}</span>
+                <p>{item.effect}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
         <div className="report-grid">
           <section>
             <h3>Приказы</h3>

@@ -371,6 +371,10 @@ function summarizeResourceDelta(delta: ResourceDelta) {
   return parts.length ? parts.join(', ') : 'без прямых изменений ресурсов';
 }
 
+function worldCauseTitle(event: WorldEvent) {
+  return event.title.startsWith(`${event.actor}:`) ? event.title : `${event.actor}: ${event.title}`;
+}
+
 export function simulateWorldTurn(
   state: GameState,
   nextTurn: number,
@@ -479,6 +483,13 @@ export function simulateWorldTurn(
   if (nextWorldTension >= 72) warnings.push('Напряжение мира высокое: риск провала военных приказов растет.');
   if (nextWorldTension <= 35) opportunities.push('Мир достаточно спокоен для торговли и инфраструктуры.');
 
+  const causeLog: TurnReport['causeLog'] = events.slice(0, MAX_REPORT_ITEMS).map((event) => ({
+    title: worldCauseTitle(event),
+    cause: 'Арбитр мира применил текущий фокус державы, давление вокруг цели и последствия российских приказов.',
+    effect: event.text,
+    tone: event.tone === 'red' ? 'danger' : event.tone === 'bronze' ? 'warning' : event.tone === 'green' ? 'success' : 'neutral',
+  }));
+
   const summary = `Ход ${nextTurn}: завершено приказов ${completedOrders.length}, активных намерений держав ${nations.filter((nation) => nation.currentIntent).length}, событий мира ${events.length}, напряжение мира ${nextWorldTension}/100.`;
   const report: TurnReport = {
     turn: nextTurn,
@@ -489,6 +500,7 @@ export function simulateWorldTurn(
     diplomacyDelta,
     warnings: warnings.slice(0, MAX_REPORT_ITEMS),
     opportunities: opportunities.slice(0, MAX_REPORT_ITEMS),
+    causeLog,
     strategicResponses: strategicResponses.slice(0, MAX_REPORT_ITEMS),
   };
 

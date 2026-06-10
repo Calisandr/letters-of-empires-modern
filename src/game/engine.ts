@@ -23,6 +23,7 @@ import type {
   SelectedCountry,
   StrategicResponse,
   TimelineEvent,
+  TurnCause,
 } from './types';
 
 export const MAX_ACTIVE_ORDERS = 5;
@@ -1534,6 +1535,99 @@ function resolveCompletedOrder(order: Order, nextTurn: number): ResolvedOrderOut
   };
 }
 
+const reportResourceLabels: Record<ResourceId, string> = {
+  gold: 'золото',
+  wood: 'дерево',
+  stone: 'камень',
+  iron: 'железо',
+  grain: 'зерно',
+  population: 'население',
+};
+
+function describeReportResourceDelta(delta: ResourceDelta = {}) {
+  const parts = Object.entries(delta)
+    .filter(([, value]) => value)
+    .map(([key, value]) => {
+      const resourceKey = key as ResourceId;
+      const formatted =
+        resourceKey === 'population' ? Number(value).toFixed(1) : Math.round(Number(value)).toLocaleString('ru-RU');
+
+      return `${Number(value) > 0 ? '+' : ''}${formatted} ${reportResourceLabels[resourceKey] || key}`;
+    });
+
+  return parts.length ? parts.join(', ') : 'без прямых изменений';
+}
+
+function reportRiskLabel(risk: Order['riskLevel']) {
+  if (risk === 'critical') return 'критический';
+  if (risk === 'high') return 'высокий';
+  if (risk === 'medium') return 'средний';
+  return 'низкий';
+}
+
+function buildTurnCauseLog({
+  completedOrders,
+  counterMoves,
+  expiredOperationPlans,
+  nextTurn,
+  resolvedOrders,
+  totalResourceDelta,
+  world,
+}: {
+  completedOrders: Order[];
+  counterMoves: ReturnType<typeof applyOrderCounterMoves>;
+  expiredOperationPlans: OperationPlan[];
+  nextTurn: number;
+  resolvedOrders: ResolvedOrderOutcome[];
+  totalResourceDelta: ResourceDelta;
+  world: ReturnType<typeof simulateWorldTurn>;
+}) {
+  const causeLog: TurnCause[] = [
+    {
+      title: 'Казна и снабжение',
+      cause: `Ход ${nextTurn} начался: держава получила доход, а затем были применены расходы, награды и внешнее давление.`,
+      effect: `Итог ресурсов: ${describeReportResourceDelta(totalResourceDelta)}.`,
+      tone: Object.values(totalResourceDelta).some((value) => Number(value) < 0) ? 'warning' : 'success',
+    },
+  ];
+
+  resolvedOrders.slice(0, 2).forEach((outcome, index) => {
+    const order = completedOrders[index];
+    if (!order) return;
+
+    causeLog.push({
+      title: outcome.report.succeeded ? 'Приказ сработал' : 'Приказ сорвался',
+      cause: `${order.title}: срок приказа истек, шанс штаба ${defaultSuccessChance(order)}%, риск ${reportRiskLabel(order.riskLevel)}.`,
+      effect: outcome.report.text,
+      tone: outcome.report.succeeded ? 'success' : 'danger',
+    });
+  });
+
+  if (counterMoves.warnings.length || counterMoves.opportunities.length) {
+    const pressureText = counterMoves.warnings[0] || counterMoves.opportunities[0];
+
+    causeLog.push({
+      title: 'Ответы держав',
+      cause: 'Соперники и союзники проверили активные российские приказы по давлению, отношениям и текущим намерениям.',
+      effect: pressureText,
+      tone: counterMoves.warnings.length ? 'warning' : 'success',
+    });
+  }
+
+  world.report.causeLog.slice(0, 2).forEach((item) => causeLog.push(item));
+
+  if (expiredOperationPlans.length) {
+    causeLog.push({
+      title: 'Окно плана закрылось',
+      cause: `Оперативные планы живут ограниченное число ходов, а разведданные устарели на ходе ${nextTurn}.`,
+      effect: `Снято планов: ${expiredOperationPlans.length}. Подготовьте новое досье, если цель всё ещё важна.`,
+      tone: 'warning',
+    });
+  }
+
+  return causeLog.slice(0, 6);
+}
+
 export function endTurn(state: GameState): GameState {
   const nextTurn = state.turnNumber + 1;
   const completedOrders: Order[] = [];
@@ -1647,6 +1741,15 @@ export function endTurn(state: GameState): GameState {
         diplomacyDelta: totalDiplomacyDelta,
         warnings: [...counterMoves.warnings, ...world.report.warnings].slice(0, 6),
         opportunities: [...counterMoves.opportunities, ...world.report.opportunities].slice(0, 6),
+        causeLog: buildTurnCauseLog({
+          completedOrders,
+          counterMoves,
+          expiredOperationPlans,
+          nextTurn,
+          resolvedOrders,
+          totalResourceDelta,
+          world,
+        }),
       },
       timelineEvents: [
         ...completedEvents,

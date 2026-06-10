@@ -436,6 +436,17 @@ try {
     assert.ok(next.worldTension >= 0 && next.worldTension <= 100);
   });
 
+  test('turn report explains causes and effects of the new turn', () => {
+    const next = endTurn(clone(initialGameState));
+    const causeLog = next.lastTurnReport.causeLog;
+
+    assert.ok(causeLog.length >= 2);
+    assert.ok(causeLog.every((item) => item.title && item.cause.length > 20 && item.effect.length > 20));
+    assert.ok(causeLog.some((item) => item.title.includes('Казна')));
+    assert.ok(causeLog.some((item) => item.title.includes(':') || item.title.includes('Приказ')));
+    assert.ok(causeLog.every((item) => ['success', 'warning', 'danger', 'neutral'].includes(item.tone)));
+  });
+
   test('world turn assigns explicit intentions to every nation', () => {
     const next = endTurn(clone(initialGameState));
     const player = next.nations.find((nation) => nation.id === 'russia');
