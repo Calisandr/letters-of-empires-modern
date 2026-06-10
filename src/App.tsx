@@ -89,6 +89,13 @@ const emptyChatToastByChannel: Record<ChatChannel, string> = {
   alliance: 'Введите сообщение союзникам',
 };
 
+function getCurrentChatTime() {
+  return new Intl.DateTimeFormat('ru-RU', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date());
+}
+
 type MapLayerId = 'borders' | 'labels' | 'capitals' | 'ports' | 'regions' | 'routes' | 'intel';
 
 type MapLayersState = Record<MapLayerId, boolean>;
@@ -393,13 +400,55 @@ const codeByFlagClass = Object.fromEntries(
   Object.entries(flagClassByCode).map(([code, className]) => [className, code]),
 ) as Record<string, string>;
 
-const quickActions: Array<{ id: QuickActionId; label: string; icon: LucideIcon; toast?: string }> = [
-  { id: 'compose-letter', label: 'Письмо союзникам', icon: Mail },
-  { id: 'create-order', label: 'Черновик приказа', icon: Flag },
-  { id: 'manage-lands', label: 'Хозяйственный ход', icon: Landmark },
-  { id: 'trade-routes', label: 'Торговый план', icon: Anchor },
-  { id: 'recruit-army', label: 'Военный набор', icon: Shield },
-  { id: 'diplomacy', label: 'Дипломатический зонд', icon: Handshake, toast: 'Дипломатические переговоры' },
+const quickActions: Array<{
+  id: QuickActionId;
+  label: string;
+  icon: LucideIcon;
+  description: string;
+  cadence: string;
+}> = [
+  {
+    id: 'compose-letter',
+    label: 'Письмо союзникам',
+    icon: Mail,
+    description: 'Совет подготовит письмо для закрытого союзного канала.',
+    cadence: 'раз в ход',
+  },
+  {
+    id: 'create-order',
+    label: 'Черновик приказа',
+    icon: Flag,
+    description: 'Совет оформит приказ по выбранной стране или Москве.',
+    cadence: 'шаблон',
+  },
+  {
+    id: 'manage-lands',
+    label: 'Хозяйственный ход',
+    icon: Landmark,
+    description: 'Внутренний совет предложит безопасный экономический приказ.',
+    cadence: 'раз в ход',
+  },
+  {
+    id: 'trade-routes',
+    label: 'Торговый план',
+    icon: Anchor,
+    description: 'Торговый совет подготовит маршрут с ценой и шансом успеха.',
+    cadence: 'шаблон',
+  },
+  {
+    id: 'recruit-army',
+    label: 'Военный набор',
+    icon: Shield,
+    description: 'Генеральный штаб оценит дорогой, но полезный набор армии.',
+    cadence: 'шаблон',
+  },
+  {
+    id: 'diplomacy',
+    label: 'Дипломатический зонд',
+    icon: Handshake,
+    description: 'Канцелярия проверит окно для осторожных переговоров.',
+    cadence: 'раз в ход',
+  },
 ];
 
 const countryIntelActions: Array<{ id: CountryIntelActionId; label: string; icon: LucideIcon; tone: string }> = [
@@ -1758,17 +1807,14 @@ function App() {
       return;
     }
 
-    const time = new Intl.DateTimeFormat('ru-RU', {
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date());
-
-    dispatchGame({ type: 'SUBMIT_CHAT_MESSAGE', channel: activeChatChannel, text, time });
+    dispatchGame({ type: 'SUBMIT_CHAT_MESSAGE', channel: activeChatChannel, text, time: getCurrentChatTime() });
     setChatInput('');
   };
 
   const runQuickAction = (id: QuickActionId) => {
-    dispatchGame({ type: 'RUN_QUICK_ACTION', id });
+    setActiveNav('Совет');
+    setActiveChatTab('Совет');
+    dispatchGame({ type: 'RUN_QUICK_ACTION', id, time: getCurrentChatTime() });
   };
 
   const handleQuickAction = (id: QuickActionId) => {
@@ -2329,19 +2375,27 @@ function EmpirePanel({
         </div>
         <div className="section-title">Предложения совета</div>
         <div className="quick-actions">
-          {quickActions.map(({ id, label, icon: Icon, toast }) => {
+          {quickActions.map(({ id, label, icon: Icon, description, cadence }) => {
             const isLocked = oncePerTurnQuickActions.has(id) && quickActionTurns[id] === turnNumber;
+            const stateLabel = isLocked ? 'подготовлено' : cadence;
+            const actionTitle = isLocked
+              ? `${label}: Совет уже подготовил это предложение в текущем ходу. Новый шаблон откроется после завершения хода.`
+              : `${label}: ${description}`;
 
             return (
               <button
                 key={label}
                 type="button"
-                title={isLocked ? 'Действие уже выполнено в этом ходу' : toast || label}
+                title={actionTitle}
+                aria-label={actionTitle}
                 onClick={() => onQuickAction(id)}
                 disabled={isLocked}
               >
                 <Icon aria-hidden="true" />
-                {label}
+                <span className="quick-action-copy">
+                  <span>{label}</span>
+                  <small>{stateLabel}</small>
+                </span>
               </button>
             );
           })}
@@ -2834,8 +2888,8 @@ function PendingActionDialog({
           </button>
         </div>
         <p>
-          Совет подготовит инфраструктурный приказ для цели: <b>{selectedCountryName}</b>. Стоимость будет списана сразу,
-          результат появится в хронике после завершения хода.
+          Совет подготовит инфраструктурный приказ для цели: <b>{selectedCountryName}</b>. Сначала он появится в предложениях Совета;
+          ресурсы спишутся только после утверждения, а результат появится в хронике после завершения хода.
         </p>
         <dl>
           <dt>Тип</dt>

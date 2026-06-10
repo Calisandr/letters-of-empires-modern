@@ -35,6 +35,11 @@ try {
     assert.equal(next.operationPlans.length, state.operationPlans.length + 1);
     assert.ok(plan.title.includes('торговый маршрут'));
     assert.equal(next.resources.find((resource) => resource.id === 'gold').value, state.resources.find((resource) => resource.id === 'gold').value);
+    assert.ok(
+      next.chatMessages
+        .slice(state.chatMessages.length)
+        .some((message) => message.channel === 'council' && message.faction === 'Совет' && message.text.includes('рабочее предложение')),
+    );
     assert.equal(next.lastNotice.kind, 'success');
 
     const launched = gameReducer(next, { type: 'RUN_OPERATION_PLAN', id: plan.id });

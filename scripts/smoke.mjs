@@ -527,10 +527,33 @@ try {
   await page.waitForTimeout(120);
   const afterComposeLetter = await readRightPanelState();
   const composeButtonDisabled = await page.locator('.quick-actions button').first().isDisabled();
+  const quickCouncilTemplateDiagnostics = await page.evaluate(() => {
+    const activeNav = document.querySelector('.primary-nav .active')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+    const activeChatTab = document.querySelector('.chat-tabs button.active')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+    const firstButton = document.querySelector('.quick-actions button');
+    const firstButtonSmall = firstButton?.querySelector('small')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+    const latestCouncilMessage =
+      [...document.querySelectorAll('.chat-messages p')]
+        .at(-1)
+        ?.textContent?.replace(/\s+/g, ' ')
+        .trim() || '';
+    const cardTitle = document.querySelector('.council-decision-card h3')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+
+    return {
+      activeNav,
+      activeChatTab,
+      firstButtonText: firstButton?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      firstButtonSmall,
+      firstButtonAria: firstButton?.getAttribute('aria-label') || '',
+      latestCouncilMessage,
+      cardTitle,
+    };
+  });
   const composeAction = {
     beforeComposeLetter,
     afterComposeLetter,
     composeButtonDisabled,
+    quickCouncilTemplateDiagnostics,
     inboxCountUnchanged: afterComposeLetter.mailCount === beforeComposeLetter.mailCount,
     noOutgoingInInbox: !afterComposeLetter.letterSubjects.some((subject) => subject?.includes('Исходящее')),
     proposalCountChanged: afterComposeLetter.operationPlanTitles.length > beforeComposeLetter.operationPlanTitles.length,
@@ -838,6 +861,8 @@ try {
         bottom: box.bottom,
         height: box.height,
         text: node.textContent?.replace(/\s+/g, ' ').trim() || '',
+        status: node.querySelector('small')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+        aria: node.getAttribute('aria-label') || '',
       };
     });
 
@@ -851,6 +876,8 @@ try {
       ),
       actionsInsideCard: actionBox.top >= cardBox.top - 1 && actionBox.bottom <= cardBox.bottom + 1,
       actionsNeedScroll: actions.scrollHeight > actions.clientHeight + 1,
+      statuses: buttons.map((button) => button.status),
+      ariaFilled: buttons.every((button) => button.aria.length > 20),
     };
   });
 
@@ -1090,6 +1117,12 @@ try {
     !composeAction.noOutgoingInInbox ||
     !composeAction.proposalCountChanged ||
     composeAction.preparedTimelineCount < 1 ||
+    !composeAction.quickCouncilTemplateDiagnostics.activeNav.includes('Совет') ||
+    composeAction.quickCouncilTemplateDiagnostics.activeChatTab !== 'Совет' ||
+    composeAction.quickCouncilTemplateDiagnostics.firstButtonSmall !== 'подготовлено' ||
+    !composeAction.quickCouncilTemplateDiagnostics.firstButtonAria.includes('текущем ходу') ||
+    !composeAction.quickCouncilTemplateDiagnostics.latestCouncilMessage.includes('рабочее предложение') ||
+    !composeAction.quickCouncilTemplateDiagnostics.cardTitle.includes('Письмо союзникам') ||
     !rightPanelLayoutDiagnostics.panelsStacked ||
     !rightPanelLayoutDiagnostics.mailPartsStacked ||
     !rightPanelLayoutDiagnostics.showAllInsideMail ||
@@ -1150,6 +1183,8 @@ try {
     !quickActionsFitDiagnostics.allButtonsInsideActions ||
     !quickActionsFitDiagnostics.actionsInsideCard ||
     quickActionsFitDiagnostics.actionsNeedScroll ||
+    !quickActionsFitDiagnostics.ariaFilled ||
+    !quickActionsFitDiagnostics.statuses.includes('шаблон') ||
     diplomacyRelationBadgeDiagnostics.count < 3 ||
     diplomacyRelationBadgeDiagnostics.minWidth < 68 ||
     diplomacyRelationBadgeDiagnostics.maxHeight > 38 ||

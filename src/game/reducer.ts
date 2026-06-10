@@ -203,6 +203,32 @@ function addCouncilProposal(state: GameState, plan: OperationPlan, notice = 'С�
   );
 }
 
+function quickActionAdvisorText(plan: OperationPlan) {
+  const cost = Object.keys(plan.cost || {}).length ? 'Цена видна в карточке решения.' : 'Затрат на подготовку нет.';
+
+  return `Совет развернул шаблон "${plan.title}" в рабочее предложение. ${cost} Утвердите его, если хотите поставить приказ в работу; уточните, если нужен безопаснее вариант; отложите, если окно пока не подходит.`;
+}
+
+function addQuickActionProposal(
+  state: GameState,
+  plan: OperationPlan,
+  notice: string,
+  time = `ход ${state.turnNumber}`,
+) {
+  const proposed = addCouncilProposal(state, plan, notice);
+
+  return appendChatMessages(proposed, [
+    {
+      id: `chat-${proposed.nextActionId}-quick-action`,
+      channel: 'council',
+      time,
+      flag: 'neutral',
+      faction: 'Совет',
+      text: quickActionAdvisorText(plan),
+    },
+  ]);
+}
+
 function flagForCountry(state: GameState, countryName: string, fallback = 'neutral') {
   return (
     state.nations.find((nation) => nation.name === countryName)?.flag ||
@@ -376,7 +402,7 @@ function submitAllianceMessage(state: GameState, text: string, time: string): Ga
   );
 }
 
-function runQuickAction(state: GameState, id: QuickActionId): GameState {
+function runQuickAction(state: GameState, id: QuickActionId, time?: string): GameState {
   if (quickActionAlreadyUsed(state, id)) {
     if (id === 'compose-letter') return createNotice(state, 'Совет уже подготовил письмо союзникам в этом ходу', 'error');
     if (id === 'manage-lands') return createNotice(state, 'Совет уже подготовил хозяйственный ход в этом ходу', 'error');
@@ -384,7 +410,7 @@ function runQuickAction(state: GameState, id: QuickActionId): GameState {
   }
 
   if (id === 'compose-letter') {
-    return addCouncilProposal(
+    return addQuickActionProposal(
       { ...state, quickActionTurns: markQuickAction(state, id) },
       orderToCouncilProposal(
         state,
@@ -407,11 +433,12 @@ function runQuickAction(state: GameState, id: QuickActionId): GameState {
         'Совет предлагает сначала утвердить письмо союзникам. После исполнения оно укрепит закрытый дипломатический канал.',
       ),
       'Совет подготовил письмо союзникам',
+      time,
     );
   }
 
   if (id === 'manage-lands') {
-    return addCouncilProposal(
+    return addQuickActionProposal(
       { ...state, quickActionTurns: markQuickAction(state, id) },
       orderToCouncilProposal(
         state,
@@ -434,11 +461,12 @@ function runQuickAction(state: GameState, id: QuickActionId): GameState {
         'Совет предлагает хозяйственный ход: безопасный внутренний приказ с понятной ценой и быстрым результатом.',
       ),
       'Совет подготовил хозяйственный ход',
+      time,
     );
   }
 
   if (id === 'trade-routes') {
-    return addCouncilProposal(
+    return addQuickActionProposal(
       state,
       orderToCouncilProposal(
         state,
@@ -458,14 +486,15 @@ function runQuickAction(state: GameState, id: QuickActionId): GameState {
           successChance: 90,
         },
         'Быстрое действие: торговый план',
-        'Торговый совет предлагает удобный план для Индии: прибыль высокий, риск низкий, но маршрут нужно утвердить.',
+        'Торговый совет предлагает удобный план для Индии: прибыль высокая, риск низкий, но маршрут нужно утвердить.',
       ),
       'Совет подготовил торговый план',
+      time,
     );
   }
 
   if (id === 'recruit-army') {
-    return addCouncilProposal(
+    return addQuickActionProposal(
       state,
       orderToCouncilProposal(
         state,
@@ -488,11 +517,12 @@ function runQuickAction(state: GameState, id: QuickActionId): GameState {
         'Генеральный штаб предлагает набор армии. Это дорого, но укрепляет державу и открывает пространство для операций.',
       ),
       'Совет подготовил военный набор',
+      time,
     );
   }
 
   if (id === 'diplomacy') {
-    return addCouncilProposal(
+    return addQuickActionProposal(
       { ...state, quickActionTurns: markQuickAction(state, id) },
       orderToCouncilProposal(
         state,
@@ -515,11 +545,12 @@ function runQuickAction(state: GameState, id: QuickActionId): GameState {
         'Канцелярия предлагает мягкий дипломатический зонд: он не подписывает договор сразу, а открывает пространство для ответа.',
       ),
       'Совет подготовил дипломатический зонд',
+      time,
     );
   }
 
   const target = state.selectedCountry?.name || 'Москва';
-  return addCouncilProposal(
+  return addQuickActionProposal(
     state,
     orderToCouncilProposal(
       state,
@@ -541,6 +572,7 @@ function runQuickAction(state: GameState, id: QuickActionId): GameState {
       `Совет подготовил черновик по цели "${target}". Проверьте цену и риск перед утверждением.`,
     ),
     'Совет подготовил черновик приказа',
+    time,
   );
 }
 
@@ -572,7 +604,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     return submitAllianceMessage(state, action.text, action.time);
   }
 
-  if (action.type === 'RUN_QUICK_ACTION') return runQuickAction(state, action.id);
+  if (action.type === 'RUN_QUICK_ACTION') return runQuickAction(state, action.id, action.time);
   if (action.type === 'RUN_COUNTRY_INTEL_ACTION') return runCountryIntelAction(state, action.id, action.country);
   if (action.type === 'RUN_STRATEGIC_RESPONSE') return runStrategicResponse(state, action.id);
   if (action.type === 'RUN_OPERATION_PLAN') return runOperationPlan(state, action.id);

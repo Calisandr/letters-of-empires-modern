@@ -309,7 +309,7 @@ export type GameAction =
   | { type: 'CLEAR_SELECTED_COUNTRY' }
   | { type: 'SUBMIT_CHAT_MESSAGE'; channel: ChatChannel; text: string; time: string }
   | { type: 'SUBMIT_COUNCIL_MESSAGE'; text: string; time: string }
-  | { type: 'RUN_QUICK_ACTION'; id: QuickActionId }
+  | { type: 'RUN_QUICK_ACTION'; id: QuickActionId; time?: string }
   | { type: 'RUN_COUNTRY_INTEL_ACTION'; id: CountryIntelActionId; country: SelectedCountry }
   | { type: 'RUN_STRATEGIC_RESPONSE'; id: string }
   | { type: 'RUN_OPERATION_PLAN'; id: string }
