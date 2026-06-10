@@ -1011,6 +1011,48 @@ try {
       ).length,
     };
   });
+  const turnFlowDiagnostics = await page.evaluate(() => {
+    const panel = document.querySelector('.chat-panel');
+    const flow = document.querySelector('.turn-flow');
+    const flowBox = flow?.getBoundingClientRect();
+    const panelBox = panel?.getBoundingClientRect();
+    const steps = [...(flow?.querySelectorAll('li') || [])].map((node) => {
+      const box = node.getBoundingClientRect();
+      const label = node.querySelector('span')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+      const detail = node.querySelector('small')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+      const textNodes = [...node.querySelectorAll('span, small')];
+      return {
+        label,
+        detail,
+        className: node.className,
+        active: node.getAttribute('aria-current') === 'step',
+        height: box.height,
+        textReadable: textNodes.every(
+          (item) => Number.parseFloat(getComputedStyle(item).fontSize) >= 10.3,
+        ),
+        overflows: textNodes.some((item) => item.scrollWidth > item.clientWidth + 2),
+      };
+    });
+    const hint = flow?.querySelector('.turn-flow-head span');
+
+    return {
+      exists: Boolean(flow),
+      aria: flow?.getAttribute('aria-label') || '',
+      activeStep: flow?.getAttribute('data-active-step') || '',
+      heading: flow?.querySelector('.turn-flow-head b')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      hint: hint?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      alert: flow?.querySelector('p')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      stepCount: steps.length,
+      activeCount: steps.filter((step) => step.active).length,
+      labels: steps.map((step) => step.label),
+      steps,
+      minHeight: steps.reduce((min, step) => Math.min(min, step.height), Number.POSITIVE_INFINITY),
+      insideChat: Boolean(panelBox && flowBox && flowBox.top >= panelBox.top - 1 && flowBox.bottom <= panelBox.bottom + 1),
+      readable:
+        steps.every((step) => step.textReadable && !step.overflows && step.detail.length >= 3) &&
+        (hint ? Number.parseFloat(getComputedStyle(hint).fontSize) >= 11 : false),
+    };
+  });
   const quickActionsFitDiagnostics = await page.evaluate(() => {
     const card = document.querySelector('.empire-card');
     const actions = document.querySelector('.quick-actions');
@@ -1198,6 +1240,7 @@ try {
     mailBadgeDiagnostics,
     empirePulseDiagnostics,
     turnObjectiveDiagnostics,
+    turnFlowDiagnostics,
     quickActionsFitDiagnostics,
     diplomacyRelationBadgeDiagnostics,
     ordersProposalLayoutDiagnostics,
@@ -1431,6 +1474,17 @@ try {
     !turnObjectiveDiagnostics.contained ||
     !turnObjectiveDiagnostics.textReadable ||
     turnObjectiveDiagnostics.overflowCount > 0 ||
+    !turnFlowDiagnostics.exists ||
+    turnFlowDiagnostics.aria !== 'Маршрут текущего хода' ||
+    turnFlowDiagnostics.heading !== 'Маршрут хода' ||
+    turnFlowDiagnostics.stepCount !== 4 ||
+    turnFlowDiagnostics.activeCount !== 1 ||
+    !['1', '2', '3', '4'].includes(turnFlowDiagnostics.activeStep) ||
+    !['Цель', 'Замысел', 'Решение', 'Ход'].every((label) => turnFlowDiagnostics.labels.includes(label)) ||
+    turnFlowDiagnostics.hint.length < 20 ||
+    turnFlowDiagnostics.minHeight < 30 ||
+    !turnFlowDiagnostics.insideChat ||
+    !turnFlowDiagnostics.readable ||
     !quickActionsFitDiagnostics.exists ||
     quickActionsFitDiagnostics.buttonCount < 6 ||
     quickActionsFitDiagnostics.minButtonHeight < 24 ||

@@ -1329,6 +1329,14 @@ type TurnObjective = {
   tone: TurnObjectiveTone;
 };
 
+type TurnFlowStepState = 'done' | 'active' | 'waiting';
+
+type TurnFlowStep = {
+  label: string;
+  detail: string;
+  state: TurnFlowStepState;
+};
+
 function buildTurnObjective({
   diplomacy,
   letters,
@@ -1464,6 +1472,72 @@ function buildTurnObjective({
     metricValue: `${worldTension}/100`,
     progress: worldTension,
     tone: worldTension >= 55 ? 'warning' : 'steady',
+  };
+}
+
+function buildTurnFlow({
+  activeChannel,
+  openLetterCount,
+  operationPlanCount,
+  orderCount,
+  selectedCountryName,
+  turnObjective,
+}: {
+  activeChannel: ChatChannel;
+  openLetterCount: number;
+  operationPlanCount: number;
+  orderCount: number;
+  selectedCountryName: string;
+  turnObjective: TurnObjective;
+}) {
+  const targetSelected = selectedCountryName !== playerCountry.name || turnObjective.eyebrow !== 'Цель хода';
+  const activeIndex = (() => {
+    if (operationPlanCount > 0) return 2;
+    if (orderCount > 0) return 3;
+    if (targetSelected || activeChannel === 'council') return 1;
+    return 0;
+  })();
+  const stepState = (index: number): TurnFlowStepState => {
+    if (index < activeIndex) return 'done';
+    if (index === activeIndex) return 'active';
+    return 'waiting';
+  };
+
+  const steps: TurnFlowStep[] = [
+    {
+      label: 'Цель',
+      detail: targetSelected ? selectedCountryName : 'карта',
+      state: stepState(0),
+    },
+    {
+      label: 'Замысел',
+      detail: activeChannel === 'council' ? 'Совет' : 'откройте Совет',
+      state: stepState(1),
+    },
+    {
+      label: 'Решение',
+      detail: operationPlanCount ? `${operationPlanCount} плана` : 'ждём план',
+      state: stepState(2),
+    },
+    {
+      label: 'Ход',
+      detail: orderCount ? `${orderCount}/5 готово` : 'после плана',
+      state: stepState(3),
+    },
+  ];
+
+  const hint = (() => {
+    if (operationPlanCount > 0) return 'Выберите план: открыть досье, уточнить или утвердить приказ.';
+    if (orderCount > 0) return 'Приказы в работе: проверьте риск и завершайте ход, когда готовы.';
+    if (targetSelected) return 'Цель выбрана: опишите Совету действие обычным текстом.';
+    return 'Начните с карты или распоряжения Совету.';
+  })();
+
+  return {
+    activeIndex,
+    hint,
+    alert: openLetterCount ? `Канцелярия: ${openLetterCount} писем могут изменить дипломатический фон.` : '',
+    steps,
   };
 }
 
@@ -2394,8 +2468,10 @@ function App() {
               operationPlans={operationPlans}
               selectedCountryName={gameState.selectedCountry?.name || 'Россия'}
               allianceNames={allianceNames}
+              openLetterCount={letters.filter((letter) => letter.status !== 'answered').length}
               turnNumber={turnNumber}
               orderCount={orders.filter((order) => order.statusClass !== 'cancelled').length}
+              turnObjective={turnObjective}
               worldTension={worldTension}
               onInputChange={setChatInput}
               onTabChange={(tab) => {
@@ -3229,6 +3305,50 @@ function CouncilChoiceBoard({
   );
 }
 
+function TurnFlowStrip({
+  activeChannel,
+  openLetterCount,
+  operationPlanCount,
+  orderCount,
+  selectedCountryName,
+  turnObjective,
+}: {
+  activeChannel: ChatChannel;
+  openLetterCount: number;
+  operationPlanCount: number;
+  orderCount: number;
+  selectedCountryName: string;
+  turnObjective: TurnObjective;
+}) {
+  const flow = buildTurnFlow({
+    activeChannel,
+    openLetterCount,
+    operationPlanCount,
+    orderCount,
+    selectedCountryName,
+    turnObjective,
+  });
+
+  return (
+    <section className="turn-flow" aria-label="Маршрут текущего хода" data-active-step={flow.activeIndex + 1}>
+      <div className="turn-flow-head">
+        <b>Маршрут хода</b>
+        <span>{flow.hint}</span>
+      </div>
+      <ol>
+        {flow.steps.map((step, index) => (
+          <li key={step.label} className={step.state} aria-current={step.state === 'active' ? 'step' : undefined}>
+            <i>{index + 1}</i>
+            <span>{step.label}</span>
+            <small>{step.detail}</small>
+          </li>
+        ))}
+      </ol>
+      {flow.alert ? <p>{flow.alert}</p> : null}
+    </section>
+  );
+}
+
 function ChatPanel({
   messages,
   input,
@@ -3237,8 +3357,10 @@ function ChatPanel({
   operationPlans,
   selectedCountryName,
   allianceNames,
+  openLetterCount,
   turnNumber,
   orderCount,
+  turnObjective,
   worldTension,
   onInputChange,
   onTabChange,
@@ -3255,8 +3377,10 @@ function ChatPanel({
   operationPlans: OperationPlan[];
   selectedCountryName: string;
   allianceNames: string[];
+  openLetterCount: number;
   turnNumber: number;
   orderCount: number;
+  turnObjective: TurnObjective;
   worldTension: number;
   onInputChange: (value: string) => void;
   onTabChange: (tab: ChatTabLabel) => void;
@@ -3360,6 +3484,14 @@ function ChatPanel({
           </span>
         ))}
       </div>
+      <TurnFlowStrip
+        activeChannel={activeChannel}
+        openLetterCount={openLetterCount}
+        operationPlanCount={operationPlans.length}
+        orderCount={orderCount}
+        selectedCountryName={selectedCountryName}
+        turnObjective={turnObjective}
+      />
       <div className={`council-decision-slot ${activeChannel === 'council' ? 'active' : ''}`} aria-live="polite">
         {activeChannel === 'council' ? (
           <CouncilChoiceBoard
