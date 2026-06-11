@@ -7837,3 +7837,706 @@ textarea:focus-visible,
     transform: none;
   }
 }
+
+/* Imperial command-table skin. Keeps the map artwork untouched and restyles only the game shell. */
+@media (min-width: 901px) {
+  .minimal-shell {
+    --panel-bg: rgba(7, 16, 17, .86);
+    --panel-bg-strong: rgba(8, 18, 19, .96);
+    --panel-line: rgba(216, 166, 82, .2);
+    --panel-line-soft: rgba(216, 166, 82, .095);
+    --gold: #f2cf78;
+    --gold-soft: rgba(242, 207, 120, .72);
+    --copy: rgba(230, 224, 196, .94);
+    --copy-soft: rgba(166, 184, 168, .78);
+    --surface-blue: rgba(5, 17, 20, .92);
+    grid-template-rows: 64px minmax(0, 1fr);
+    background:
+      radial-gradient(circle at 51% 10%, rgba(80, 106, 85, .11), transparent 34%),
+      linear-gradient(90deg, #050b0c 0%, #071213 17%, #061011 78%, #040909 100%);
+    color: var(--copy);
+  }
+
+  .minimal-shell::before {
+    opacity: .025;
+  }
+
+  .minimal-shell::after {
+    box-shadow:
+      inset 0 0 92px rgba(0, 0, 0, .52),
+      inset 0 0 0 1px rgba(242, 207, 120, .075);
+  }
+
+  .minimal-shell .topbar {
+    height: 64px;
+    grid-template-columns: 252px minmax(420px, 1fr) auto;
+    border-bottom-color: rgba(216, 166, 82, .18);
+    background:
+      linear-gradient(180deg, rgba(8, 17, 19, .98), rgba(3, 8, 9, .97)),
+      #050b0c;
+    box-shadow:
+      0 18px 42px rgba(0, 0, 0, .36),
+      inset 0 -1px 0 rgba(242, 207, 120, .04);
+  }
+
+  .minimal-shell .brand {
+    align-items: center;
+    padding-inline: 24px 18px;
+    border-right-color: rgba(216, 166, 82, .12);
+    background: linear-gradient(90deg, rgba(242, 207, 120, .055), transparent 76%);
+  }
+
+  .minimal-shell .brand-mark {
+    display: none;
+  }
+
+  .minimal-shell .brand-text {
+    color: #f7dc8c;
+    font-size: 18px;
+    letter-spacing: .13em;
+    line-height: 1;
+    text-shadow: 0 0 18px rgba(242, 207, 120, .16);
+  }
+
+  .minimal-shell .primary-nav {
+    gap: 2px;
+    padding-left: 10px;
+  }
+
+  .minimal-shell .nav-link {
+    height: 64px;
+    padding-inline: 14px;
+    color: rgba(216, 205, 172, .7);
+    font-size: 12px;
+    letter-spacing: .055em;
+    border-inline: 1px solid transparent;
+  }
+
+  .minimal-shell .nav-link svg {
+    color: rgba(242, 207, 120, .78);
+  }
+
+  .minimal-shell .nav-link.active,
+  .minimal-shell .nav-link:hover,
+  .minimal-shell .nav-link:focus-visible {
+    color: #f7dc8c;
+    border-inline-color: rgba(242, 207, 120, .08);
+    background:
+      linear-gradient(180deg, rgba(242, 207, 120, .11), transparent 72%),
+      rgba(242, 207, 120, .025);
+  }
+
+  .minimal-shell .nav-link.active::after {
+    left: 14px;
+    right: 14px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(242, 207, 120, .95), transparent);
+    box-shadow: 0 0 20px rgba(242, 207, 120, .34);
+  }
+
+  .minimal-shell .top-actions {
+    gap: 6px;
+    padding-right: 0;
+  }
+
+  .minimal-shell .top-actions .icon-button.optional {
+    display: none;
+  }
+
+  .minimal-shell .icon-button {
+    width: 40px;
+    height: 40px;
+    border: 1px solid transparent;
+    color: rgba(216, 205, 172, .72);
+    background: transparent;
+  }
+
+  .minimal-shell .icon-button:hover,
+  .minimal-shell .icon-button:focus-visible {
+    border-color: rgba(242, 207, 120, .2);
+    background: rgba(242, 207, 120, .07);
+  }
+
+  .minimal-shell .profile-chip {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 18px;
+    min-width: 230px;
+    height: 64px;
+    gap: 10px;
+    padding-inline: 18px 18px;
+    border-left-color: rgba(216, 166, 82, .14);
+    background: linear-gradient(90deg, rgba(242, 207, 120, .04), rgba(4, 10, 11, .4));
+  }
+
+  .minimal-shell .profile-avatar,
+  .minimal-shell .ruler-avatar {
+    display: none;
+  }
+
+  .minimal-shell .profile-text strong {
+    color: #f7dc8c;
+    font-size: 14px;
+  }
+
+  .minimal-shell .profile-text small {
+    color: var(--copy-soft);
+    font-size: 12px;
+  }
+
+  .minimal-shell .left-panel,
+  .minimal-shell .right-panel {
+    background:
+      linear-gradient(180deg, rgba(8, 20, 21, .94), rgba(3, 9, 10, .97)),
+      #050b0c;
+  }
+
+  .minimal-shell .left-panel {
+    border-right-color: rgba(216, 166, 82, .16);
+  }
+
+  .minimal-shell .right-panel {
+    grid-template-rows: minmax(260px, 1fr) minmax(254px, .92fr);
+    gap: 12px;
+    padding: 12px 10px 12px 0;
+    border-left-color: rgba(216, 166, 82, .16);
+  }
+
+  .minimal-shell .framed-panel {
+    border-color: rgba(216, 166, 82, .18);
+    border-radius: 8px;
+    background:
+      linear-gradient(180deg, rgba(12, 28, 30, .72), rgba(5, 13, 14, .88)),
+      var(--panel-bg);
+    box-shadow:
+      0 24px 58px rgba(0, 0, 0, .24),
+      inset 0 1px 0 rgba(255, 235, 176, .045);
+  }
+
+  .minimal-shell .framed-panel::before,
+  .minimal-shell .framed-panel::after {
+    display: none;
+  }
+
+  .minimal-shell .empire-card {
+    height: calc(100vh - 64px);
+    gap: 16px;
+    padding: 18px 18px 16px;
+    border: 0;
+    border-radius: 0;
+    background:
+      radial-gradient(circle at 50% 8%, rgba(242, 207, 120, .08), transparent 26%),
+      linear-gradient(180deg, rgba(10, 24, 25, .54), transparent 48%);
+    box-shadow: none;
+    font-size: 14px;
+  }
+
+  .minimal-shell .empire-identity {
+    gap: 10px;
+    text-align: center;
+  }
+
+  .minimal-shell .empire-card h1 {
+    color: #f8dc8e;
+    font-size: 28px;
+    letter-spacing: .22em;
+    line-height: 1;
+    text-shadow: 0 0 24px rgba(242, 207, 120, .18);
+  }
+
+  .minimal-shell .state-flag {
+    height: 86px;
+  }
+
+  .minimal-shell .state-flag .flag {
+    --flag-w: 136px;
+    --flag-h: 76px;
+    border-radius: 7px;
+    box-shadow:
+      0 14px 30px rgba(0, 0, 0, .42),
+      0 0 0 1px rgba(0, 0, 0, .6),
+      inset 0 0 0 1px rgba(255, 255, 255, .16);
+  }
+
+  .minimal-shell .ruler-block {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    min-height: 56px;
+    padding: 11px 0;
+    border-width: 1px 0;
+    border-color: rgba(216, 166, 82, .13);
+    background: linear-gradient(90deg, transparent, rgba(242, 207, 120, .04), transparent);
+  }
+
+  .minimal-shell .ruler-block strong {
+    color: #f2cf78;
+    font-size: 15px;
+  }
+
+  .minimal-shell .ruler-block small,
+  .minimal-shell .meta-line,
+  .minimal-shell .turn-info small {
+    color: var(--copy-soft);
+  }
+
+  .minimal-shell .meta-line {
+    min-height: 34px;
+    padding: 0 4px;
+    border-bottom-color: rgba(216, 166, 82, .12);
+  }
+
+  .minimal-shell .meta-line b {
+    color: #f3d484;
+  }
+
+  .minimal-shell .empire-economy {
+    padding: 13px 10px 12px;
+    border: 1px solid rgba(216, 166, 82, .12);
+    border-radius: 8px;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, .018), transparent),
+      rgba(2, 9, 10, .34);
+  }
+
+  .minimal-shell .section-title {
+    margin: 0 0 9px;
+    color: var(--gold-soft);
+    font-size: 13px;
+    letter-spacing: .13em;
+  }
+
+  .minimal-shell .resource-list li {
+    grid-template-columns: minmax(72px, 1fr) 62px 78px;
+    min-height: 27px;
+    padding-block: 3px;
+    color: rgba(230, 224, 196, .9);
+    border-bottom-color: rgba(216, 166, 82, .065);
+  }
+
+  .minimal-shell .resource-list b,
+  .minimal-shell .resource-list em {
+    font-size: 14px;
+  }
+
+  .minimal-shell .resource-list b {
+    color: #f0d383;
+  }
+
+  .minimal-shell .resource-list em {
+    color: #7df08a;
+  }
+
+  .minimal-shell .empire-command {
+    gap: 9px;
+    margin-top: auto;
+  }
+
+  .minimal-shell .empire-pulse {
+    gap: 1px;
+    overflow: hidden;
+    border: 1px solid rgba(216, 166, 82, .13);
+    border-radius: 8px;
+    background: rgba(2, 8, 9, .48);
+  }
+
+  .minimal-shell .empire-pulse div,
+  .minimal-shell .empire-pulse div:nth-of-type(-n+2),
+  .minimal-shell .empire-pulse div:nth-of-type(3) {
+    padding: 9px 10px;
+    background: rgba(255, 255, 255, .024);
+  }
+
+  .minimal-shell .empire-pulse span,
+  .minimal-shell .empire-pulse b {
+    font-size: 14px;
+  }
+
+  .minimal-shell .empire-pulse b,
+  .minimal-shell .turn-info strong {
+    color: #f5d783;
+  }
+
+  .minimal-shell .turn-objective {
+    padding: 11px;
+    border-color: rgba(216, 166, 82, .16);
+    border-radius: 8px;
+    background:
+      linear-gradient(135deg, rgba(242, 207, 120, .09), transparent 68%),
+      rgba(2, 9, 10, .5);
+  }
+
+  .minimal-shell .turn-objective h2,
+  .minimal-shell .turn-objective p,
+  .minimal-shell .turn-objective small {
+    font-size: 14px;
+  }
+
+  .minimal-shell .turn-objective h2 {
+    color: #ffe193;
+  }
+
+  .minimal-shell .turn-info {
+    gap: 9px;
+    padding-top: 10px;
+    border-top-color: rgba(216, 166, 82, .13);
+  }
+
+  .minimal-shell .turn-info strong {
+    font-size: 22px;
+  }
+
+  .minimal-shell .end-turn-button {
+    min-height: 42px;
+    border-color: rgba(242, 207, 120, .56);
+    border-radius: 7px;
+    background:
+      linear-gradient(180deg, rgba(136, 88, 32, .58), rgba(54, 35, 17, .66)),
+      rgba(90, 59, 24, .62);
+    color: #ffe7a0;
+    font-size: 14px;
+    letter-spacing: .08em;
+    box-shadow:
+      0 10px 26px rgba(0, 0, 0, .24),
+      inset 0 1px 0 rgba(255, 235, 176, .14);
+  }
+
+  .minimal-shell .main-area {
+    grid-template-rows: minmax(500px, 1fr) 306px;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .minimal-shell .map-section {
+    border-color: rgba(216, 166, 82, .2);
+    border-radius: 8px;
+    background: rgba(2, 9, 10, .36);
+    box-shadow:
+      0 26px 70px rgba(0, 0, 0, .32),
+      inset 0 0 0 1px rgba(255, 235, 176, .035);
+  }
+
+  .minimal-shell .map-toolbar {
+    top: 14px;
+    left: 16px;
+    gap: 8px;
+  }
+
+  .minimal-shell .tool-select,
+  .minimal-shell .route-toggle {
+    min-height: 36px;
+    border-color: rgba(216, 166, 82, .2);
+    border-radius: 6px;
+    background:
+      linear-gradient(180deg, rgba(14, 28, 28, .82), rgba(3, 9, 10, .86)),
+      rgba(4, 10, 11, .82);
+    color: rgba(230, 224, 196, .9);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, .26);
+  }
+
+  .minimal-shell .route-toggle input {
+    accent-color: #a67d42;
+  }
+
+  .minimal-shell .map-controls {
+    gap: 8px;
+  }
+
+  .minimal-shell .map-controls button {
+    width: 38px;
+    height: 38px;
+    border-color: rgba(216, 166, 82, .24);
+    border-radius: 6px;
+    background: rgba(3, 9, 10, .74);
+    color: #e7c574;
+  }
+
+  .minimal-shell .map-legend {
+    min-height: 38px;
+    padding-inline: 18px;
+    border-color: rgba(216, 166, 82, .2);
+    border-radius: 7px;
+    background: rgba(3, 9, 10, .78);
+    color: rgba(222, 214, 184, .82);
+    box-shadow: 0 14px 32px rgba(0, 0, 0, .28);
+  }
+
+  .minimal-shell .bottom-dock {
+    min-height: 0;
+  }
+
+  .minimal-shell .chat-panel {
+    grid-template-rows: auto auto minmax(0, auto) minmax(0, 1fr) auto;
+    border-color: rgba(216, 166, 82, .18);
+    border-radius: 8px;
+    background:
+      radial-gradient(circle at 12% 0%, rgba(242, 207, 120, .055), transparent 24%),
+      linear-gradient(180deg, rgba(8, 24, 25, .82), rgba(3, 10, 11, .9)),
+      rgba(3, 10, 11, .9);
+  }
+
+  .minimal-shell .chat-tabs {
+    min-height: 50px;
+    padding-inline: 14px 12px;
+    border-bottom-color: rgba(216, 166, 82, .13);
+  }
+
+  .minimal-shell .chat-tabs b {
+    color: #f7dc8c;
+    font-size: 18px;
+    letter-spacing: .055em;
+  }
+
+  .minimal-shell .chat-tabs button {
+    min-height: 30px;
+    padding-inline: 14px;
+    border-radius: 999px;
+    color: rgba(179, 197, 176, .82);
+  }
+
+  .minimal-shell .chat-tabs button.active {
+    color: #f8dd8d;
+    background: rgba(242, 207, 120, .12);
+  }
+
+  .minimal-shell .chat-context {
+    min-height: 36px;
+    gap: 16px;
+    padding-inline: 16px;
+    border-bottom-color: rgba(216, 166, 82, .08);
+    color: rgba(203, 214, 188, .86);
+    font-size: 13px;
+  }
+
+  .minimal-shell .council-decision-slot.active {
+    padding: 8px 16px 0;
+  }
+
+  .minimal-shell .council-decision-card {
+    border-color: rgba(216, 166, 82, .18);
+    border-radius: 7px;
+    background:
+      linear-gradient(90deg, rgba(242, 207, 120, .065), transparent 78%),
+      rgba(3, 12, 13, .72);
+  }
+
+  .minimal-shell .council-decision-card h3 {
+    color: #ffe193;
+    font-size: 14px;
+  }
+
+  .minimal-shell .chat-messages {
+    padding: 14px 16px 10px;
+    overflow-y: auto;
+  }
+
+  .minimal-shell .chat-messages p {
+    grid-template-columns: 42px 24px 76px minmax(0, 1fr);
+    gap: 7px;
+    margin: 8px 0;
+    color: rgba(230, 224, 196, .9);
+    font-size: 14px;
+    line-height: 1.46;
+  }
+
+  .minimal-shell .chat-messages time {
+    color: rgba(146, 172, 165, .86);
+  }
+
+  .minimal-shell .chat-messages b {
+    color: #f5d783;
+  }
+
+  .minimal-shell .chat-input {
+    grid-template-columns: minmax(0, 1fr) 44px 56px;
+    gap: 10px;
+    padding: 12px 14px 14px;
+  }
+
+  .minimal-shell .chat-input textarea {
+    min-height: 60px;
+    padding: 14px 16px;
+    border-color: rgba(216, 166, 82, .2);
+    border-radius: 7px;
+    background: rgba(2, 8, 9, .72);
+    color: var(--copy);
+    font-size: 14px;
+  }
+
+  .minimal-shell .chat-input button {
+    border-radius: 7px;
+  }
+
+  .minimal-shell .chat-input .send {
+    border-color: rgba(242, 207, 120, .5);
+    background:
+      linear-gradient(180deg, rgba(133, 89, 34, .58), rgba(56, 36, 18, .68)),
+      rgba(83, 55, 24, .64);
+    color: #ffe49b;
+  }
+
+  .minimal-shell .timeline-panel,
+  .minimal-shell .mail-panel {
+    overflow: hidden;
+    border-color: rgba(216, 166, 82, .18);
+    border-radius: 8px;
+    background:
+      linear-gradient(180deg, rgba(10, 24, 25, .82), rgba(3, 10, 11, .9)),
+      rgba(3, 10, 11, .88);
+  }
+
+  .minimal-shell .panel-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 48px;
+    gap: 8px;
+    padding-inline: 14px 12px;
+    border-bottom-color: rgba(216, 166, 82, .12);
+  }
+
+  .minimal-shell .right-panel .panel-heading h2,
+  .minimal-shell .panel-heading h2 {
+    min-width: 0;
+    overflow: hidden;
+    color: #f7dc8c;
+    font-size: 16px;
+    letter-spacing: .055em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-shadow: 0 0 16px rgba(242, 207, 120, .14);
+  }
+
+  .minimal-shell .right-panel .panel-heading {
+    gap: 6px;
+    padding-inline: 12px 10px;
+  }
+
+  .minimal-shell .right-panel .panel-heading h2 {
+    font-size: 14.6px;
+    letter-spacing: .025em;
+  }
+
+  .minimal-shell .panel-heading button {
+    min-height: 30px;
+    padding-inline: 9px;
+    border-color: rgba(216, 166, 82, .14);
+    border-radius: 5px;
+    background: rgba(242, 207, 120, .055);
+    color: #e7c574;
+    font-size: 10.8px;
+    white-space: nowrap;
+  }
+
+  .minimal-shell .right-panel .panel-heading button {
+    min-height: 28px;
+    padding-inline: 7px;
+    font-size: 10.2px;
+  }
+
+  .minimal-shell .timeline-list,
+  .minimal-shell .mail-list {
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .minimal-shell .timeline-panel article,
+  .minimal-shell .mail-panel .mail-item {
+    min-height: 0;
+  }
+
+  .minimal-shell .timeline-row-button,
+  .minimal-shell .mail-row-button {
+    grid-template-columns: 30px minmax(0, 1fr) 44px;
+    min-height: 64px;
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid rgba(216, 166, 82, .07);
+    border-radius: 5px;
+    background:
+      linear-gradient(90deg, rgba(255, 255, 255, .025), transparent 70%),
+      rgba(8, 18, 18, .64);
+  }
+
+  .minimal-shell .timeline-row-button > div,
+  .minimal-shell .mail-row-button > div {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .minimal-shell .timeline-panel article.world-pulse-row,
+  .minimal-shell .world-pulse-row .timeline-row-button {
+    min-height: 84px;
+    background:
+      linear-gradient(90deg, rgba(242, 207, 120, .07), transparent 74%),
+      rgba(15, 22, 16, .72);
+  }
+
+  .minimal-shell .timeline-row-button .flag,
+  .minimal-shell .mail-row-button .letter-seal {
+    width: 31px;
+    height: 22px;
+  }
+
+  .minimal-shell .mail-row-button .letter-seal {
+    display: grid;
+    place-items: center;
+    height: 31px;
+    border-radius: 4px;
+  }
+
+  .minimal-shell .timeline-panel h3,
+  .minimal-shell .mail-panel h3 {
+    min-width: 0;
+    overflow: hidden;
+    color: #f2cf78;
+    font-size: 13.4px;
+    line-height: 1.24;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .minimal-shell .timeline-panel p,
+  .minimal-shell .mail-panel p {
+    display: -webkit-box;
+    overflow: hidden;
+    color: rgba(190, 204, 184, .74);
+    font-size: 12.4px;
+    line-height: 1.34;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .minimal-shell .timeline-panel time,
+  .minimal-shell .mail-panel time {
+    width: 44px;
+    overflow: hidden;
+    color: rgba(176, 190, 166, .72);
+    font-size: 10.8px;
+    line-height: 1.25;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .minimal-shell .timeline-kind {
+    color: #f7dc8c;
+    font-size: 10.5px;
+    letter-spacing: .09em;
+  }
+
+  .minimal-shell .show-all {
+    min-height: 38px;
+    margin: 0 10px 10px;
+    border-color: rgba(216, 166, 82, .2);
+    border-radius: 6px;
+    background: rgba(3, 10, 11, .58);
+    color: #eac777;
+    font-size: 12px;
+    letter-spacing: .05em;
+  }
+
+  .minimal-shell .timeline-list,
+  .minimal-shell .mail-list,
+  .minimal-shell .chat-messages {
+    scrollbar-color: rgba(216, 166, 82, .42) rgba(5, 12, 13, .55);
+  }
+}
