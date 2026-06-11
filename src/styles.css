@@ -6980,7 +6980,7 @@ textarea:focus-visible,
     --panel-bg-strong: rgba(5, 13, 14, .92);
     --panel-line: rgba(215, 168, 87, .11);
     --panel-line-soft: rgba(215, 168, 87, .065);
-    grid-template-columns: 228px minmax(860px, 1fr) 278px;
+    grid-template-columns: 252px minmax(860px, 1fr) 264px;
     grid-template-rows: 58px minmax(0, 1fr);
     min-width: 1120px;
   }
@@ -6996,7 +6996,7 @@ textarea:focus-visible,
   }
 
   .minimal-shell .topbar {
-    grid-template-columns: 228px minmax(420px, 1fr) auto;
+    grid-template-columns: 252px minmax(420px, 1fr) auto;
     height: 58px;
     border-bottom-color: rgba(215, 168, 87, .11);
     box-shadow: 0 14px 34px rgba(0, 0, 0, .28);
@@ -7008,7 +7008,7 @@ textarea:focus-visible,
   }
 
   .minimal-shell .brand-text {
-    font-size: 16.5px;
+    font-size: 17px;
     letter-spacing: .08em;
   }
 
@@ -7083,14 +7083,14 @@ textarea:focus-visible,
   }
 
   .minimal-shell .empire-card {
-    display: grid;
-    grid-template-rows: auto minmax(178px, 1fr) auto;
-    align-content: stretch;
-    gap: clamp(10px, 1.5vh, 16px);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
     height: calc(100vh - 58px);
     min-height: 0;
-    padding: 14px 18px 16px;
+    padding: 15px 18px 16px;
     overflow: hidden;
+    font-size: 14px;
   }
 
   .minimal-shell .empire-identity,
@@ -7109,18 +7109,14 @@ textarea:focus-visible,
     gap: 9px;
   }
 
-  .minimal-shell .empire-economy {
-    align-self: center;
-  }
-
   .minimal-shell .empire-command {
-    align-self: end;
+    margin-top: auto;
     gap: 6px;
   }
 
   .minimal-shell .empire-card h1 {
     margin: 0;
-    font-size: 24px;
+    font-size: 26px;
     letter-spacing: .2em;
   }
 
@@ -7135,37 +7131,48 @@ textarea:focus-visible,
   }
 
   .minimal-shell .ruler-block {
-    min-height: 40px;
+    min-height: 46px;
     margin: 0;
-    padding: 5px 0;
+    padding: 7px 0;
   }
 
   .minimal-shell .ruler-avatar {
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
+  }
+
+  .minimal-shell .ruler-block strong,
+  .minimal-shell .ruler-block small,
+  .minimal-shell .meta-line,
+  .minimal-shell .turn-info small,
+  .minimal-shell .turn-objective header span,
+  .minimal-shell .turn-objective header b,
+  .minimal-shell .empire-pulse span,
+  .minimal-shell .empire-pulse b {
+    font-size: 14px;
   }
 
   .minimal-shell .section-title {
-    margin: 0 0 7px;
+    margin: 0 0 8px;
     color: rgba(241, 205, 116, .66);
-    font-size: 11.4px;
+    font-size: 14px;
     letter-spacing: .12em;
   }
 
   .minimal-shell .resource-list li {
-    grid-template-columns: minmax(58px, 1fr) 60px 72px;
-    min-height: 24px;
+    grid-template-columns: minmax(70px, 1fr) 58px 78px;
+    min-height: 26px;
     padding: 2px 0;
     border-bottom-color: rgba(215, 168, 87, .055);
-    font-size: 12.4px;
+    font-size: 14px;
   }
 
   .minimal-shell .resource-list b {
-    font-size: 12.5px;
+    font-size: 14px;
   }
 
   .minimal-shell .resource-list em {
-    font-size: 11px;
+    font-size: 14px;
   }
 
   .minimal-shell .empire-pulse {
@@ -7178,6 +7185,7 @@ textarea:focus-visible,
   .minimal-shell .empire-pulse div:nth-of-type(-n+2) {
     min-height: 48px;
     padding: 7px 8px;
+    font-size: 14px;
   }
 
   .minimal-shell .empire-pulse div:nth-of-type(3) {
@@ -7194,14 +7202,36 @@ textarea:focus-visible,
       rgba(2, 8, 9, .45);
   }
 
+  .minimal-shell .turn-objective header {
+    align-items: start;
+    gap: 6px;
+  }
+
+  .minimal-shell .turn-objective header span {
+    overflow: visible;
+    line-height: 1.15;
+    letter-spacing: .04em;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .minimal-shell .turn-objective header b {
+    line-height: 1.15;
+    text-align: right;
+  }
+
   .minimal-shell .turn-objective h2 {
-    font-size: 13.2px;
+    overflow: visible;
+    font-size: 14px;
+    line-height: 1.18;
+    text-overflow: clip;
+    white-space: normal;
   }
 
   .minimal-shell .turn-objective p,
   .minimal-shell .turn-objective small {
-    font-size: 11px;
-    line-height: 1.24;
+    font-size: 14px;
+    line-height: 1.28;
   }
 
   .minimal-shell .turn-info {
@@ -7211,19 +7241,20 @@ textarea:focus-visible,
   }
 
   .minimal-shell .turn-info strong {
-    font-size: 19px;
+    font-size: 21px;
   }
 
   .minimal-shell .turn-info #turnClock {
-    font-size: 12.6px;
+    font-size: 14px;
   }
 
   .minimal-shell .end-turn-button {
-    min-height: 38px;
+    min-height: 40px;
     border-color: rgba(241, 205, 116, .45);
     background:
       linear-gradient(180deg, rgba(121, 78, 30, .46), rgba(48, 32, 16, .58)),
       rgba(66, 45, 22, .45);
+    font-size: 14px;
   }
 
   .minimal-shell .quick-actions {
@@ -7322,6 +7353,23 @@ textarea:focus-visible,
   .minimal-shell .panel-heading h2 {
     font-size: 16px;
     letter-spacing: .05em;
+  }
+
+  .minimal-shell .right-panel .panel-heading {
+    gap: 8px;
+    padding-inline: 12px 10px;
+  }
+
+  .minimal-shell .right-panel .panel-heading h2 {
+    overflow: visible;
+    font-size: 14.5px;
+    letter-spacing: .025em;
+    text-overflow: clip;
+  }
+
+  .minimal-shell .right-panel .panel-heading button {
+    flex: 0 0 auto;
+    font-size: 11.5px;
   }
 
   .minimal-shell .chat-context {
