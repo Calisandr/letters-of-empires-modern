@@ -12,13 +12,70 @@ const page = await browser.newPage({
   deviceScaleFactor: 1,
 });
 const consoleErrors = [];
+const failures = [];
 
-await page.addInitScript(() => {
-  if (!window.sessionStorage.getItem('letters-of-empires:smoke-ready')) {
-    window.localStorage.removeItem('letters-of-empires:game:v1');
-    window.sessionStorage.setItem('letters-of-empires:smoke-ready', '1');
-  }
-});
+function assert(condition, message) {
+  if (!condition) failures.push(message);
+}
+
+async function readLayoutDiagnostics() {
+  return page.evaluate(() => {
+    const isVisible = (selector) => {
+      const node = document.querySelector(selector);
+      if (!node) return false;
+      const style = getComputedStyle(node);
+      const box = node.getBoundingClientRect();
+      return style.display !== 'none' && style.visibility !== 'hidden' && box.width > 0 && box.height > 0;
+    };
+    const rect = (selector) => {
+      const box = document.querySelector(selector)?.getBoundingClientRect();
+      return box
+        ? {
+            width: box.width,
+            height: box.height,
+            top: box.top,
+            bottom: box.bottom,
+            left: box.left,
+            right: box.right,
+          }
+        : null;
+    };
+    const chatMessages = document.querySelector('.chat-messages');
+    const chatPanel = rect('.chat-panel');
+    const map = rect('.map-section');
+    const rightPanel = rect('.right-panel');
+
+    return {
+      title: document.title,
+      brand: document.querySelector('.brand-text')?.textContent?.trim() || '',
+      appClasses: document.querySelector('.app-shell')?.className || '',
+      nav: [...document.querySelectorAll('.primary-nav .nav-link')].map((node) =>
+        node.textContent?.replace(/\s+/g, ' ').trim() || '',
+      ),
+      countryCount: document.querySelectorAll('.country').length,
+      map,
+      rightPanel,
+      chatPanel,
+      quickActionsVisible: isVisible('.quick-actions'),
+      ordersPanelVisible: isVisible('.orders-panel'),
+      diplomacyPanelVisible: isVisible('.diplomacy-panel'),
+      turnFlowVisible: isVisible('.turn-flow'),
+      starterPromptsVisible: isVisible('.council-starter-prompts'),
+      chatOverflowY: chatMessages ? getComputedStyle(chatMessages).overflowY : '',
+      chatScrollHeight: chatMessages?.scrollHeight || 0,
+      chatClientHeight: chatMessages?.clientHeight || 0,
+      timelineRows: document.querySelectorAll('.timeline-panel article').length,
+      mailRows: document.querySelectorAll('.mail-panel article').length,
+      visibleRightPanels: [...document.querySelectorAll('.right-panel .framed-panel')].filter((node) => {
+        const style = getComputedStyle(node);
+        const box = node.getBoundingClientRect();
+        return style.display !== 'none' && box.height > 0 && box.width > 0;
+      }).length,
+      mailBadge: document.querySelector('.primary-nav .pill')?.textContent?.trim() || '',
+      endTurnText: document.querySelector('.end-turn-button')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+    };
+  });
+}
 
 page.on('console', (message) => {
   if (message.type() === 'error') consoleErrors.push(message.text());
@@ -28,15 +85,17 @@ page.on('pageerror', (error) => {
   consoleErrors.push(error.message);
 });
 
+await page.addInitScript(() => {
+  window.localStorage.removeItem('letters-of-empires:game:v1');
+  window.sessionStorage.clear();
+});
+
 try {
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
-  await page.waitForSelector('.app-shell');
+  await page.waitForSelector('.app-shell.minimal-shell');
   await page.waitForSelector('.world-svg');
 
-  const countryCount = await page.locator('.country').count();
-  const initialTitle = await page.locator('.brand-text').textContent();
   const loadedScripts = await page.evaluate(() => [...document.scripts].map((script) => script.src));
-  const legacyScriptLoaded = loadedScripts.some((src) => src.includes('/js/app.js'));
   const legacyScriptResponse = await page.evaluate(async () => {
     const response = await fetch('/js/app.js', { cache: 'no-store' });
     const text = await response.text();
@@ -51,1515 +110,177 @@ try {
     };
   });
 
-  await page.getByRole('button', { name: 'Помощь' }).click();
-  await page.waitForSelector('.guide-dialog');
-  const guideDialogDiagnostics = await page.evaluate(() => {
-    const dialog = document.querySelector('.guide-dialog');
-    const dialogRect = dialog?.getBoundingClientRect();
-    const textNodes = [...(dialog?.querySelectorAll('p, dd, dt, button, span, small, b') || [])].filter((node) => {
-      const text = node.textContent?.trim() || '';
-      return text.length > 0;
-    });
-    const smallTextNodes = textNodes.filter((node) => parseFloat(getComputedStyle(node).fontSize) < 12);
-    const overflowingNodes = [...(dialog?.querySelectorAll('*') || [])].filter((node) => {
-      const box = node.getBoundingClientRect();
-      return box.width > 0 && dialogRect && box.right > dialogRect.right + 2;
-    });
+  const initialLayout = await readLayoutDiagnostics();
 
-    return {
-      exists: Boolean(dialog),
-      role: dialog?.getAttribute('role') || '',
-      modal: dialog?.getAttribute('aria-modal') || '',
-      title: dialog?.querySelector('h2')?.textContent?.trim() || '',
-      currentText: dialog?.querySelector('.guide-current p')?.textContent?.trim() || '',
-      cycleCount: dialog?.querySelectorAll('.guide-cycle article').length || 0,
-      channelCount: dialog?.querySelectorAll('.guide-channels article').length || 0,
-      actionCount: dialog?.querySelectorAll('.guide-actions dl div').length || 0,
-      activeChannelCount: dialog?.querySelectorAll('.guide-channels article.active').length || 0,
-      visibleWidth: dialogRect?.width || 0,
-      visibleHeight: dialogRect?.height || 0,
-      smallTextCount: smallTextNodes.length,
-      overflowCount: overflowingNodes.length,
-      closeText: dialog?.querySelector('.dialog-close')?.textContent?.trim() || '',
-    };
-  });
-  await page.locator('.guide-dialog .dialog-close').click();
-  await page.waitForFunction(() => document.querySelectorAll('.guide-dialog').length === 0);
-  const guideDialogClosed = (await page.locator('.guide-dialog').count()) === 0;
-
-  const councilStarterDiagnostics = await page.evaluate(() => {
-    const board = document.querySelector('.council-choice-board.empty');
-    const buttons = [...document.querySelectorAll('.council-starter-prompts button')].map((node) => {
-      const box = node.getBoundingClientRect();
-
-      return {
-        label: node.querySelector('b')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-        detail: node.querySelector('span')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-        height: box.height,
-        aria: node.getAttribute('aria-label') || node.textContent?.replace(/\s+/g, ' ').trim() || '',
-      };
-    });
-    const textNodes = [...(board?.querySelectorAll('p, button, span, b') || [])].filter((node) => {
-      const text = node.textContent?.trim() || '';
-      return text.length > 0;
-    });
-    const smallTextNodes = textNodes.filter((node) => parseFloat(getComputedStyle(node).fontSize) < 12);
-    const boardBox = board?.getBoundingClientRect();
-    const overflowingNodes = [...(board?.querySelectorAll('*') || [])].filter((node) => {
-      const box = node.getBoundingClientRect();
-      return box.width > 0 && boardBox && box.right > boardBox.right + 2;
-    });
-
-    return {
-      exists: Boolean(board),
-      title: board?.querySelector('header span')?.textContent?.trim() || '',
-      promptCount: buttons.length,
-      labels: buttons.map((button) => button.label),
-      minButtonHeight: buttons.reduce((min, button) => Math.min(min, button.height), Number.POSITIVE_INFINITY),
-      smallTextCount: smallTextNodes.length,
-      overflowCount: overflowingNodes.length,
-    };
-  });
-  await page.locator('.council-starter-prompts button').first().click();
-  await page.waitForFunction(() => document.activeElement?.id === 'chatInput');
-  await page.waitForTimeout(260);
-  const starterPromptInserted = await page.locator('#chatInput').inputValue();
-  const starterInputFocusDiagnostics = await page.evaluate(() => {
-    const form = document.querySelector('#chatForm');
-    const input = document.querySelector('#chatInput');
-    const inputBox = input?.getBoundingClientRect();
-    const inputStyle = input ? getComputedStyle(input) : null;
-
-    return {
-      focused: document.activeElement === input,
-      primed: Boolean(form?.classList.contains('primed')),
-      tagName: input?.tagName || '',
-      valueLength: input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement ? input.value.length : 0,
-      inputHeight: inputBox?.height || 0,
-      inputFontSize: inputStyle ? Number.parseFloat(inputStyle.fontSize) : 0,
-      borderColor: inputStyle?.borderColor || '',
-    };
-  });
-  await page.locator('#chatInput').fill('');
-
-  await page.locator('#mapMode').click();
-  await page.locator('.map-mode-menu button').nth(1).click();
-  await page.waitForFunction(() => document.querySelector('.app-shell')?.classList.contains('trade-mode'));
   await page.locator('#mapMode').click();
   await page.locator('.map-mode-menu button').nth(2).click();
-  await page.waitForFunction(() => document.querySelector('.app-shell')?.classList.contains('strategy-mode'));
-  await page.waitForSelector('.map-signal-marker');
-  const liveMapDiagnostics = await page.evaluate(() => {
-    const markers = [...document.querySelectorAll('.map-signal-marker')];
-    const markerLabels = markers.map((node) => node.textContent?.replace(/\s+/g, ' ').trim() || '');
-    const ukraine = document.querySelector('.country[data-name="Ukraine"]');
-    const india = document.querySelector('.country[data-name="India"]');
+  const mapModeTitle = await page.locator('#mapMode').textContent();
 
-    return {
-      markerCount: markers.length,
-      linkCount: document.querySelectorAll('.map-live-link').length,
-      markerLabels,
-      hasUkraineMarker: markerLabels.some((label) => label.includes('Украина')),
-      hasIndiaSignal: Boolean(india?.classList.contains('live-trade')),
-      ukraineClass: ukraine?.getAttribute('class') || '',
-      indiaClass: india?.getAttribute('class') || '',
-    };
-  });
-  await page.locator('.map-signal-marker').filter({ hasText: 'Украина' }).click();
-  await page.waitForFunction(() =>
-    document.querySelector('.country[data-name="Ukraine"]')?.classList.contains('selected'),
-  );
-  const liveMarkerClickSelectedUkraine = await page
-    .locator('.country[data-name="Ukraine"]')
-    .evaluate((node) => node.classList.contains('selected'));
-
-  await page.locator('#routeToggle').uncheck();
-  const routesState = await page.locator('.app-shell').getAttribute('data-routes');
-  await page.locator('.map-toolbar .tool-select').first().click();
-  await page.locator('.map-layer-menu button').nth(1).click();
-  const labelsLayerState = await page.locator('.map-canvas').getAttribute('data-layer-labels');
-
-  const beforeZoom = await page.locator('#mapZoomLayer').evaluate((node) => getComputedStyle(node).transform);
   await page.locator('#zoomIn').click();
-  const afterZoom = await page.locator('#mapZoomLayer').evaluate((node) => node.style.transform);
-
-  await page.locator('.country[data-name="Russia"]').hover();
-  await page.waitForSelector('.tooltip.visible');
-  const tooltip = await page.locator('.tooltip').innerText();
-  await page.locator('.country[data-name="Russia"]').click();
-  await page.waitForFunction(() =>
-    document.querySelector('.country[data-name="Russia"]')?.classList.contains('selected'),
-  );
-  const selectedRussia = await page
-    .locator('.country[data-name="Russia"]')
-    .evaluate((node) => node.classList.contains('selected'));
-  const franceCountry = page.locator('.country[data-name="France"]');
-  await franceCountry.focus();
-  await page.keyboard.press('Enter');
-  await page.waitForFunction(() =>
-    document.querySelector('.country[data-name="France"]')?.classList.contains('selected'),
-  );
-  const keyboardSelectedFrance = await franceCountry.evaluate((node) => ({
-    selected: node.classList.contains('selected'),
-    role: node.getAttribute('role'),
-    label: node.getAttribute('aria-label'),
-  }));
-
-  const inspectCountryIntel = async (countryName) => {
-    const country = page.locator(`.country[data-name="${countryName}"]`);
-    await country.focus();
-    await page.keyboard.press('Enter');
-    await page.waitForFunction(
-      (name) => document.querySelector(`.country[data-name="${name}"]`)?.classList.contains('selected'),
-      countryName,
-    );
-    return page.evaluate(() => {
-      const flag = document.querySelector('.country-intel .flag');
-      const flagStyle = flag ? getComputedStyle(flag) : null;
-      return {
-        title: document.querySelector('.country-intel strong')?.textContent?.trim() || '',
-        flagClass: flag?.className.toString() || '',
-        flagTitle: flag?.getAttribute('title') || '',
-        flagBackgroundImage: flagStyle?.backgroundImage || '',
-        visibleBeforeClose: Boolean(document.querySelector('.country-intel')),
-      };
-    });
-  };
-
-  const algeriaIntel = await inspectCountryIntel('Algeria');
-  const brazilIntel = await inspectCountryIntel('Brazil');
-  const greenlandIntel = await inspectCountryIntel('Greenland');
-  const countryIntelFlagDiagnostics = {
-    algeriaIntel,
-    brazilIntel,
-    greenlandIntel,
-  };
-  const countryIntelFlagsWork = [algeriaIntel, brazilIntel, greenlandIntel].every((intel) =>
-    intel.visibleBeforeClose &&
-    intel.flagClass.includes('flag-svg') &&
-    intel.flagClass.includes('fi-') &&
-    intel.flagBackgroundImage.includes('url('),
-  );
-  const countryIntelStillUsesEmojiFallback = [algeriaIntel, brazilIntel, greenlandIntel].some((intel) =>
-    intel.flagClass.includes('emoji-flag') || intel.flagBackgroundImage === 'none',
-  );
-  const countryIntelShowsTextCode = await page.evaluate(() => {
-    const flag = document.querySelector('.country-intel .flag');
-    return {
-      text: flag?.textContent?.trim() || '',
-      pseudoText: flag ? getComputedStyle(flag, '::before').content + getComputedStyle(flag, '::after').content : '',
-    };
-  });
-
-  await inspectCountryIntel('Brazil');
-  const beforeCountryIntelAction = await page.evaluate(() => ({
-    goldText: [...document.querySelectorAll('.resource-list li')].find((node) =>
-      node.textContent?.includes('Золото'),
-    )?.textContent || '',
-    diplomacyNames: [...document.querySelectorAll('.diplomacy-row > b')].map((node) =>
-      node.textContent?.trim(),
-    ),
-  }));
-  await page.getByRole('button', { name: 'Посол: Бразилия' }).click();
-  await page.waitForFunction(() =>
-    [...document.querySelectorAll('.diplomacy-row > b')].some((node) => node.textContent?.includes('Бразилия')),
-  );
-  await page.getByRole('button', { name: 'Разведка: Бразилия' }).click();
   await page.waitForTimeout(120);
-  await page.waitForSelector('.council-priority, .operation-plan');
-  const afterCountryIntelAction = await page.evaluate(() => ({
-    goldText: [...document.querySelectorAll('.resource-list li')].find((node) =>
-      node.textContent?.includes('Золото'),
-    )?.textContent || '',
-    diplomacyNames: [...document.querySelectorAll('.diplomacy-row > b')].map((node) =>
-      node.textContent?.trim(),
-    ),
-    intelText: document.querySelector('.country-intel-activity')?.textContent?.trim() || '',
-    timelineTop: document.querySelector('.timeline-panel article h3')?.textContent?.trim() || '',
+  const zoomTransform = await page.locator('#mapZoomLayer').evaluate((node) => getComputedStyle(node).transform);
+
+  await page.locator('.country[data-name="France"]').evaluate((node) => node.dispatchEvent(new MouseEvent('click', {
+    bubbles: true,
+    cancelable: true,
+    view: window,
+  })));
+  const selectedCountry = await page.evaluate(() => ({
+    selected: document.querySelector('.country.selected')?.getAttribute('data-name') || '',
+    intelTitle: document.querySelector('.country-intel strong')?.textContent?.trim() || '',
   }));
-  const operationPlanDiagnostics = await page.evaluate(() => {
-    const plans = [...document.querySelectorAll('.council-priority, .operation-plan')];
-    const first = plans[0];
 
-    return {
-      count: plans.length,
-      title: first?.querySelector('h3')?.textContent?.trim() || '',
-      hasRunButton: Boolean(first?.querySelector('.plan-run')?.textContent?.includes('Утвердить')),
-      hasDismissButton: Boolean(first?.querySelector('.plan-dismiss')),
-      meta:
-        first?.querySelector('small')?.textContent?.replace(/\s+/g, ' ').trim() ||
-        [...(first?.querySelectorAll('.council-priority-facts b') || [])]
-          .map((node) => node.textContent?.trim() || '')
-          .join(' · '),
-    };
-  });
-  await page.locator('.council-priority .plan-run, .operation-plan .plan-run').first().click();
-  await page.waitForSelector('.operation-plan-dialog');
-  const operationPlanDossierDiagnostics = await page.evaluate(() => {
-    const dialog = document.querySelector('.operation-plan-dialog');
-    const dialogRect = dialog?.getBoundingClientRect();
-    const textNodes = [...(dialog?.querySelectorAll('p, dd, button, span, small') || [])];
-    const overflowingNodes = [...(dialog?.querySelectorAll('*') || [])].filter((node) => {
-      const box = node.getBoundingClientRect();
-      return box.width > 0 && dialogRect && box.right > dialogRect.right + 2;
-    });
-    const buttons = [...(dialog?.querySelectorAll('button') || [])].map((button) =>
-      button.textContent?.replace(/\s+/g, ' ').trim() || button.getAttribute('aria-label') || '',
-    );
-    const approveButton = [...(dialog?.querySelectorAll('button') || [])].find((button) =>
-      button.textContent?.includes('Утвердить приказ'),
-    );
+  await page.locator('.country-intel .country-intel-close').click();
+  await page.waitForFunction(() => !document.querySelector('.country-intel'));
+  const selectedAfterClose = await page.locator('.country.selected').count();
 
-    return {
-      exists: Boolean(dialog),
-      role: dialog?.getAttribute('role') || '',
-      modal: dialog?.getAttribute('aria-modal') || '',
-      title: dialog?.querySelector('h2')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-      readiness: dialog?.querySelector('.dialog-heading strong')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-      metricCount: dialog?.querySelectorAll('.plan-dossier-metrics dd').length || 0,
-      outcomeCount: dialog?.querySelectorAll('.plan-dossier-outcomes article').length || 0,
-      effectCount: dialog?.querySelectorAll('.plan-dossier-effects dd').length || 0,
-      buttons,
-      approveDisabled: Boolean(approveButton?.disabled),
-      visibleWidth: dialogRect?.width || 0,
-      visibleHeight: dialogRect?.height || 0,
-      smallTextCount: textNodes.filter((node) => Number.parseFloat(getComputedStyle(node).fontSize) < 11).length,
-      overflowCount: overflowingNodes.length,
-    };
-  });
-  await page.locator('.operation-plan-dialog .dialog-close').click();
-  await page.waitForFunction(() => document.querySelectorAll('.operation-plan-dialog').length === 0);
-  const operationPlanDossierClosed = (await page.locator('.operation-plan-dialog').count()) === 0;
-  const countryIntelActionDiagnostics = {
-    beforeCountryIntelAction,
-    afterCountryIntelAction,
-    operationPlanDiagnostics,
-    operationPlanDossierDiagnostics,
-    operationPlanDossierClosed,
-    diplomacyHasBrazil: afterCountryIntelAction.diplomacyNames.includes('Бразилия'),
-    goldChanged: beforeCountryIntelAction.goldText !== afterCountryIntelAction.goldText,
-    intelUpdated: afterCountryIntelAction.intelText.includes('Разведка'),
-  };
+  await page.getByRole('tab', { name: 'Мир' }).click();
+  for (let index = 0; index < 14; index += 1) {
+    await page.locator('#chatInput').fill(`Публичное заявление ${index + 1}: Россия подтверждает спокойный канал.`);
+    await page.locator('#chatForm').evaluate((form) => form.requestSubmit());
+    await page.waitForTimeout(25);
+  }
 
-  const diplomacyScrollDiagnostics = await page.evaluate(() => {
-    const panel = document.querySelector('.diplomacy-panel');
-    const list = document.querySelector('.diplomacy-panel ul');
-    if (!panel || !list) {
-      return { exists: false };
-    }
-
-    const before = list.scrollTop;
-    list.scrollTop = list.scrollHeight;
-    const after = list.scrollTop;
-    list.scrollTop = 0;
-    const style = getComputedStyle(list);
-    const panelRect = panel.getBoundingClientRect();
-    const listRect = list.getBoundingClientRect();
-    const needsScroll = list.scrollHeight > list.clientHeight + 1;
+  const chatScrollDiagnostics = await page.evaluate(() => {
+    const messages = document.querySelector('.chat-messages');
+    if (!messages) return { exists: false };
+    messages.scrollTop = messages.scrollHeight;
 
     return {
       exists: true,
-      itemCount: list.children.length,
-      overflowY: style.overflowY,
-      clientHeight: list.clientHeight,
-      scrollHeight: list.scrollHeight,
-      needsScroll,
-      canReachBottom: !needsScroll || after > before,
-      contained: listRect.top >= panelRect.top - 1 && listRect.bottom <= panelRect.bottom + 1,
+      overflowY: getComputedStyle(messages).overflowY,
+      scrollHeight: messages.scrollHeight,
+      clientHeight: messages.clientHeight,
+      scrollTop: messages.scrollTop,
+      messageCount: messages.querySelectorAll('p').length,
     };
   });
 
-  const diplomacyDossierRow = page.locator('.diplomacy-row').first();
-  if ((await diplomacyDossierRow.getAttribute('aria-expanded')) !== 'true') {
-    await diplomacyDossierRow.click();
-  }
-  await page.waitForSelector('.diplomacy-dialog');
-  const diplomacyDossierDiagnostics = await page.evaluate(() => {
-    const row = document.querySelector('.diplomacy-row[aria-expanded="true"]') || document.querySelector('.diplomacy-row');
-    const dialog = document.querySelector('.diplomacy-dialog');
-    const rightPanel = document.querySelector('.right-panel');
-    const meter = dialog?.querySelector('.dialog-meter');
-    const activity = dialog?.querySelector('.diplomacy-dialog-activity');
-    const metrics = [...(dialog?.querySelectorAll('.diplomacy-dialog-metrics dd') || [])].map((node) =>
-      node.textContent?.replace(/\s+/g, ' ').trim(),
-    );
-    const dialogRect = dialog?.getBoundingClientRect();
-    const rightPanelRect = rightPanel?.getBoundingClientRect();
-    const textNodes = [...(dialog?.querySelectorAll('p, li, dd, button, small') || [])];
-    const smallTextNodes = textNodes.filter((node) => Number.parseFloat(getComputedStyle(node).fontSize) < 12);
-    const overflowingNodes = [...(dialog?.querySelectorAll('*') || [])].filter(
-      (node) => node.scrollWidth > node.clientWidth + 2,
-    );
-
-    return {
-      exists: Boolean(dialog),
-      role: dialog?.getAttribute('role') || '',
-      modal: dialog?.getAttribute('aria-modal') || '',
-      rowExpanded: row?.getAttribute('aria-expanded') === 'true',
-      meterText: meter?.textContent?.replace(/\s+/g, ' ').trim() || '',
-      activityText: activity?.textContent?.replace(/\s+/g, ' ').trim() || '',
-      metrics,
-      goalCount: dialog?.querySelectorAll('.diplomacy-dialog-goals li').length || 0,
-      visibleHeight: dialogRect?.height || 0,
-      visibleWidth: dialogRect?.width || 0,
-      outsideRightPanel: Boolean(dialogRect && rightPanelRect && dialogRect.left < rightPanelRect.left - 12),
-      closeButtonExists: Boolean(dialog?.querySelector('.dialog-close')),
-      smallTextCount: smallTextNodes.length,
-      overflowCount: overflowingNodes.length,
-    };
-  });
-  await page.keyboard.press('Escape');
-  await page.waitForFunction(() => document.querySelectorAll('.diplomacy-dialog').length === 0);
-  const diplomacyDossierCloseDiagnostics = {
-    closed: (await page.locator('.diplomacy-dialog').count()) === 0,
-    expandedRows: await page.locator('.diplomacy-row[aria-expanded="true"]').count(),
-  };
-
-  await page.locator('.country-intel-close').click();
-  await page.waitForFunction(() => document.querySelectorAll('.country-intel').length === 0);
-  const countryIntelClosed = (await page.locator('.country-intel').count()) === 0;
-  const countrySelectionAfterClose = await page.evaluate(() => ({
-    selectedCount: document.querySelectorAll('.world-svg .country.selected').length,
-    selectedNames: [...document.querySelectorAll('.world-svg .country.selected')].map((node) => node.dataset.name),
-  }));
-
-  await page.locator('.timeline-row-button').first().click();
-  await page.waitForSelector('.chronicle-dialog');
-  const chronicleHighlightLabel = await page
-    .locator('.world-pulse-row .timeline-kind')
-    .first()
-    .textContent();
-  const chronicleDialogDiagnostics = await page.evaluate(() => {
-    const dialog = document.querySelector('.chronicle-dialog');
-    const rightPanel = document.querySelector('.right-panel');
-    const dialogRect = dialog?.getBoundingClientRect();
-    const rightPanelRect = rightPanel?.getBoundingClientRect();
-    const textNodes = [...(dialog?.querySelectorAll('p, dd, button, small') || [])];
-    const smallTextNodes = textNodes.filter((node) => Number.parseFloat(getComputedStyle(node).fontSize) < 12);
-    const overflowingNodes = [...(dialog?.querySelectorAll('*') || [])].filter(
-      (node) => node.scrollWidth > node.clientWidth + 2,
-    );
-
-    return {
-      exists: Boolean(dialog),
-      role: dialog?.getAttribute('role') || '',
-      modal: dialog?.getAttribute('aria-modal') || '',
-      title: dialog?.querySelector('h2')?.textContent?.trim() || '',
-      metrics: dialog?.querySelectorAll('.chronicle-dialog-metrics dd').length || 0,
-      meaningText: dialog?.querySelector('.chronicle-dialog-meaning p')?.textContent?.trim() || '',
-      visibleWidth: dialogRect?.width || 0,
-      visibleHeight: dialogRect?.height || 0,
-      outsideRightPanel: Boolean(dialogRect && rightPanelRect && dialogRect.left < rightPanelRect.left - 12),
-      closeButtonExists: Boolean(dialog?.querySelector('.dialog-close')),
-      smallTextCount: smallTextNodes.length,
-      overflowCount: overflowingNodes.length,
-    };
-  });
-  await page.locator('.chronicle-dialog .dialog-close').click();
-  await page.waitForFunction(() => document.querySelectorAll('.chronicle-dialog').length === 0);
-  const chronicleDialogClosed = (await page.locator('.chronicle-dialog').count()) === 0;
-
-  await page.locator('.timeline-panel .panel-heading button').click();
-  await page.waitForSelector('.chronicle-archive-dialog');
-  const chronicleArchiveDiagnostics = await page.evaluate(() => {
-    const dialog = document.querySelector('.chronicle-archive-dialog');
-    const rightPanel = document.querySelector('.right-panel');
-    const dialogRect = dialog?.getBoundingClientRect();
-    const rightPanelRect = rightPanel?.getBoundingClientRect();
-    const rows = [...document.querySelectorAll('.chronicle-archive-row')];
-    const rowBoxes = rows.map((node) => {
-      const box = node.getBoundingClientRect();
-      return { top: box.top, bottom: box.bottom, height: box.height };
-    });
-    const smallTextNodes = [...(dialog?.querySelectorAll('p, time, button, small') || [])].filter(
-      (node) => Number.parseFloat(getComputedStyle(node).fontSize) < 12,
-    );
-    const overflowingNodes = [...(dialog?.querySelectorAll('*') || [])].filter(
-      (node) => node.scrollWidth > node.clientWidth + 2,
-    );
-
-    return {
-      exists: Boolean(dialog),
-      role: dialog?.getAttribute('role') || '',
-      modal: dialog?.getAttribute('aria-modal') || '',
-      rowCount: rows.length,
-      minRowHeight: rowBoxes.reduce((min, row) => Math.min(min, row.height), Number.POSITIVE_INFINITY),
-      visibleWidth: dialogRect?.width || 0,
-      outsideRightPanel: Boolean(dialogRect && rightPanelRect && dialogRect.left < rightPanelRect.left - 12),
-      smallTextCount: smallTextNodes.length,
-      overflowCount: overflowingNodes.length,
-    };
-  });
-  await page.locator('.chronicle-archive-row').first().click();
-  await page.waitForSelector('.chronicle-dialog');
-  const chronicleArchiveOpensEntry = (await page.locator('.chronicle-dialog').count()) === 1;
-  await page.keyboard.press('Escape');
-  await page.waitForFunction(() => document.querySelectorAll('.chronicle-dialog').length === 0);
-  const chronicleArchiveClosed = (await page.locator('.chronicle-archive-dialog').count()) === 0;
-
-  await franceCountry.focus();
-  await page.keyboard.press('Enter');
-  await page.waitForSelector('.country-intel');
-
-  await page.locator('#chatInput').fill('Разведать Турцию');
-  await page.locator('#chatInput').press('Enter');
+  await page.getByRole('tab', { name: 'Совет' }).click();
+  await page.locator('#chatInput').fill('Совет, разведай Турцию и предложи безопасный план без резкой эскалации.');
+  await page.locator('#chatForm').evaluate((form) => form.requestSubmit());
   await page.waitForSelector('.council-decision-card');
-  const chatText = await page.locator('.chat-messages').innerText();
-  const councilDirectiveDiagnostics = await page.evaluate(() => {
-    const card = document.querySelector('.council-decision-card');
-    const choiceBoard = document.querySelector('.council-choice-board.has-plans');
-    const alternatives = [...document.querySelectorAll('.council-next-step')].map((node) => {
-      const box = node.getBoundingClientRect();
 
-      return {
-        title: node.querySelector('h4')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-        role: node.querySelector('span')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-        buttonCount: node.querySelectorAll('button').length,
-        height: box.height,
-      };
-    });
-    const planTitles = [...document.querySelectorAll('.council-priority h3, .operation-plan h3')].map((node) =>
-      node.textContent?.replace(/\s+/g, ' ').trim() || '',
-    );
-    const buttons = [...(card?.querySelectorAll('button') || [])].map((button) =>
-      button.textContent?.replace(/\s+/g, ' ').trim() || '',
-    );
-    const textNodes = [...(card?.querySelectorAll('h3, p, dt, dd, button, span, b') || [])];
-    const overflowingNodes = [...(card?.querySelectorAll('*') || [])].filter(
-      (node) => node.scrollWidth > node.clientWidth + 2 && node.tagName !== 'H3',
-    );
-    const cardBox = card?.getBoundingClientRect();
-    const chatPanelBox = document.querySelector('.chat-panel')?.getBoundingClientRect();
+  const councilDecision = await page.evaluate(() => {
+    const card = document.querySelector('.council-decision-card');
+    const box = card?.getBoundingClientRect();
 
     return {
       exists: Boolean(card),
-      roleLabel: card?.getAttribute('aria-label') || '',
-      title: card?.querySelector('h3')?.textContent?.trim() || '',
+      title: card?.querySelector('h3')?.textContent?.replace(/\s+/g, ' ').trim() || '',
       summary: card?.querySelector('p')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-      metrics: [...(card?.querySelectorAll('dd') || [])].map((node) => node.textContent?.trim() || ''),
-      buttons,
-      choiceBoardExists: Boolean(choiceBoard),
-      alternativeCount: alternatives.length,
-      alternatives,
-      planTitles,
-      advisorReply: [...document.querySelectorAll('.chat-messages p')].at(-1)?.textContent?.replace(/\s+/g, ' ').trim() || '',
-      contained: Boolean(cardBox && chatPanelBox && cardBox.top >= chatPanelBox.top - 1 && cardBox.bottom <= chatPanelBox.bottom + 1),
-      smallTextCount: textNodes.filter((node) => Number.parseFloat(getComputedStyle(node).fontSize) < 10.5).length,
-      overflowCount: overflowingNodes.length,
-      overflowSamples: overflowingNodes.slice(0, 4).map((node) => ({
-        tag: node.tagName,
-        className: node.className?.toString?.() || '',
-        text: node.textContent?.replace(/\s+/g, ' ').trim() || '',
-        scrollWidth: node.scrollWidth,
-        clientWidth: node.clientWidth,
-      })),
-    };
-  });
-  await page.locator('.council-decision-card .plan-dismiss').click();
-  await page.waitForFunction(() =>
-    ![...document.querySelectorAll('.council-priority h3, .operation-plan h3')].some((node) =>
-      node.textContent?.includes('Турция'),
-    ),
-  );
-  const councilDirectiveDismissed = await page.evaluate(() => ({
-    planStillVisible: [...document.querySelectorAll('.council-priority h3, .operation-plan h3')].some((node) =>
-      node.textContent?.includes('Турция'),
-    ),
-    cardStillVisible: Boolean(document.querySelector('.council-decision-card h3')?.textContent?.includes('Турция')),
-  }));
-  await page.locator('.chat-tabs button').filter({ hasText: 'Альянс' }).click();
-  const chatTabDiagnostics = await page.evaluate(() => {
-    const active = document.querySelector('.chat-tabs button.active');
-    const alliance = [...document.querySelectorAll('.chat-tabs button')].find((button) =>
-      button.textContent?.includes('Альянс'),
-    );
-    return {
-      activeText: active?.textContent?.trim() || '',
-      allianceSelected: alliance?.getAttribute('aria-selected') === 'true',
-    };
-  });
-  await page.locator('.mail-row-button').first().click();
-  await page.waitForSelector('.letter-dialog');
-  const letterResponseBefore = await page.evaluate(() => {
-    const dialog = document.querySelector('.letter-dialog');
-    const rightPanel = document.querySelector('.right-panel');
-    const dialogRect = dialog?.getBoundingClientRect();
-    const rightPanelRect = rightPanel?.getBoundingClientRect();
-    const responseButtons = [...document.querySelectorAll('.letter-dialog-response')];
-    const textNodes = [...(dialog?.querySelectorAll('p, button, small, span') || [])];
-    const smallTextNodes = textNodes.filter((node) => Number.parseFloat(getComputedStyle(node).fontSize) < 12);
-    const overflowingNodes = [...(dialog?.querySelectorAll('*') || [])].filter(
-      (node) => node.scrollWidth > node.clientWidth + 2,
-    );
-
-    return {
-      hasDialog: Boolean(dialog),
-      role: dialog?.getAttribute('role') || '',
-      modal: dialog?.getAttribute('aria-modal') || '',
-      responseCount: responseButtons.length,
-      firstResponse: responseButtons[0]?.querySelector('span')?.textContent?.trim() || '',
-      visibleWidth: dialogRect?.width || 0,
-      visibleHeight: dialogRect?.height || 0,
-      outsideRightPanel: Boolean(dialogRect && rightPanelRect && dialogRect.left < rightPanelRect.left - 12),
-      closeButtonExists: Boolean(dialog?.querySelector('.dialog-close')),
-      smallTextCount: smallTextNodes.length,
-      overflowCount: overflowingNodes.length,
-    };
-  });
-  await page.locator('.letter-dialog-response').first().click();
-  await page.waitForTimeout(120);
-  const letterResponseAfter = await page.evaluate(() => ({
-    answeredCount: document.querySelectorAll('.mail-item.answered').length,
-    selectedStatus: document.querySelector('.letter-dialog em')?.textContent?.trim() || '',
-    timelineTop: document.querySelector('.timeline-panel article h3')?.textContent?.trim() || '',
-    timelineHasResponse: [...document.querySelectorAll('.timeline-panel article h3')].some((node) =>
-      node.textContent?.includes('Ответ отправлен') || node.textContent?.includes('торговый канал'),
-    ),
-    responseDisabled: Boolean(document.querySelector('.letter-dialog-response')?.disabled),
-  }));
-  await page.locator('.letter-dialog .dialog-close').click();
-  await page.waitForFunction(() => document.querySelectorAll('.letter-dialog').length === 0);
-  const letterDialogClosed = (await page.locator('.letter-dialog').count()) === 0;
-
-  const orderRemovalBefore = await page.evaluate(() => ({
-    count: document.querySelectorAll('.order-card').length,
-    heading: document.querySelector('.orders-panel .panel-heading h2 span')?.textContent || '',
-    firstTitle: document.querySelector('.order-card h3')?.textContent?.trim() || '',
-  }));
-  await page.locator('.order-card').first().locator('button').last().click();
-  await page.waitForTimeout(120);
-  const orderRemovalAfter = await page.evaluate(() => ({
-    count: document.querySelectorAll('.order-card').length,
-    heading: document.querySelector('.orders-panel .panel-heading h2 span')?.textContent || '',
-    firstTitle: document.querySelector('.order-card h3')?.textContent?.trim() || '',
-    cancelledVisible: [...document.querySelectorAll('.order-card .status')].some((node) =>
-      node.textContent?.includes('Отмен'),
-    ),
-    timelineTop: document.querySelector('.timeline-panel article h3')?.textContent?.trim() || '',
-    timelineHasCancel: [...document.querySelectorAll('.timeline-panel article h3')].some((node) =>
-      node.textContent?.includes('Приказ отменен'),
-    ),
-  }));
-  const orderRemovalDiagnostics = {
-    before: orderRemovalBefore,
-    after: orderRemovalAfter,
-    removedFromList: orderRemovalAfter.count === Math.max(0, orderRemovalBefore.count - 1),
-    firstChanged: orderRemovalBefore.count <= 1 || orderRemovalAfter.firstTitle !== orderRemovalBefore.firstTitle,
-    logged: orderRemovalAfter.timelineHasCancel,
-  };
-  const orderCounterBeforeDialog = await page.locator('.orders-panel .panel-heading h2 span').textContent();
-  const proposalCountBeforeDialog = await page.locator('.council-priority, .operation-plan').count();
-  await page.locator('.create-order').click();
-  await page.waitForSelector('[role="dialog"]');
-  const dialogOpened = await page.locator('[role="dialog"]').isVisible();
-  await page.locator('[role="dialog"]').getByRole('button', { name: 'Подтвердить приказ' }).click();
-  await page.waitForTimeout(120);
-  const orderCounterAfterDialog = await page.locator('.orders-panel .panel-heading h2 span').textContent();
-  const proposalCountAfterDialog = await page.locator('.council-priority, .operation-plan').count();
-  const proposalTitleAfterDialog = await page.locator('.council-priority h3, .operation-plan h3').first().textContent();
-
-  const readRightPanelState = () =>
-    page.evaluate(() => ({
-      timelineTitles: [...document.querySelectorAll('.timeline-panel article h3')].map((node) =>
-        node.textContent?.trim(),
+      buttons: [...(card?.querySelectorAll('button') || [])].map((node) =>
+        node.textContent?.replace(/\s+/g, ' ').trim() || '',
       ),
-      letterSubjects: [...document.querySelectorAll('.mail-panel article p')].map((node) =>
-        node.textContent?.replace(/\s+/g, ' ').trim(),
-      ),
-      mailCount: document.querySelectorAll('.mail-panel article').length,
-      operationPlanTitles: [...document.querySelectorAll('.council-priority h3, .operation-plan h3')].map((node) =>
-        node.textContent?.replace(/\s+/g, ' ').trim(),
-      ),
-    }));
-
-  const beforeComposeLetter = await readRightPanelState();
-  await page.locator('.quick-actions button').first().click();
-  await page.waitForTimeout(120);
-  const afterComposeLetter = await readRightPanelState();
-  const composeButtonDisabled = await page.locator('.quick-actions button').first().isDisabled();
-  const quickCouncilTemplateDiagnostics = await page.evaluate(() => {
-    const activeNav = document.querySelector('.primary-nav .active')?.textContent?.replace(/\s+/g, ' ').trim() || '';
-    const activeChatTab = document.querySelector('.chat-tabs button.active')?.textContent?.replace(/\s+/g, ' ').trim() || '';
-    const firstButton = document.querySelector('.quick-actions button');
-    const firstButtonSmall = firstButton?.querySelector('small')?.textContent?.replace(/\s+/g, ' ').trim() || '';
-    const latestCouncilMessage =
-      [...document.querySelectorAll('.chat-messages p')]
-        .at(-1)
-        ?.textContent?.replace(/\s+/g, ' ')
-        .trim() || '';
-    const cardTitle = document.querySelector('.council-decision-card h3')?.textContent?.replace(/\s+/g, ' ').trim() || '';
-
-    return {
-      activeNav,
-      activeChatTab,
-      firstButtonText: firstButton?.textContent?.replace(/\s+/g, ' ').trim() || '',
-      firstButtonSmall,
-      firstButtonAria: firstButton?.getAttribute('aria-label') || '',
-      latestCouncilMessage,
-      cardTitle,
-    };
-  });
-  const composeAction = {
-    beforeComposeLetter,
-    afterComposeLetter,
-    composeButtonDisabled,
-    quickCouncilTemplateDiagnostics,
-    inboxCountUnchanged: afterComposeLetter.mailCount === beforeComposeLetter.mailCount,
-    noOutgoingInInbox: !afterComposeLetter.letterSubjects.some((subject) => subject?.includes('Исходящее')),
-    proposalCountChanged: afterComposeLetter.operationPlanTitles.length > beforeComposeLetter.operationPlanTitles.length,
-    preparedTimelineCount: afterComposeLetter.timelineTitles.filter((title) => title === 'Совет подготовил предложение').length,
-  };
-
-  const rightPanelLayoutDiagnostics = await page.evaluate(() => {
-    const rect = (selector) => {
-      const node = document.querySelector(selector);
-      if (!node) return null;
-      const box = node.getBoundingClientRect();
-      return {
-        top: box.top,
-        bottom: box.bottom,
-        left: box.left,
-        right: box.right,
-        width: box.width,
-        height: box.height,
-      };
-    };
-    const ordered = (first, second) => Boolean(first && second && first.bottom <= second.top + 1);
-
-    const timeline = rect('.timeline-panel');
-    const mail = rect('.mail-panel');
-    const diplomacy = rect('.diplomacy-panel');
-    const mailList = rect('.mail-list');
-    const showAll = rect('.mail-panel .show-all');
-    const timelinePanel = document.querySelector('.timeline-panel');
-    const mailPanel = document.querySelector('.mail-panel');
-
-    return {
-      panelsStacked: ordered(timeline, mail) && ordered(mail, diplomacy),
-      mailPartsStacked: ordered(mailList, showAll),
-      showAllInsideMail: Boolean(showAll && mail && showAll.bottom <= mail.bottom + 1),
-      timelineOverflowY: timelinePanel ? getComputedStyle(timelinePanel).overflowY : '',
-      mailOverflowY: mailPanel ? getComputedStyle(mailPanel).overflowY : '',
+      visibleHeight: box?.height || 0,
     };
   });
 
-  const mailPanelReadabilityDiagnostics = await page.evaluate(() => {
-    const list = document.querySelector('.mail-list');
-    const showAll = document.querySelector('.mail-panel .show-all');
-    const mailPanel = document.querySelector('.mail-panel');
-    if (!list || !showAll || !mailPanel) {
-      return { exists: false };
-    }
-
-    const listRect = list.getBoundingClientRect();
-    const showAllRect = showAll.getBoundingClientRect();
-    const mailPanelRect = mailPanel.getBoundingClientRect();
-    const rowBoxes = [...document.querySelectorAll('.mail-row-button')].map((node) => {
-      const box = node.getBoundingClientRect();
-      return { top: box.top, bottom: box.bottom, height: box.height };
-    });
-    const orderedRows = rowBoxes.every((row, index) => {
-      const next = rowBoxes[index + 1];
-      return !next || row.bottom <= next.top + 1;
-    });
-    const fullyVisibleRows = rowBoxes.filter((row) => row.top >= listRect.top - 1 && row.bottom <= listRect.bottom + 1);
-
-    return {
-      exists: true,
-      listOverflowY: getComputedStyle(list).overflowY,
-      rowCount: rowBoxes.length,
-      minRowHeight: rowBoxes.reduce((min, row) => Math.min(min, row.height), Number.POSITIVE_INFINITY),
-      orderedRows,
-      fullyVisibleRowCount: fullyVisibleRows.length,
-      hasInlineDetail: Boolean(document.querySelector('.mail-panel .letter-detail')),
-      hasInlineResponses: Boolean(document.querySelector('.mail-panel .letter-response-list')),
-      showAllInsidePanel: showAllRect.bottom <= mailPanelRect.bottom + 1,
-      listBeforeButton: listRect.bottom <= showAllRect.top + 1,
-      listHeight: listRect.height,
-    };
-  });
-
-  const timelineRowDiagnostics = await page.evaluate(() => {
-    const rows = [...document.querySelectorAll('.timeline-panel article')].map((node) => {
-      const row = node.getBoundingClientRect();
-      const title = node.querySelector('h3')?.getBoundingClientRect();
-      const body = node.querySelector('p')?.getBoundingClientRect();
-      const time = node.querySelector('time')?.getBoundingClientRect();
-
-      return {
-        height: row.height,
-        textFits:
-          (!title || title.top >= row.top - 1 && title.bottom <= row.bottom + 1) &&
-          (!body || body.top >= row.top - 1 && body.bottom <= row.bottom + 1) &&
-          (!time || time.top >= row.top - 1 && time.bottom <= row.bottom + 1),
-      };
-    });
-    const noOverlap = rows.every((_, index) => {
-      const current = document.querySelectorAll('.timeline-panel article')[index]?.getBoundingClientRect();
-      const next = document.querySelectorAll('.timeline-panel article')[index + 1]?.getBoundingClientRect();
-      return !current || !next || current.bottom <= next.top + 1;
-    });
-
-    return {
-      count: rows.length,
-      minHeight: rows.reduce((min, row) => Math.min(min, row.height), Number.POSITIVE_INFINITY),
-      textFits: rows.every((row) => row.textFits),
-      noOverlap,
-    };
-  });
-
-  const readGameState = () =>
-    page.evaluate(() => ({
-      resources: [...document.querySelectorAll('.resource-list li')].map((node) =>
-        node.textContent?.replace(/\s+/g, ' ').trim(),
-      ),
-      turn: document.querySelector('.turn-info strong')?.textContent || '',
-      timelineTop: document.querySelector('.timeline-panel article h3')?.textContent || '',
-      orderCounter: document.querySelector('.orders-panel .panel-heading h2 span')?.textContent || '',
-      operationPlanCount: document.querySelectorAll('.council-priority, .operation-plan').length,
-      operationPlanTop: document.querySelector('.council-priority h3, .operation-plan h3')?.textContent?.trim() || '',
-    }));
-
-  const beforeGameAction = await readGameState();
-  await page.locator('.quick-actions button').nth(2).click();
-  await page.waitForTimeout(120);
-  const afterLandManagement = await readGameState();
-  await page.locator('.end-turn-button').dblclick();
-  await page.waitForTimeout(120);
-  const afterEndTurn = await readGameState();
-  const orderCounterMoveDiagnostics = await page.evaluate(() => {
-    const rows = [...document.querySelectorAll('.order-countermove')].map((node) =>
+  await page.locator('.council-decision-card .plan-run').click();
+  await page.waitForSelector('.operation-plan-dialog');
+  const planDialog = await page.evaluate(() => ({
+    title: document.querySelector('.operation-plan-dialog h2')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+    buttons: [...document.querySelectorAll('.operation-plan-dialog button')].map((node) =>
       node.textContent?.replace(/\s+/g, ' ').trim() || '',
-    );
-
-    return {
-      count: rows.length,
-      first: rows[0] || '',
-      hasChance: rows.some((text) => text.includes('шанс')),
-      hasPressure: rows.some((text) => text.includes('давление')),
-    };
-  });
-  await page.waitForSelector('.strategic-response');
-  const turnReportCauseDiagnostics = await page.evaluate(() => {
-    const report = document.querySelector('.turn-report');
-    const causality = document.querySelector('.report-causality');
-    const rows = [...document.querySelectorAll('.report-causality li')].map((node) => {
-      const box = node.getBoundingClientRect();
-      const title = node.querySelector('b')?.textContent?.replace(/\s+/g, ' ').trim() || '';
-      const cause = node.querySelector('span')?.textContent?.replace(/\s+/g, ' ').trim() || '';
-      const effect = node.querySelector('p')?.textContent?.replace(/\s+/g, ' ').trim() || '';
-
-      return {
-        title,
-        cause,
-        effect,
-        height: box.height,
-        overflows: node.scrollWidth > node.clientWidth + 2,
-        smallText: [...node.querySelectorAll('b, span, p')].some(
-          (item) => Number.parseFloat(getComputedStyle(item).fontSize) < 12,
-        ),
-      };
-    });
-    const reportBox = report?.getBoundingClientRect();
-    const causalityBox = causality?.getBoundingClientRect();
-
-    return {
-      exists: Boolean(causality),
-      heading: causality?.querySelector('h3')?.textContent?.trim() || '',
-      rowCount: rows.length,
-      rows,
-      insideReport: Boolean(reportBox && causalityBox && causalityBox.top >= reportBox.top - 1 && causalityBox.bottom <= reportBox.bottom + 1),
-      noOverflow: rows.every((row) => !row.overflows),
-      noDuplicateActorTitle: rows.every((row) => !/^([^:]+): \1:/.test(row.title)),
-      readable: rows.every((row) => !row.smallText && row.cause.length > 20 && row.effect.length > 20),
-    };
-  });
-  const strategicResponseBefore = await page.evaluate(() => {
-    const responses = [...document.querySelectorAll('.strategic-response')];
-
-    return {
-      count: responses.length,
-      firstTitle: responses[0]?.querySelector('b')?.textContent?.trim() || '',
-      firstButton: responses[0]?.querySelector('button')?.textContent?.trim() || '',
-      hasEnabledButton: responses.some((response) => !response.querySelector('button')?.disabled),
-    };
-  });
-  await page.locator('.strategic-response button').first().click();
-  await page.waitForTimeout(160);
-  const afterStrategicResponse = await readGameState();
-  const strategicResponseAfter = await page.evaluate(() => {
-    const responses = [...document.querySelectorAll('.strategic-response')];
-    const firstButton = responses[0]?.querySelector('button');
-
-    return {
-      firstUsed: responses[0]?.classList.contains('used') || false,
-      firstButtonText: firstButton?.textContent?.trim() || '',
-      firstButtonDisabled: Boolean(firstButton?.disabled),
-      toast: document.querySelector('.toast')?.textContent || '',
-    };
-  });
-  await page.getByLabel('Закрыть отчет хода').click();
-  await page.waitForTimeout(80);
-  await page.locator('.order-card').nth(1).locator('button').first().click();
-  const orderDetailsVisible = (await page.locator('.order-expanded').count()) > 0;
-  const composeButtonUnlockedAfterTurn = !(await page.locator('.quick-actions button').first().isDisabled());
-  const savedTurnAfterReload = await (async () => {
-    await page.reload({ waitUntil: 'networkidle' });
-    await page.waitForSelector('.app-shell');
-    return page.locator('.turn-info strong').first().textContent();
-  })();
-  const countryIntentAfterReload = await page.evaluate(() => {
-    const intent = document.querySelector('.country-intent');
-    const text = intent?.textContent?.replace(/\s+/g, ' ').trim() || '';
-
-    return {
-      text,
-      hasIntentBlock: Boolean(intent),
-      hasTurnIntent: text.includes('уверенность') || text.includes('цель:') || text.includes('Намерение'),
-    };
-  });
-  const buttonNameDiagnostics = await page.evaluate(() => {
-    const unnamed = [...document.querySelectorAll('button')].filter((button) => {
-      const label = button.getAttribute('aria-label') || button.getAttribute('title') || button.textContent || '';
-      return !label.trim();
-    });
-    return {
-      unnamedCount: unnamed.length,
-      unnamedClasses: unnamed.map((button) => button.className.toString()),
-    };
-  });
-  const gameCycle = {
-    beforeGameAction,
-    afterLandManagement,
-    afterEndTurn,
-    afterStrategicResponse,
-    strategicResponseBefore,
-    strategicResponseAfter,
-    orderCounterMoveDiagnostics,
-    orderDetailsVisible,
-    composeButtonUnlockedAfterTurn,
-    savedTurnAfterReload,
-    countryIntentAfterReload,
-    proposalChangedAfterAction:
-      afterLandManagement.operationPlanCount > beforeGameAction.operationPlanCount,
-    turnAdvanced: Number(afterEndTurn.turn) === Number(beforeGameAction.turn) + 1,
-    resourcesChangedAfterTurn:
-      afterLandManagement.resources.join('|') !== afterEndTurn.resources.join('|'),
-    strategicResponseChangedState:
-      afterStrategicResponse.orderCounter !== afterEndTurn.orderCounter ||
-      afterStrategicResponse.resources.join('|') !== afterEndTurn.resources.join('|'),
-  };
-
-  await page.locator('.nav-link').last().dblclick();
-  await page.waitForTimeout(90);
-  const toastDiagnostics = await page.evaluate(() => ({
-    count: document.querySelectorAll('.toast').length,
-    visibleCount: document.querySelectorAll('.toast.visible').length,
-    text: document.querySelector('.toast')?.textContent || '',
+    ),
+    visibleWidth: document.querySelector('.operation-plan-dialog')?.getBoundingClientRect().width || 0,
   }));
-  const mailBadgeDiagnostics = await page.evaluate(() => {
-    const navMail = [...document.querySelectorAll('.nav-link')].find((node) =>
-      node.textContent?.includes('Письма'),
-    );
-    const topMail = document.querySelector('.top-actions button[aria-label="Почта"]');
-    const panelCount = document.querySelector('.mail-panel h2 span')?.textContent || '';
+  await page.locator('.operation-plan-dialog .dialog-secondary.primary').click();
+  await page.waitForTimeout(220);
 
-    return {
-      navBadge: navMail?.querySelector('.pill')?.textContent || '',
-      topBadge: topMail?.querySelector('b')?.textContent || '',
-      panelCount,
-    };
-  });
-  const empirePulseDiagnostics = await page.evaluate(() => {
-    const pulse = document.querySelector('.empire-pulse');
-    const rows = [...(pulse?.querySelectorAll('div') || [])].map((node) => {
-      const box = node.getBoundingClientRect();
-      const label = node.querySelector('span');
-      const value = node.querySelector('b');
+  const afterPlanApprove = await page.evaluate(() => ({
+    toast: document.querySelector('.toast.visible')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+    context: document.querySelector('.chat-context')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+    timelineTop: document.querySelector('.timeline-panel article h3')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+  }));
 
-      return {
-        height: box.height,
-        labelText: label?.textContent?.trim() || '',
-        valueText: value?.textContent?.trim() || '',
-        labelFontSize: label ? Number.parseFloat(getComputedStyle(label).fontSize) : 0,
-        valueFontSize: value ? Number.parseFloat(getComputedStyle(value).fontSize) : 0,
-      };
-    });
+  const beforeTurn = await page.locator('.turn-info strong').first().textContent();
+  await page.locator('.end-turn-button').click();
+  await page.waitForSelector('.turn-report');
+  const turnReport = await page.evaluate(() => ({
+    title: document.querySelector('.turn-report h2')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+    causeHeading: document.querySelector('.report-causality h3')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+    rows: document.querySelectorAll('.report-causality li').length,
+  }));
+  await page.locator('.turn-report .panel-heading button[aria-label]').click();
+  await page.waitForFunction(() => !document.querySelector('.turn-report'));
+  const afterTurn = await page.locator('.turn-info strong').first().textContent();
 
-    return {
-      exists: Boolean(pulse),
-      rowCount: rows.length,
-      rows,
-      hasInlineNote: Boolean(pulse?.querySelector('p')),
-    };
-  });
-  const turnObjectiveDiagnostics = await page.evaluate(() => {
-    const card = document.querySelector('.empire-card');
-    const objective = document.querySelector('.turn-objective');
-    const title = objective?.querySelector('h2');
-    const summary = objective?.querySelector('p');
-    const action = objective?.querySelector('small');
-    const meter = objective?.querySelector('.turn-objective-meter i');
-    const objectiveBox = objective?.getBoundingClientRect();
-    const cardBox = card?.getBoundingClientRect();
-    const textNodes = [title, summary, action].filter(Boolean);
-
-    return {
-      exists: Boolean(objective),
-      title: title?.textContent?.replace(/\s+/g, ' ').trim() || '',
-      summary: summary?.textContent?.replace(/\s+/g, ' ').trim() || '',
-      action: action?.textContent?.replace(/\s+/g, ' ').trim() || '',
-      aria: objective?.getAttribute('aria-label') || '',
-      tone:
-        objective?.classList.contains('danger')
-          ? 'danger'
-          : objective?.classList.contains('warning')
-            ? 'warning'
-            : objective?.classList.contains('opportunity')
-              ? 'opportunity'
-              : objective?.classList.contains('steady')
-                ? 'steady'
-                : '',
-      meterWidth: meter?.getBoundingClientRect().width || 0,
-      height: objectiveBox?.height || 0,
-      contained: Boolean(cardBox && objectiveBox && objectiveBox.top >= cardBox.top - 1 && objectiveBox.bottom <= cardBox.bottom + 1),
-      textReadable: textNodes.every((node) => Number.parseFloat(getComputedStyle(node).fontSize) >= 10.5),
-      overflowCount: [...(objective?.querySelectorAll('*') || [])].filter(
-        (node) => node.scrollWidth > node.clientWidth + 2 && node.tagName !== 'H2',
-      ).length,
-    };
-  });
-  const turnFlowDiagnostics = await page.evaluate(() => {
-    const panel = document.querySelector('.chat-panel');
-    const flow = document.querySelector('.turn-flow');
-    const flowBox = flow?.getBoundingClientRect();
-    const panelBox = panel?.getBoundingClientRect();
-    const steps = [...(flow?.querySelectorAll('li') || [])].map((node) => {
-      const box = node.getBoundingClientRect();
-      const label = node.querySelector('span')?.textContent?.replace(/\s+/g, ' ').trim() || '';
-      const detail = node.querySelector('small')?.textContent?.replace(/\s+/g, ' ').trim() || '';
-      const textNodes = [...node.querySelectorAll('span, small')];
-      return {
-        label,
-        detail,
-        className: node.className,
-        active: node.getAttribute('aria-current') === 'step',
-        height: box.height,
-        textReadable: textNodes.every(
-          (item) => Number.parseFloat(getComputedStyle(item).fontSize) >= 10.3,
-        ),
-        overflows: textNodes.some((item) => item.scrollWidth > item.clientWidth + 2),
-      };
-    });
-    const hint = flow?.querySelector('.turn-flow-head span');
-
-    return {
-      exists: Boolean(flow),
-      aria: flow?.getAttribute('aria-label') || '',
-      activeStep: flow?.getAttribute('data-active-step') || '',
-      heading: flow?.querySelector('.turn-flow-head b')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-      hint: hint?.textContent?.replace(/\s+/g, ' ').trim() || '',
-      alert: flow?.querySelector('p')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-      stepCount: steps.length,
-      activeCount: steps.filter((step) => step.active).length,
-      labels: steps.map((step) => step.label),
-      steps,
-      minHeight: steps.reduce((min, step) => Math.min(min, step.height), Number.POSITIVE_INFINITY),
-      insideChat: Boolean(panelBox && flowBox && flowBox.top >= panelBox.top - 1 && flowBox.bottom <= panelBox.bottom + 1),
-      readable:
-        steps.every((step) => step.textReadable && !step.overflows && step.detail.length >= 3) &&
-        (hint ? Number.parseFloat(getComputedStyle(hint).fontSize) >= 11 : false),
-    };
-  });
-  const quickActionsFitDiagnostics = await page.evaluate(() => {
-    const card = document.querySelector('.empire-card');
-    const actions = document.querySelector('.quick-actions');
-    if (!card || !actions) {
-      return { exists: false };
-    }
-
-    const cardBox = card.getBoundingClientRect();
-    const actionBox = actions.getBoundingClientRect();
-    const buttons = [...actions.querySelectorAll('button')].map((node) => {
-      const box = node.getBoundingClientRect();
-      return {
-        top: box.top,
-        bottom: box.bottom,
-        height: box.height,
-        text: node.textContent?.replace(/\s+/g, ' ').trim() || '',
-        status: node.querySelector('small')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-        aria: node.getAttribute('aria-label') || '',
-      };
-    });
-
-    return {
-      exists: true,
-      buttonCount: buttons.length,
-      minButtonHeight: buttons.reduce((min, button) => Math.min(min, button.height), Number.POSITIVE_INFINITY),
-      allButtonsInsideCard: buttons.every((button) => button.top >= cardBox.top - 1 && button.bottom <= cardBox.bottom + 1),
-      allButtonsInsideActions: buttons.every(
-        (button) => button.top >= actionBox.top - 1 && button.bottom <= actionBox.bottom + 1,
-      ),
-      actionsInsideCard: actionBox.top >= cardBox.top - 1 && actionBox.bottom <= cardBox.bottom + 1,
-      actionsNeedScroll: actions.scrollHeight > actions.clientHeight + 1,
-      statuses: buttons.map((button) => button.status),
-      ariaFilled: buttons.every((button) => button.aria.length > 20),
-    };
-  });
-
-  const diplomacyRelationBadgeDiagnostics = await page.evaluate(() => {
-    const badges = [...document.querySelectorAll('.diplomacy-row .relation-score')].map((node) => {
-      const box = node.getBoundingClientRect();
-      const label = node.querySelector('span')?.getBoundingClientRect();
-      const value = node.querySelector('b')?.getBoundingClientRect();
-
-      return {
-        width: box.width,
-        height: box.height,
-        text: node.textContent?.replace(/\s+/g, ' ').trim() || '',
-        labelAndValueInline: Boolean(label && value && Math.abs(label.top - value.top) < 3),
-        overflows: node.scrollWidth > node.clientWidth + 1,
-      };
-    });
-
-    return {
-      count: badges.length,
-      minWidth: badges.reduce((min, badge) => Math.min(min, badge.width), Number.POSITIVE_INFINITY),
-      maxHeight: badges.reduce((max, badge) => Math.max(max, badge.height), 0),
-      allInline: badges.every((badge) => badge.labelAndValueInline),
-      anyOverflow: badges.some((badge) => badge.overflows),
-      samples: badges.slice(0, 4),
-    };
-  });
-
-  const ordersProposalLayoutDiagnostics = await page.evaluate(() => {
-    const panel = document.querySelector('.orders-panel');
-    const create = document.querySelector('.orders-panel .create-order');
-    const list = document.querySelector('.operation-plan-list');
-    const priority = document.querySelector('.council-priority');
-    const brief = document.querySelector('.orders-panel-brief');
-    const priorityBox = priority?.getBoundingClientRect();
-    const plans = [...document.querySelectorAll('.operation-plan')].map((node) => {
-      const box = node.getBoundingClientRect();
-      const metrics = [...node.querySelectorAll('.operation-plan-metrics span')].map(
-        (item) => item.textContent?.replace(/\s+/g, ' ').trim() || '',
-      );
-      const textNodes = [...node.querySelectorAll('h3, p, small, .operation-plan-metrics span')];
-
-      return {
-        height: box.height,
-        actionCount: node.querySelectorAll('.operation-plan-actions button').length,
-        actionRowVisible: Boolean(node.querySelector('.operation-plan-actions')?.getBoundingClientRect().height),
-        badge: node.querySelector('.plan-decision-badge')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-        role: node.querySelector('.operation-plan-head span')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-        effect: node.querySelector('.operation-plan-effect')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-        metrics,
-        textReadable: textNodes.every((item) => Number.parseFloat(getComputedStyle(item).fontSize) >= 10.5),
-        overflows: node.scrollWidth > node.clientWidth + 2,
-      };
-    });
-
-    const panelBox = panel?.getBoundingClientRect();
-    const createBox = create?.getBoundingClientRect();
-    const priorityButtons = [...(priority?.querySelectorAll('button') || [])].map((node) =>
-      node.textContent?.replace(/\s+/g, ' ').trim() || '',
-    );
-
-    return {
-      exists: Boolean(panel && create),
-      briefExists: Boolean(brief),
-      briefText: brief?.textContent?.replace(/\s+/g, ' ').trim() || '',
-      priorityExists: Boolean(priority),
-      priorityLabel: priority?.getAttribute('aria-label') || '',
-      priorityTitle: priority?.querySelector('h3')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-      priorityReason: priority?.querySelector('p')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-      priorityDecision: priority?.querySelector('.plan-decision-badge')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-      priorityGuidanceCount: priority?.querySelectorAll('.council-priority-guidance span').length || 0,
-      priorityGuidanceText: priority?.querySelector('.council-priority-guidance')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-      priorityMetricCount: priority?.querySelectorAll('.council-priority-facts li').length || 0,
-      priorityButtons,
-      priorityInsidePanel: Boolean(
-        panelBox && priorityBox && priorityBox.top >= panelBox.top - 1 && priorityBox.bottom <= panelBox.bottom + 1,
-      ),
-      createInsidePanel: Boolean(panelBox && createBox && createBox.bottom <= panelBox.bottom + 1),
-      createVisibleHeight: createBox?.height || 0,
-      planCount: plans.length + (priority ? 1 : 0),
-      listedPlanCount: plans.length,
-      minPlanHeight: plans.reduce((min, plan) => Math.min(min, plan.height), Number.POSITIVE_INFINITY),
-      firstPlanBadge: plans[0]?.badge || '',
-      firstPlanRole: plans[0]?.role || '',
-      firstPlanEffect: plans[0]?.effect || '',
-      firstPlanMetricCount: plans[0]?.metrics.length || 0,
-      operationPlansReadable: plans.every((plan) => plan.textReadable && !plan.overflows && plan.effect.length >= 20),
-      firstPlanHasActions: (plans[0]?.actionCount === 3 && plans[0]?.actionRowVisible) || priorityButtons.length >= 3,
-      listOverflowY: list ? getComputedStyle(list).overflowY : '',
-      listCanScroll: list ? list.scrollHeight >= list.clientHeight : false,
-    };
-  });
-
+  const finalLayout = await readLayoutDiagnostics();
   await page.screenshot({ path: screenshotPath, fullPage: true });
+
+  assert(!loadedScripts.some((src) => src.includes('/js/app.js')), 'legacy app.js script should not be loaded');
+  assert(!legacyScriptResponse.servesLegacyJs, 'legacy /js/app.js should not serve old JS');
+  assert(initialLayout.brand === 'Письма Империй', 'brand should render');
+  assert(initialLayout.appClasses.includes('minimal-shell'), 'minimal shell class should be enabled');
+  assert(initialLayout.nav.length === 3, 'primary navigation should be reduced to three items');
+  assert(initialLayout.nav.some((item) => item.includes('Карта мира')), 'map nav item should remain');
+  assert(initialLayout.nav.some((item) => item.includes('Совет')), 'council nav item should remain');
+  assert(initialLayout.nav.some((item) => item.includes('Письма')), 'mail nav item should remain');
+  assert(initialLayout.countryCount > 100, 'world map countries should render');
+  assert(initialLayout.map?.height > 430, 'map should stay the dominant top surface');
+  assert(initialLayout.chatPanel?.width > 900, 'chat should occupy the full lower center');
+  assert(initialLayout.quickActionsVisible === false, 'left quick action block should be removed');
+  assert(initialLayout.ordersPanelVisible === false, 'separate orders dashboard should be removed');
+  assert(initialLayout.diplomacyPanelVisible === false, 'permanent diplomacy list should be removed');
+  assert(initialLayout.turnFlowVisible === false, 'turn flow strip should be removed from the main screen');
+  assert(initialLayout.starterPromptsVisible === false, 'starter prompt buttons should not crowd the chat');
+  assert(initialLayout.chatOverflowY === 'auto' || initialLayout.chatOverflowY === 'scroll', 'chat messages should be scrollable');
+  assert(initialLayout.visibleRightPanels === 2, 'right rail should show only summary and mail');
+  assert(initialLayout.timelineRows >= 2, 'world summary should still show events');
+  assert(initialLayout.mailRows >= 2, 'mail summary should still show letters');
+  assert(initialLayout.endTurnText.includes('Завершить ход'), 'end turn action should remain');
+  assert(mapModeTitle?.includes('Стратегическая карта'), 'map mode switch should work');
+  assert(zoomTransform.includes('matrix') || zoomTransform.includes('1.12'), 'zoom should change map transform');
+  assert(selectedCountry.selected === 'France', 'country click should select France');
+  assert(selectedCountry.intelTitle === 'Франция', 'country intel should open for selected country');
+  assert(selectedAfterClose === 0, 'closing country intel should clear selected country highlight');
+  assert(chatScrollDiagnostics.exists, 'chat message list should exist');
+  assert(chatScrollDiagnostics.messageCount >= 14, 'world chat should accept repeated messages');
+  assert(chatScrollDiagnostics.scrollHeight > chatScrollDiagnostics.clientHeight, 'chat should have real scroll overflow');
+  assert(chatScrollDiagnostics.scrollTop > 0, 'chat scroll position should be adjustable');
+  assert(councilDecision.exists, 'council command should create a decision card');
+  assert(councilDecision.title.length > 8, 'council decision should have a readable title');
+  assert(councilDecision.summary.length > 30, 'council decision should explain the plan');
+  assert(councilDecision.buttons.includes('Утвердить'), 'council decision should keep approve action');
+  assert(councilDecision.buttons.includes('Уточнить'), 'council decision should keep refine action');
+  assert(councilDecision.buttons.includes('Отложить'), 'council decision should keep dismiss action');
+  assert(councilDecision.visibleHeight > 70, 'council decision card should be visible');
+  assert(planDialog.title.length > 8, 'plan dossier should open from council decision');
+  assert(planDialog.buttons.includes('Утвердить приказ'), 'plan dossier should allow approving the order');
+  assert(planDialog.visibleWidth > 640, 'plan dossier should open as a readable modal');
+  assert(afterPlanApprove.toast.includes('Приказ') || afterPlanApprove.context.includes('Приказы'), 'approving a plan should update game state');
+  assert(/ход/i.test(turnReport.title), 'ending turn should open turn report');
+  assert(turnReport.causeHeading === 'Почему так вышло', 'turn report should explain causes');
+  assert(turnReport.rows >= 2, 'turn report should show cause/effect rows');
+  assert(Number(afterTurn) === Number(beforeTurn) + 1, 'end turn should advance turn number');
+  assert(finalLayout.quickActionsVisible === false, 'quick actions should stay removed after interactions');
+  assert(finalLayout.ordersPanelVisible === false, 'orders panel should stay removed after interactions');
+  assert(finalLayout.diplomacyPanelVisible === false, 'diplomacy panel should stay removed after interactions');
+  assert(finalLayout.chatOverflowY === 'auto' || finalLayout.chatOverflowY === 'scroll', 'chat scroll should stay enabled');
+  assert(consoleErrors.length === 0, 'browser console should have no errors');
 
   const result = {
     loaded: true,
-    initialTitle,
-    legacyScriptLoaded,
-    legacyScriptResponse,
-    guideDialogDiagnostics,
-    guideDialogClosed,
-    councilStarterDiagnostics,
-    starterPromptInserted,
-    starterInputFocusDiagnostics,
-    countryCount,
-    liveMapDiagnostics,
-    liveMarkerClickSelectedUkraine,
-    routesState,
-    labelsLayerState,
-    beforeZoom,
-    afterZoom,
-    tooltip,
-    selectedRussia,
-    keyboardSelectedFrance,
-    countryIntelFlagDiagnostics,
-    countryIntelFlagsWork,
-    countryIntelStillUsesEmojiFallback,
-    countryIntelShowsTextCode,
-    countryIntelActionDiagnostics,
-    countryIntelClosed,
-    countrySelectionAfterClose,
-    chronicleHighlightLabel,
-    chronicleDialogDiagnostics,
-    chronicleDialogClosed,
-    chronicleArchiveDiagnostics,
-    chronicleArchiveOpensEntry,
-    chronicleArchiveClosed,
-    diplomacyScrollDiagnostics,
-    diplomacyDossierDiagnostics,
-    diplomacyDossierCloseDiagnostics,
-    councilDirectiveDiagnostics,
-    councilDirectiveDismissed,
-    chatTabDiagnostics,
-    letterResponseBefore,
-    letterResponseAfter,
-    letterDialogClosed,
-    chatAdded: chatText.includes('Разведать Турцию'),
-    orderRemovalDiagnostics,
-    orderCounterBeforeDialog,
-    dialogOpened,
-    orderCounterAfterDialog,
-    proposalCountBeforeDialog,
-    proposalCountAfterDialog,
-    proposalTitleAfterDialog,
-    composeAction,
-    rightPanelLayoutDiagnostics,
-    mailPanelReadabilityDiagnostics,
-    timelineRowDiagnostics,
-    gameCycle,
-    turnReportCauseDiagnostics,
-    toastDiagnostics,
-    mailBadgeDiagnostics,
-    empirePulseDiagnostics,
-    turnObjectiveDiagnostics,
-    turnFlowDiagnostics,
-    quickActionsFitDiagnostics,
-    diplomacyRelationBadgeDiagnostics,
-    ordersProposalLayoutDiagnostics,
+    initialLayout,
+    mapModeTitle,
+    selectedCountry,
+    chatScrollDiagnostics,
+    councilDecision,
+    planDialog,
+    afterPlanApprove,
+    turnReport,
+    beforeTurn,
+    afterTurn,
+    finalLayout,
     consoleErrors,
+    failures,
     screenshot: screenshotPath,
   };
 
-  const failed =
-    legacyScriptLoaded ||
-    legacyScriptResponse.servesLegacyJs ||
-    !guideDialogDiagnostics.exists ||
-    guideDialogDiagnostics.role !== 'dialog' ||
-    guideDialogDiagnostics.modal !== 'true' ||
-    guideDialogDiagnostics.title !== 'Как вести ход' ||
-    guideDialogDiagnostics.currentText.length < 40 ||
-    guideDialogDiagnostics.cycleCount < 4 ||
-    guideDialogDiagnostics.channelCount < 3 ||
-    guideDialogDiagnostics.actionCount < 4 ||
-    guideDialogDiagnostics.activeChannelCount !== 1 ||
-    guideDialogDiagnostics.visibleWidth < 760 ||
-    guideDialogDiagnostics.visibleHeight < 520 ||
-    guideDialogDiagnostics.smallTextCount > 0 ||
-    guideDialogDiagnostics.overflowCount > 0 ||
-    guideDialogDiagnostics.closeText !== 'Закрыть устав' ||
-    !guideDialogClosed ||
-    !councilStarterDiagnostics.exists ||
-    councilStarterDiagnostics.title !== 'Штабной выбор' ||
-    councilStarterDiagnostics.promptCount < 3 ||
-    councilStarterDiagnostics.minButtonHeight < 52 ||
-    councilStarterDiagnostics.smallTextCount > 0 ||
-    councilStarterDiagnostics.overflowCount > 0 ||
-    !starterInputFocusDiagnostics.focused ||
-    !starterInputFocusDiagnostics.primed ||
-    starterInputFocusDiagnostics.tagName !== 'TEXTAREA' ||
-    starterInputFocusDiagnostics.valueLength < 20 ||
-    starterInputFocusDiagnostics.inputHeight < 54 ||
-    starterInputFocusDiagnostics.inputFontSize < 13 ||
-    !starterInputFocusDiagnostics.borderColor.includes('241') ||
-    !starterPromptInserted.includes('Совет') ||
-    !starterPromptInserted.includes('цели') ||
-    countryCount < 30 ||
-    liveMapDiagnostics.markerCount < 3 ||
-    liveMapDiagnostics.linkCount < 1 ||
-    !liveMapDiagnostics.hasUkraineMarker ||
-    !liveMapDiagnostics.hasIndiaSignal ||
-    !liveMapDiagnostics.ukraineClass.includes('live-') ||
-    !liveMarkerClickSelectedUkraine ||
-    routesState !== 'off' ||
-    !afterZoom.includes('1.12') ||
-    !selectedRussia ||
-    !keyboardSelectedFrance.selected ||
-    keyboardSelectedFrance.role !== 'button' ||
-    !keyboardSelectedFrance.label?.includes('Франция') ||
-    !countryIntelFlagsWork ||
-    countryIntelStillUsesEmojiFallback ||
-    countryIntelShowsTextCode.text ||
-    countryIntelShowsTextCode.pseudoText.includes('DZ') ||
-    countryIntelShowsTextCode.pseudoText.includes('BR') ||
-    !countryIntelActionDiagnostics.diplomacyHasBrazil ||
-    !countryIntelActionDiagnostics.goldChanged ||
-    !countryIntelActionDiagnostics.intelUpdated ||
-    countryIntelActionDiagnostics.operationPlanDiagnostics.count < 1 ||
-    !countryIntelActionDiagnostics.operationPlanDiagnostics.hasRunButton ||
-    !countryIntelActionDiagnostics.operationPlanDiagnostics.hasDismissButton ||
-    !countryIntelActionDiagnostics.operationPlanDossierDiagnostics.exists ||
-    countryIntelActionDiagnostics.operationPlanDossierDiagnostics.role !== 'dialog' ||
-    countryIntelActionDiagnostics.operationPlanDossierDiagnostics.modal !== 'true' ||
-    countryIntelActionDiagnostics.operationPlanDossierDiagnostics.title.length < 8 ||
-    !countryIntelActionDiagnostics.operationPlanDossierDiagnostics.readiness ||
-    countryIntelActionDiagnostics.operationPlanDossierDiagnostics.metricCount < 6 ||
-    countryIntelActionDiagnostics.operationPlanDossierDiagnostics.outcomeCount < 2 ||
-    countryIntelActionDiagnostics.operationPlanDossierDiagnostics.effectCount < 4 ||
-    !countryIntelActionDiagnostics.operationPlanDossierDiagnostics.buttons.includes('Утвердить приказ') ||
-    !countryIntelActionDiagnostics.operationPlanDossierDiagnostics.buttons.includes('Уточнить план') ||
-    !countryIntelActionDiagnostics.operationPlanDossierClosed ||
-    countryIntelActionDiagnostics.operationPlanDossierDiagnostics.smallTextCount > 0 ||
-    countryIntelActionDiagnostics.operationPlanDossierDiagnostics.overflowCount > 0 ||
-    !countryIntelClosed ||
-    countrySelectionAfterClose.selectedCount !== 0 ||
-    chronicleHighlightLabel !== 'Главное событие' ||
-    !chronicleDialogDiagnostics.exists ||
-    chronicleDialogDiagnostics.role !== 'dialog' ||
-    chronicleDialogDiagnostics.modal !== 'true' ||
-    chronicleDialogDiagnostics.title.length < 4 ||
-    chronicleDialogDiagnostics.metrics < 3 ||
-    chronicleDialogDiagnostics.meaningText.length < 40 ||
-    chronicleDialogDiagnostics.visibleHeight < 330 ||
-    chronicleDialogDiagnostics.visibleWidth < 640 ||
-    !chronicleDialogDiagnostics.outsideRightPanel ||
-    !chronicleDialogDiagnostics.closeButtonExists ||
-    chronicleDialogDiagnostics.smallTextCount > 0 ||
-    chronicleDialogDiagnostics.overflowCount > 0 ||
-    !chronicleDialogClosed ||
-    !chronicleArchiveDiagnostics.exists ||
-    chronicleArchiveDiagnostics.role !== 'dialog' ||
-    chronicleArchiveDiagnostics.modal !== 'true' ||
-    chronicleArchiveDiagnostics.rowCount < 3 ||
-    chronicleArchiveDiagnostics.minRowHeight < 58 ||
-    chronicleArchiveDiagnostics.visibleWidth < 620 ||
-    !chronicleArchiveDiagnostics.outsideRightPanel ||
-    chronicleArchiveDiagnostics.smallTextCount > 0 ||
-    chronicleArchiveDiagnostics.overflowCount > 0 ||
-    !chronicleArchiveOpensEntry ||
-    !chronicleArchiveClosed ||
-    !diplomacyScrollDiagnostics.exists ||
-    !['auto', 'scroll'].includes(diplomacyScrollDiagnostics.overflowY) ||
-    !diplomacyScrollDiagnostics.canReachBottom ||
-    !diplomacyScrollDiagnostics.contained ||
-    !diplomacyDossierDiagnostics.exists ||
-    diplomacyDossierDiagnostics.role !== 'dialog' ||
-    diplomacyDossierDiagnostics.modal !== 'true' ||
-    !diplomacyDossierDiagnostics.rowExpanded ||
-    !diplomacyDossierDiagnostics.meterText.includes('/100') ||
-    diplomacyDossierDiagnostics.activityText.length < 20 ||
-    diplomacyDossierDiagnostics.metrics.length < 3 ||
-    diplomacyDossierDiagnostics.visibleHeight < 360 ||
-    diplomacyDossierDiagnostics.visibleWidth < 680 ||
-    !diplomacyDossierDiagnostics.outsideRightPanel ||
-    !diplomacyDossierDiagnostics.closeButtonExists ||
-    diplomacyDossierDiagnostics.smallTextCount > 0 ||
-    diplomacyDossierDiagnostics.overflowCount > 0 ||
-    !diplomacyDossierCloseDiagnostics.closed ||
-    diplomacyDossierCloseDiagnostics.expandedRows !== 0 ||
-    !result.chatAdded ||
-    !councilDirectiveDiagnostics.exists ||
-    councilDirectiveDiagnostics.roleLabel !== 'Решение Совета' ||
-    !councilDirectiveDiagnostics.title.includes('Турция') ||
-    councilDirectiveDiagnostics.summary.length < 30 ||
-    councilDirectiveDiagnostics.metrics.length < 4 ||
-    !councilDirectiveDiagnostics.metrics.some((metric) => metric.includes('%')) ||
-    !councilDirectiveDiagnostics.metrics.some((metric) => metric.includes('ход')) ||
-    !councilDirectiveDiagnostics.buttons.includes('Утвердить') ||
-    !councilDirectiveDiagnostics.buttons.includes('Уточнить') ||
-    !councilDirectiveDiagnostics.buttons.includes('Отложить') ||
-    !councilDirectiveDiagnostics.choiceBoardExists ||
-    councilDirectiveDiagnostics.alternativeCount < 1 ||
-    !councilDirectiveDiagnostics.alternatives.every((item) => item.buttonCount >= 2 && item.height >= 54) ||
-    !councilDirectiveDiagnostics.planTitles.some((title) => title.includes('Турция')) ||
-    !councilDirectiveDiagnostics.advisorReply.includes('подготовил предложение') ||
-    !councilDirectiveDiagnostics.contained ||
-    councilDirectiveDiagnostics.smallTextCount > 0 ||
-    councilDirectiveDiagnostics.overflowCount > 0 ||
-    councilDirectiveDismissed.planStillVisible ||
-    councilDirectiveDismissed.cardStillVisible ||
-    chatTabDiagnostics.activeText !== 'Альянс' ||
-    !chatTabDiagnostics.allianceSelected ||
-    !letterResponseBefore.hasDialog ||
-    letterResponseBefore.role !== 'dialog' ||
-    letterResponseBefore.modal !== 'true' ||
-    letterResponseBefore.responseCount < 2 ||
-    letterResponseBefore.visibleHeight < 330 ||
-    letterResponseBefore.visibleWidth < 640 ||
-    !letterResponseBefore.outsideRightPanel ||
-    !letterResponseBefore.closeButtonExists ||
-    letterResponseBefore.smallTextCount > 0 ||
-    letterResponseBefore.overflowCount > 0 ||
-    letterResponseAfter.answeredCount < 1 ||
-    !letterResponseAfter.responseDisabled ||
-    !letterResponseAfter.timelineHasResponse ||
-    !letterDialogClosed ||
-    !orderRemovalDiagnostics.removedFromList ||
-    !orderRemovalDiagnostics.firstChanged ||
-    orderRemovalDiagnostics.after.cancelledVisible ||
-    !orderRemovalDiagnostics.logged ||
-    !dialogOpened ||
-    orderCounterAfterDialog !== orderCounterBeforeDialog ||
-    proposalCountAfterDialog <= proposalCountBeforeDialog ||
-    !proposalTitleAfterDialog?.includes('Развить инфраструктуру') ||
-    !composeAction.composeButtonDisabled ||
-    !composeAction.inboxCountUnchanged ||
-    !composeAction.noOutgoingInInbox ||
-    !composeAction.proposalCountChanged ||
-    composeAction.preparedTimelineCount < 1 ||
-    !composeAction.quickCouncilTemplateDiagnostics.activeNav.includes('Совет') ||
-    composeAction.quickCouncilTemplateDiagnostics.activeChatTab !== 'Совет' ||
-    composeAction.quickCouncilTemplateDiagnostics.firstButtonSmall !== 'подготовлено' ||
-    !composeAction.quickCouncilTemplateDiagnostics.firstButtonAria.includes('текущем ходу') ||
-    !composeAction.quickCouncilTemplateDiagnostics.latestCouncilMessage.includes('рабочее предложение') ||
-    !composeAction.quickCouncilTemplateDiagnostics.cardTitle.includes('Письмо союзникам') ||
-    !rightPanelLayoutDiagnostics.panelsStacked ||
-    !rightPanelLayoutDiagnostics.mailPartsStacked ||
-    !rightPanelLayoutDiagnostics.showAllInsideMail ||
-    rightPanelLayoutDiagnostics.timelineOverflowY === 'visible' ||
-    rightPanelLayoutDiagnostics.mailOverflowY === 'visible' ||
-    !mailPanelReadabilityDiagnostics.exists ||
-    !['auto', 'scroll'].includes(mailPanelReadabilityDiagnostics.listOverflowY) ||
-    mailPanelReadabilityDiagnostics.minRowHeight < 38 ||
-    !mailPanelReadabilityDiagnostics.orderedRows ||
-    mailPanelReadabilityDiagnostics.fullyVisibleRowCount < 2 ||
-    mailPanelReadabilityDiagnostics.hasInlineDetail ||
-    mailPanelReadabilityDiagnostics.hasInlineResponses ||
-    !mailPanelReadabilityDiagnostics.showAllInsidePanel ||
-    !mailPanelReadabilityDiagnostics.listBeforeButton ||
-    mailPanelReadabilityDiagnostics.listHeight < 90 ||
-    timelineRowDiagnostics.count < 3 ||
-    timelineRowDiagnostics.minHeight < 50 ||
-    !timelineRowDiagnostics.textFits ||
-    !timelineRowDiagnostics.noOverlap ||
-    !gameCycle.proposalChangedAfterAction ||
-    !gameCycle.turnAdvanced ||
-    !gameCycle.resourcesChangedAfterTurn ||
-    !turnReportCauseDiagnostics.exists ||
-    turnReportCauseDiagnostics.heading !== 'Почему так вышло' ||
-    turnReportCauseDiagnostics.rowCount < 2 ||
-    !turnReportCauseDiagnostics.insideReport ||
-    !turnReportCauseDiagnostics.noOverflow ||
-    !turnReportCauseDiagnostics.noDuplicateActorTitle ||
-    !turnReportCauseDiagnostics.readable ||
-    !turnReportCauseDiagnostics.rows.some((row) => row.title.includes('Казна')) ||
-    gameCycle.orderCounterMoveDiagnostics.count < 1 ||
-    !gameCycle.orderCounterMoveDiagnostics.hasChance ||
-    !gameCycle.orderDetailsVisible ||
-    gameCycle.strategicResponseBefore.count < 1 ||
-    !gameCycle.strategicResponseBefore.hasEnabledButton ||
-    !gameCycle.strategicResponseAfter.firstUsed ||
-    !gameCycle.strategicResponseAfter.firstButtonDisabled ||
-    !gameCycle.strategicResponseChangedState ||
-    !gameCycle.composeButtonUnlockedAfterTurn ||
-    gameCycle.savedTurnAfterReload !== gameCycle.afterEndTurn.turn ||
-    !gameCycle.countryIntentAfterReload.hasIntentBlock ||
-    !gameCycle.countryIntentAfterReload.hasTurnIntent ||
-    toastDiagnostics.count !== 1 ||
-    toastDiagnostics.visibleCount !== 1 ||
-    mailBadgeDiagnostics.navBadge !== mailBadgeDiagnostics.panelCount ||
-    mailBadgeDiagnostics.topBadge !== mailBadgeDiagnostics.panelCount ||
-    !empirePulseDiagnostics.exists ||
-    empirePulseDiagnostics.rowCount < 3 ||
-    empirePulseDiagnostics.hasInlineNote ||
-    empirePulseDiagnostics.rows.some((row) => row.height < 20 || row.labelFontSize < 11 || row.valueFontSize < 11.8) ||
-    !turnObjectiveDiagnostics.exists ||
-    turnObjectiveDiagnostics.title.length < 8 ||
-    turnObjectiveDiagnostics.summary.length < 20 ||
-    turnObjectiveDiagnostics.action.length < 20 ||
-    turnObjectiveDiagnostics.aria !== 'Цель текущего хода' ||
-    !['danger', 'warning', 'opportunity', 'steady'].includes(turnObjectiveDiagnostics.tone) ||
-    turnObjectiveDiagnostics.meterWidth < 8 ||
-    turnObjectiveDiagnostics.height < 66 ||
-    !turnObjectiveDiagnostics.contained ||
-    !turnObjectiveDiagnostics.textReadable ||
-    turnObjectiveDiagnostics.overflowCount > 0 ||
-    !turnFlowDiagnostics.exists ||
-    turnFlowDiagnostics.aria !== 'Маршрут текущего хода' ||
-    turnFlowDiagnostics.heading !== 'Маршрут хода' ||
-    turnFlowDiagnostics.stepCount !== 4 ||
-    turnFlowDiagnostics.activeCount !== 1 ||
-    !['1', '2', '3', '4'].includes(turnFlowDiagnostics.activeStep) ||
-    !['Цель', 'Замысел', 'Решение', 'Ход'].every((label) => turnFlowDiagnostics.labels.includes(label)) ||
-    turnFlowDiagnostics.hint.length < 20 ||
-    turnFlowDiagnostics.minHeight < 30 ||
-    !turnFlowDiagnostics.insideChat ||
-    !turnFlowDiagnostics.readable ||
-    !quickActionsFitDiagnostics.exists ||
-    quickActionsFitDiagnostics.buttonCount < 6 ||
-    quickActionsFitDiagnostics.minButtonHeight < 24 ||
-    !quickActionsFitDiagnostics.allButtonsInsideCard ||
-    !quickActionsFitDiagnostics.allButtonsInsideActions ||
-    !quickActionsFitDiagnostics.actionsInsideCard ||
-    quickActionsFitDiagnostics.actionsNeedScroll ||
-    !quickActionsFitDiagnostics.ariaFilled ||
-    !quickActionsFitDiagnostics.statuses.includes('шаблон') ||
-    diplomacyRelationBadgeDiagnostics.count < 3 ||
-    diplomacyRelationBadgeDiagnostics.minWidth < 68 ||
-    diplomacyRelationBadgeDiagnostics.maxHeight > 38 ||
-    !diplomacyRelationBadgeDiagnostics.allInline ||
-    diplomacyRelationBadgeDiagnostics.anyOverflow ||
-    !ordersProposalLayoutDiagnostics.exists ||
-    !ordersProposalLayoutDiagnostics.briefExists ||
-    !ordersProposalLayoutDiagnostics.briefText.includes('Главное:') ||
-    !ordersProposalLayoutDiagnostics.briefText.includes('Очередь:') ||
-    !ordersProposalLayoutDiagnostics.priorityExists ||
-    ordersProposalLayoutDiagnostics.priorityLabel !== 'Рекомендация Совета' ||
-    ordersProposalLayoutDiagnostics.priorityTitle.length < 8 ||
-    ordersProposalLayoutDiagnostics.priorityReason.length < 20 ||
-    ordersProposalLayoutDiagnostics.priorityDecision.length < 6 ||
-    ordersProposalLayoutDiagnostics.priorityGuidanceCount < 2 ||
-    !ordersProposalLayoutDiagnostics.priorityGuidanceText.includes('Следующий шаг') ||
-    !ordersProposalLayoutDiagnostics.priorityGuidanceText.includes('Эффект') ||
-    ordersProposalLayoutDiagnostics.priorityMetricCount < 5 ||
-    !ordersProposalLayoutDiagnostics.priorityButtons.includes('Утвердить') ||
-    !ordersProposalLayoutDiagnostics.priorityButtons.includes('Уточнить') ||
-    !ordersProposalLayoutDiagnostics.priorityButtons.includes('Отложить') ||
-    !ordersProposalLayoutDiagnostics.priorityInsidePanel ||
-    !ordersProposalLayoutDiagnostics.createInsidePanel ||
-    ordersProposalLayoutDiagnostics.createVisibleHeight < 32 ||
-    ordersProposalLayoutDiagnostics.planCount < 1 ||
-    ordersProposalLayoutDiagnostics.minPlanHeight < 68 ||
-    (ordersProposalLayoutDiagnostics.listedPlanCount > 0 &&
-      (!ordersProposalLayoutDiagnostics.firstPlanBadge ||
-        !ordersProposalLayoutDiagnostics.firstPlanRole ||
-        ordersProposalLayoutDiagnostics.firstPlanEffect.length < 20 ||
-        ordersProposalLayoutDiagnostics.firstPlanMetricCount < 5 ||
-        !ordersProposalLayoutDiagnostics.operationPlansReadable)) ||
-    !ordersProposalLayoutDiagnostics.firstPlanHasActions ||
-    !['auto', 'scroll'].includes(ordersProposalLayoutDiagnostics.listOverflowY) ||
-    buttonNameDiagnostics.unnamedCount !== 0 ||
-    consoleErrors.length > 0;
-
   console.log(JSON.stringify(result, null, 2));
 
-  if (failed) {
+  if (failures.length) {
     process.exitCode = 1;
   }
 } finally {

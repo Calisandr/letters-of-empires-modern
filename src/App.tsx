@@ -131,8 +131,6 @@ const navItems = [
   { label: 'Карта мира', icon: MapIcon },
   { label: 'Совет', icon: MessageSquare },
   { label: 'Письма', icon: Mail, badge: 6 },
-  { label: 'Приказы', icon: Flag },
-  { label: 'Архив', icon: Landmark },
 ];
 
 const mapModes: Array<{ id: MapModeId; title: string; className: string }> = [
@@ -2484,16 +2482,6 @@ function App() {
               onDismissPlan={dismissOperationPlan}
               messagesRef={chatMessagesRef}
             />
-            <OrdersPanel
-              orders={orders}
-              operationPlans={operationPlans}
-              currentTurn={turnNumber}
-              onCancel={cancelOrder}
-              onCreateOrder={() => handleQuickAction('create-order')}
-              onRunPlan={openOperationPlanDossier}
-              onRefinePlan={refineOperationPlan}
-              onDismissPlan={dismissOperationPlan}
-            />
           </section>
         </main>
 
@@ -3057,33 +3045,6 @@ function EmpirePanel({
             Завершить ход
           </button>
         </div>
-        <div className="section-title">Шаблоны Совета</div>
-        <div className="quick-actions">
-          {quickActions.map(({ id, label, icon: Icon, description, cadence }) => {
-            const isLocked = oncePerTurnQuickActions.has(id) && quickActionTurns[id] === turnNumber;
-            const stateLabel = isLocked ? 'подготовлено' : cadence;
-            const actionTitle = isLocked
-              ? `${label}: Совет уже подготовил это предложение в текущем ходу. Новый шаблон откроется после завершения хода.`
-              : `${label}: ${description}`;
-
-            return (
-              <button
-                key={label}
-                type="button"
-                title={actionTitle}
-                aria-label={actionTitle}
-                onClick={() => onQuickAction(id)}
-                disabled={isLocked}
-              >
-                <Icon aria-hidden="true" />
-                <span className="quick-action-copy">
-                  <span>{label}</span>
-                  <small>{stateLabel}</small>
-                </span>
-              </button>
-            );
-          })}
-        </div>
       </section>
       <footer className="server-line">
         <span>Сервер: Европа 1</span>
@@ -3519,16 +3480,8 @@ function ChatPanel({
           </span>
         ))}
       </div>
-      <TurnFlowStrip
-        activeChannel={activeChannel}
-        openLetterCount={openLetterCount}
-        operationPlanCount={operationPlans.length}
-        orderCount={orderCount}
-        selectedCountryName={selectedCountryName}
-        turnObjective={turnObjective}
-      />
       <div className={`council-decision-slot ${activeChannel === 'council' ? 'active' : ''}`} aria-live="polite">
-        {activeChannel === 'council' ? (
+        {activeChannel === 'council' && councilChoicePlans.length ? (
           <CouncilChoiceBoard
             plans={councilChoicePlans}
             selectedCountryName={selectedCountryName}

@@ -6980,7 +6980,7 @@ textarea:focus-visible,
     --panel-bg-strong: rgba(5, 13, 14, .92);
     --panel-line: rgba(215, 168, 87, .11);
     --panel-line-soft: rgba(215, 168, 87, .065);
-    grid-template-columns: 252px minmax(760px, 1fr) 330px;
+    grid-template-columns: 228px minmax(860px, 1fr) 278px;
     grid-template-rows: 58px minmax(0, 1fr);
     min-width: 1120px;
   }
@@ -6996,20 +6996,20 @@ textarea:focus-visible,
   }
 
   .minimal-shell .topbar {
-    grid-template-columns: 252px minmax(420px, 1fr) auto;
+    grid-template-columns: 228px minmax(420px, 1fr) auto;
     height: 58px;
     border-bottom-color: rgba(215, 168, 87, .11);
     box-shadow: 0 14px 34px rgba(0, 0, 0, .28);
   }
 
   .minimal-shell .brand {
-    padding-inline: 20px 14px;
+    padding-inline: 16px 12px;
     border-right-color: rgba(215, 168, 87, .08);
   }
 
   .minimal-shell .brand-text {
-    font-size: 17px;
-    letter-spacing: .1em;
+    font-size: 16.5px;
+    letter-spacing: .08em;
   }
 
   .minimal-shell .primary-nav {
@@ -7048,7 +7048,7 @@ textarea:focus-visible,
   }
 
   .minimal-shell .profile-chip {
-    min-width: 214px;
+    min-width: 202px;
     height: 58px;
     border-left-color: rgba(215, 168, 87, .11);
     background: rgba(4, 10, 11, .36);
@@ -7066,9 +7066,9 @@ textarea:focus-visible,
   }
 
   .minimal-shell .right-panel {
-    grid-template-rows: 228px 224px minmax(0, 1fr);
+    grid-template-rows: minmax(218px, .95fr) minmax(206px, .78fr);
     gap: 10px;
-    padding: 10px 10px 10px 0;
+    padding: 10px 8px 10px 0;
     border-left-color: rgba(215, 168, 87, .1);
   }
 
@@ -7196,8 +7196,7 @@ textarea:focus-visible,
   }
 
   .minimal-shell .quick-actions {
-    gap: 3px;
-    margin-top: auto;
+    display: none;
   }
 
   .minimal-shell .quick-actions button {
@@ -7261,7 +7260,7 @@ textarea:focus-visible,
   }
 
   .minimal-shell .bottom-dock {
-    grid-template-columns: minmax(0, 1.38fr) minmax(330px, .72fr);
+    grid-template-columns: minmax(0, 1fr);
     gap: 10px;
   }
 
@@ -7271,6 +7270,15 @@ textarea:focus-visible,
     background:
       linear-gradient(180deg, rgba(8, 20, 21, .76), rgba(3, 9, 10, .86)),
       rgba(3, 9, 10, .82);
+  }
+
+  .minimal-shell .orders-panel {
+    display: none;
+  }
+
+  .minimal-shell .chat-panel {
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+    min-height: 0;
   }
 
   .minimal-shell .chat-tabs,
@@ -7293,9 +7301,7 @@ textarea:focus-visible,
   }
 
   .minimal-shell .turn-flow {
-    padding: 6px 14px;
-    border-bottom-color: rgba(215, 168, 87, .055);
-    background: rgba(2, 7, 8, .22);
+    display: none;
   }
 
   .minimal-shell .turn-flow li {
@@ -7319,6 +7325,11 @@ textarea:focus-visible,
 
   .minimal-shell .council-decision-slot.active {
     padding: 6px 14px 0;
+  }
+
+  .minimal-shell .council-decision-slot.active:empty {
+    display: none;
+    padding: 0;
   }
 
   .minimal-shell .council-choice-board.has-plans {
@@ -7400,6 +7411,9 @@ textarea:focus-visible,
   }
 
   .minimal-shell .chat-messages {
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
     padding: 12px 14px 8px;
   }
 
@@ -7533,6 +7547,10 @@ textarea:focus-visible,
       linear-gradient(180deg, rgba(8, 20, 21, .62), rgba(3, 9, 10, .78)),
       rgba(3, 9, 10, .78);
     box-shadow: 0 14px 34px rgba(0, 0, 0, .16);
+  }
+
+  .minimal-shell .diplomacy-panel {
+    display: none;
   }
 
   .minimal-shell .timeline-list,
