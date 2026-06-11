@@ -2991,59 +2991,65 @@ function EmpirePanel({
       transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
     >
       <section className="empire-card framed-panel">
-        <h1>{playerCountry.name}</h1>
-        <div className="state-flag" aria-label={`Флаг страны: ${playerCountry.name}`}>
-          <span className={`flag ${playerCountry.flag}`} />
-        </div>
-        <div className="ruler-block">
-          <span className="avatar-slot ruler-avatar" aria-hidden="true" />
-          <div>
-            <strong>Родерик</strong>
-            <small>Правитель</small>
+        <div className="empire-identity">
+          <h1>{playerCountry.name}</h1>
+          <div className="state-flag" aria-label={`Флаг страны: ${playerCountry.name}`}>
+            <span className={`flag ${playerCountry.flag}`} />
+          </div>
+          <div className="ruler-block">
+            <span className="avatar-slot ruler-avatar" aria-hidden="true" />
+            <div>
+              <strong>Родерик</strong>
+              <small>Правитель</small>
+            </div>
+          </div>
+          <div className="meta-line">
+            <span>Столица:</span>
+            <b>✦ Москва</b>
           </div>
         </div>
-        <div className="meta-line">
-          <span>Столица:</span>
-          <b>✦ Москва</b>
+        <div className="empire-economy">
+          <div className="section-title">Экономика</div>
+          <ul className="resource-list">
+            {resources.map((resource) => (
+              <li key={resource.label}>
+                <span>{resource.label}</span>
+                <b>{formatResourceValue(resource)}</b>
+                <em>{formatResourceTrend(resource)}</em>
+              </li>
+            ))}
+          </ul>
         </div>
-        <div className="section-title">Экономика</div>
-        <ul className="resource-list">
-          {resources.map((resource) => (
-            <li key={resource.label}>
-              <span>{resource.label}</span>
-              <b>{formatResourceValue(resource)}</b>
-              <em>{formatResourceTrend(resource)}</em>
-            </li>
-          ))}
-        </ul>
-        <div className="section-title">Пульс державы</div>
-        <div className="empire-pulse">
-          <div>
-            <span>Стабильность</span>
-            <b>{russia?.stability ?? 72}/100</b>
+        <div className="empire-command">
+          <div className="section-title">Пульс державы</div>
+          <div className="empire-pulse">
+            <div>
+              <span>Стабильность</span>
+              <b>{russia?.stability ?? 72}/100</b>
+            </div>
+            <div>
+              <span>Армия</span>
+              <b>{russia?.army ?? 78}/100</b>
+            </div>
+            <div>
+              <span>Напряжение мира</span>
+              <b className={worldTension >= 70 ? 'danger' : worldTension >= 50 ? 'warn' : ''}>{worldTension}/100</b>
+            </div>
           </div>
-          <div>
-            <span>Армия</span>
-            <b>{russia?.army ?? 78}/100</b>
+          <TurnObjectiveCard objective={turnObjective} />
+          <div className="turn-info">
+            <div>
+              <small>Текущий ход</small>
+              <strong>{turnNumber}</strong>
+            </div>
+            <div>
+              <small>До конца хода</small>
+              <strong id="turnClock">{clock}</strong>
+            </div>
+            <button className="end-turn-button" type="button" onClick={onEndTurn}>
+              Завершить ход
+            </button>
           </div>
-          <div>
-            <span>Напряжение мира</span>
-            <b className={worldTension >= 70 ? 'danger' : worldTension >= 50 ? 'warn' : ''}>{worldTension}/100</b>
-          </div>
-        </div>
-        <TurnObjectiveCard objective={turnObjective} />
-        <div className="turn-info">
-          <div>
-            <small>Текущий ход</small>
-            <strong>{turnNumber}</strong>
-          </div>
-          <div>
-            <small>До конца хода</small>
-            <strong id="turnClock">{clock}</strong>
-          </div>
-          <button className="end-turn-button" type="button" onClick={onEndTurn}>
-            Завершить ход
-          </button>
         </div>
       </section>
       <footer className="server-line">
