@@ -1836,7 +1836,7 @@ function App() {
   }, []);
 
   const appClassName = useMemo(() => {
-    return ['app-shell', 'redesign-shell', mapModes[mapModeIndex].className].filter(Boolean).join(' ');
+    return ['app-shell', 'redesign-shell', 'minimal-shell', mapModes[mapModeIndex].className].filter(Boolean).join(' ');
   }, [mapModeIndex]);
 
   const mapLayerAttributes = useMemo(() => {
@@ -2576,11 +2576,11 @@ function Topbar({
   onUtilityAction: (label: string) => void;
 }) {
   const topActions = [
-    { label: 'Поиск', icon: Search },
-    { label: 'Корона', icon: Crown, className: 'crown' },
-    { label: 'Почта', icon: Mail, badge: mailCount },
-    { label: 'Уведомления', icon: Bell },
-    { label: 'Помощь', icon: CircleHelp },
+    { label: 'Поиск', icon: Search, className: 'optional' },
+    { label: 'Корона', icon: Crown, className: 'crown optional' },
+    { label: 'Почта', icon: Mail, badge: mailCount, className: 'mail' },
+    { label: 'Уведомления', icon: Bell, className: 'optional' },
+    { label: 'Помощь', icon: CircleHelp, className: 'help' },
   ];
 
   return (
@@ -3057,7 +3057,7 @@ function EmpirePanel({
             Завершить ход
           </button>
         </div>
-        <div className="section-title">Предложения совета</div>
+        <div className="section-title">Шаблоны Совета</div>
         <div className="quick-actions">
           {quickActions.map(({ id, label, icon: Icon, description, cadence }) => {
             const isLocked = oncePerTurnQuickActions.has(id) && quickActionTurns[id] === turnNumber;
@@ -3722,7 +3722,7 @@ function OrdersPanel({
     >
       <div className="panel-heading">
         <h2>
-          Приказы совета <span>({activeOrderCount}/5)</span>
+          Очередь решений <span>({activeOrderCount}/5)</span>
         </h2>
       </div>
       <div className="orders-panel-brief" aria-label="Состояние штаба">
