@@ -133,7 +133,8 @@ try {
     return {
       focused: document.activeElement === input,
       primed: Boolean(form?.classList.contains('primed')),
-      valueLength: input instanceof HTMLInputElement ? input.value.length : 0,
+      tagName: input?.tagName || '',
+      valueLength: input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement ? input.value.length : 0,
       inputHeight: inputBox?.height || 0,
       inputFontSize: inputStyle ? Number.parseFloat(inputStyle.fontSize) : 0,
       borderColor: inputStyle?.borderColor || '',
@@ -501,7 +502,7 @@ try {
   await page.waitForSelector('.country-intel');
 
   await page.locator('#chatInput').fill('Разведать Турцию');
-  await page.locator('.chat-input .send').click();
+  await page.locator('#chatInput').press('Enter');
   await page.waitForSelector('.council-decision-card');
   const chatText = await page.locator('.chat-messages').innerText();
   const councilDirectiveDiagnostics = await page.evaluate(() => {
@@ -1292,8 +1293,9 @@ try {
     councilStarterDiagnostics.overflowCount > 0 ||
     !starterInputFocusDiagnostics.focused ||
     !starterInputFocusDiagnostics.primed ||
+    starterInputFocusDiagnostics.tagName !== 'TEXTAREA' ||
     starterInputFocusDiagnostics.valueLength < 20 ||
-    starterInputFocusDiagnostics.inputHeight < 38 ||
+    starterInputFocusDiagnostics.inputHeight < 54 ||
     starterInputFocusDiagnostics.inputFontSize < 13 ||
     !starterInputFocusDiagnostics.borderColor.includes('241') ||
     !starterPromptInserted.includes('Совет') ||

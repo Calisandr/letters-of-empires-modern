@@ -14,6 +14,7 @@ button svg,
 
 button:focus-visible,
 input:focus-visible,
+textarea:focus-visible,
 .country:focus-visible {
   outline: 2px solid rgba(243, 202, 113, .82);
   outline-offset: 2px;
@@ -3760,7 +3761,17 @@ input:focus-visible,
     box-shadow .22s ease;
 }
 
-.chat-input input {
+.chat-input textarea {
+  width: 100%;
+  border: 1px solid rgba(176, 131, 73, .24);
+  background: rgba(7, 12, 14, .74);
+  color: #d7cab0;
+  padding-inline: 9px;
+  outline: none;
+  resize: none;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(205, 162, 85, .32) rgba(5, 12, 13, .68);
   transition:
     border-color .22s ease,
     background-color .22s ease,
@@ -3776,7 +3787,7 @@ input:focus-visible,
   box-shadow: inset 0 1px 0 rgba(241, 205, 116, .16);
 }
 
-.chat-input.primed input {
+.chat-input.primed textarea {
   border-color: rgba(241, 205, 116, .62);
   background: rgba(5, 12, 12, .88);
   box-shadow:
@@ -4093,9 +4104,12 @@ input:focus-visible,
     grid-template-columns: minmax(0, 1fr) 36px 44px;
   }
 
-  .chat-input input {
-    height: 37px;
+  .chat-input textarea {
+    min-height: 46px;
+    max-height: 68px;
+    padding-block: 7px;
     font-size: 14px;
+    line-height: 1.32;
   }
 
   .chat-input button {
@@ -5377,12 +5391,15 @@ input:focus-visible,
     border-top-color: rgba(205, 162, 85, .14);
   }
 
-  .chat-input input {
-    height: 40px;
+  .chat-input textarea {
+    min-height: 52px;
+    max-height: 78px;
+    padding-block: 8px;
     border-color: rgba(205, 162, 85, .22);
     background: rgba(3, 9, 10, .78);
     color: #e8dcb7;
     font-size: 13.6px;
+    line-height: 1.34;
   }
 
   .chat-input button {
@@ -6204,13 +6221,16 @@ input:focus-visible,
     border-top: 1px solid rgba(215, 168, 87, .12);
   }
 
-  .redesign-shell .chat-input input {
-    height: 46px;
+  .redesign-shell .chat-input textarea {
+    min-height: 58px;
+    max-height: 82px;
+    padding-block: 9px;
     border-radius: 7px;
     border-color: rgba(215, 168, 87, .2);
     background: rgba(2, 7, 8, .72);
     color: #efe3c0;
     font-size: 14px;
+    line-height: 1.38;
   }
 
   .redesign-shell .chat-input button {
@@ -6232,7 +6252,7 @@ input:focus-visible,
     box-shadow: inset 0 1px 0 rgba(241, 205, 116, .15);
   }
 
-  .redesign-shell .chat-input.primed input {
+  .redesign-shell .chat-input.primed textarea {
     border-color: rgba(241, 205, 116, .62);
     background: rgba(5, 12, 12, .9);
     box-shadow:

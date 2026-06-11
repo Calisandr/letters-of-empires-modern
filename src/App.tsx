@@ -3390,7 +3390,7 @@ function ChatPanel({
   onDismissPlan: (id: string) => void;
   messagesRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const primeTimerRef = useRef<number | null>(null);
   const [inputPrimed, setInputPrimed] = useState(false);
   const alliesLabel = allianceNames.length ? allianceNames.join(', ') : 'нет надежного союза';
@@ -3482,6 +3482,12 @@ function ChatPanel({
     },
   };
   const config = chatConfig[activeChannel];
+  const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== 'Enter' || event.shiftKey) return;
+
+    event.preventDefault();
+    event.currentTarget.form?.requestSubmit();
+  };
 
   return (
     <motion.section
@@ -3554,17 +3560,18 @@ function ChatPanel({
         )}
       </div>
       <form id="chatForm" className={`chat-input${inputPrimed ? ' primed' : ''}`} onSubmit={onSubmit}>
-        <input
+        <textarea
           ref={inputRef}
           id="chatInput"
-          type="text"
           aria-label={config.placeholder}
           placeholder={config.placeholder}
+          rows={2}
           value={input}
           onChange={(event) => {
             if (inputPrimed) setInputPrimed(false);
             onInputChange(event.currentTarget.value);
           }}
+          onKeyDown={handleComposerKeyDown}
         />
         <button
           className="emoji"
