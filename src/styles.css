@@ -8540,3 +8540,375 @@ textarea:focus-visible,
     scrollbar-color: rgba(216, 166, 82, .42) rgba(5, 12, 13, .55);
   }
 }
+
+/* Reference-match pass: stronger command-room composition, still without changing the map asset. */
+@media (min-width: 901px) {
+  .minimal-shell {
+    grid-template-rows: 74px minmax(0, 1fr);
+    background:
+      radial-gradient(circle at 51% 5%, rgba(103, 120, 88, .12), transparent 30%),
+      linear-gradient(90deg, #050b0c 0%, #071415 17%, #061213 78%, #040909 100%);
+  }
+
+  .minimal-shell .topbar {
+    height: 74px;
+    border-bottom-color: rgba(216, 166, 82, .2);
+    background:
+      linear-gradient(180deg, rgba(13, 25, 26, .98), rgba(4, 10, 11, .98)),
+      #050b0c;
+    box-shadow:
+      0 22px 52px rgba(0, 0, 0, .42),
+      inset 0 -1px 0 rgba(242, 207, 120, .06);
+  }
+
+  .minimal-shell .brand {
+    position: relative;
+    display: grid;
+    align-content: center;
+    gap: 5px;
+    padding-inline: 26px 18px;
+  }
+
+  .minimal-shell .brand::after {
+    content: "ГЕОПОЛИТИЧЕСКАЯ СИСТЕМА";
+    color: rgba(242, 207, 120, .58);
+    font: 700 9.5px/1 var(--sans);
+    letter-spacing: .12em;
+  }
+
+  .minimal-shell .brand-text {
+    font-size: 18.5px;
+    letter-spacing: .115em;
+  }
+
+  .minimal-shell .nav-link {
+    height: 74px;
+    padding-inline: 16px;
+    font-size: 12.2px;
+  }
+
+  .minimal-shell .nav-link.active::after {
+    left: 16px;
+    right: 16px;
+    height: 2px;
+    bottom: 0;
+    box-shadow:
+      0 0 18px rgba(242, 207, 120, .44),
+      0 -10px 24px rgba(242, 207, 120, .16);
+  }
+
+  .minimal-shell .icon-button {
+    width: 42px;
+    height: 42px;
+  }
+
+  .minimal-shell .profile-chip {
+    height: 74px;
+    min-width: 244px;
+    padding-inline: 20px 20px;
+  }
+
+  .minimal-shell .left-panel {
+    padding: 6px 10px 6px 10px;
+  }
+
+  .minimal-shell .empire-card {
+    height: calc(100vh - 86px);
+    gap: 8px;
+    padding: 12px 15px 12px;
+    border: 1px solid rgba(216, 166, 82, .16);
+    border-radius: 8px;
+    background:
+      radial-gradient(circle at 50% 9%, rgba(242, 207, 120, .1), transparent 27%),
+      linear-gradient(180deg, rgba(13, 31, 32, .7), rgba(3, 10, 11, .78)),
+      rgba(3, 10, 11, .78);
+    box-shadow:
+      0 20px 52px rgba(0, 0, 0, .22),
+      inset 0 1px 0 rgba(255, 235, 176, .04);
+  }
+
+  .minimal-shell .empire-card h1 {
+    font-size: 25px;
+    letter-spacing: .21em;
+  }
+
+  .minimal-shell .state-flag {
+    height: 70px;
+  }
+
+  .minimal-shell .state-flag .flag {
+    --flag-w: 126px;
+    --flag-h: 68px;
+  }
+
+  .minimal-shell .ruler-block {
+    min-height: 42px;
+    padding-block: 6px;
+    border-color: rgba(216, 166, 82, .12);
+  }
+
+  .minimal-shell .meta-line {
+    min-height: 30px;
+  }
+
+  .minimal-shell .empire-economy {
+    padding: 9px 11px;
+    border-color: rgba(216, 166, 82, .14);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, .024), transparent),
+      rgba(2, 9, 10, .46);
+  }
+
+  .minimal-shell .resource-list li {
+    grid-template-columns: minmax(58px, 1fr) 54px 66px;
+    column-gap: 4px;
+    min-height: 23px;
+    padding-block: 1px;
+  }
+
+  .minimal-shell .resource-list b {
+    font-size: 13.2px;
+  }
+
+  .minimal-shell .resource-list em {
+    overflow: visible;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .minimal-shell .empire-pulse div,
+  .minimal-shell .empire-pulse div:nth-of-type(-n+2),
+  .minimal-shell .empire-pulse div:nth-of-type(3) {
+    min-height: 30px;
+    padding: 5px 10px 10px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .minimal-shell .empire-pulse div:nth-of-type(3) {
+    min-height: 28px;
+  }
+
+  .minimal-shell .empire-pulse span,
+  .minimal-shell .empire-pulse b {
+    font-size: 13px;
+  }
+
+  .minimal-shell .empire-pulse div::after {
+    content: "";
+    position: absolute;
+    left: 9px;
+    right: 9px;
+    bottom: 6px;
+    height: 4px;
+    border-radius: 999px;
+    background:
+      linear-gradient(90deg, rgba(101, 196, 98, .76), rgba(242, 207, 120, .72) 72%, rgba(96, 28, 26, .45) 72%),
+      rgba(255, 255, 255, .06);
+    opacity: .72;
+  }
+
+  .minimal-shell .empire-pulse div:nth-of-type(2)::after {
+    background:
+      linear-gradient(90deg, rgba(242, 207, 120, .78), rgba(242, 207, 120, .78) 78%, rgba(255, 255, 255, .08) 78%),
+      rgba(255, 255, 255, .06);
+  }
+
+  .minimal-shell .empire-pulse div:nth-of-type(3)::after {
+    background:
+      linear-gradient(90deg, rgba(220, 82, 73, .7), rgba(242, 207, 120, .76) 51%, rgba(255, 255, 255, .08) 51%),
+      rgba(255, 255, 255, .06);
+  }
+
+  .minimal-shell .turn-objective {
+    display: block;
+    gap: 5px;
+    max-height: 118px;
+    padding: 8px;
+    overflow: hidden;
+  }
+
+  .minimal-shell .turn-objective header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    align-items: start;
+    margin-bottom: 4px;
+  }
+
+  .minimal-shell .turn-objective h2 {
+    display: block;
+    margin: 0 0 3px;
+    overflow: hidden;
+    font-size: 13.3px;
+    line-height: 1.28;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .minimal-shell .turn-objective p {
+    display: block;
+    margin: 0 0 5px;
+    overflow: hidden;
+    font-size: 12.5px;
+    line-height: 1.32;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .minimal-shell .turn-objective small {
+    display: block;
+    margin: 5px 0 0;
+    overflow: hidden;
+    font-size: 12.2px;
+    line-height: 1.24;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .minimal-shell .turn-info {
+    gap: 6px;
+    padding-top: 6px;
+  }
+
+  .minimal-shell .turn-info strong {
+    font-size: 20px;
+  }
+
+  .minimal-shell .end-turn-button {
+    min-height: 38px;
+  }
+
+  .minimal-shell .main-area {
+    grid-template-rows: minmax(520px, 1fr) 268px;
+    gap: 12px;
+    padding: 12px 10px;
+  }
+
+  .minimal-shell .map-section {
+    border-color: rgba(216, 166, 82, .18);
+    border-radius: 8px;
+    box-shadow:
+      0 28px 76px rgba(0, 0, 0, .34),
+      inset 0 0 0 1px rgba(255, 235, 176, .035),
+      inset 0 0 60px rgba(0, 0, 0, .12);
+  }
+
+  .minimal-shell .map-toolbar {
+    top: 16px;
+    left: 16px;
+  }
+
+  .minimal-shell .tool-select,
+  .minimal-shell .route-toggle {
+    min-height: 38px;
+    padding-inline: 13px;
+    border-color: rgba(216, 166, 82, .22);
+    background:
+      linear-gradient(180deg, rgba(15, 30, 31, .88), rgba(3, 9, 10, .9)),
+      rgba(4, 10, 11, .86);
+  }
+
+  .minimal-shell .chat-panel {
+    min-height: 0;
+    grid-template-rows: auto auto minmax(0, auto) minmax(0, 1fr) auto;
+    background:
+      radial-gradient(circle at 14% 0%, rgba(242, 207, 120, .07), transparent 28%),
+      linear-gradient(180deg, rgba(9, 27, 28, .86), rgba(3, 10, 11, .94)),
+      rgba(3, 10, 11, .92);
+  }
+
+  .minimal-shell .chat-tabs {
+    min-height: 48px;
+  }
+
+  .minimal-shell .chat-context {
+    min-height: 32px;
+  }
+
+  .minimal-shell .chat-messages {
+    padding-block: 12px 8px;
+  }
+
+  .minimal-shell .chat-input textarea {
+    min-height: 54px;
+  }
+
+  .minimal-shell .right-panel {
+    grid-template-rows: minmax(300px, 1fr) minmax(292px, .94fr);
+    gap: 14px;
+    padding: 12px 10px 12px 0;
+  }
+
+  .minimal-shell .timeline-panel,
+  .minimal-shell .mail-panel {
+    min-height: 0;
+    background:
+      radial-gradient(circle at 8% 0%, rgba(242, 207, 120, .055), transparent 26%),
+      linear-gradient(180deg, rgba(10, 25, 26, .88), rgba(3, 10, 11, .94)),
+      rgba(3, 10, 11, .92);
+  }
+
+  .minimal-shell .panel-heading {
+    min-height: 50px;
+  }
+
+  .minimal-shell .right-panel .panel-heading h2 {
+    font-size: 16px;
+    letter-spacing: .045em;
+  }
+
+  .minimal-shell .timeline-list,
+  .minimal-shell .mail-list {
+    gap: 9px;
+    padding: 10px;
+    overflow-y: auto;
+  }
+
+  .minimal-shell .timeline-list {
+    grid-auto-rows: minmax(76px, max-content);
+  }
+
+  .minimal-shell .mail-list {
+    grid-auto-rows: minmax(60px, max-content);
+  }
+
+  .minimal-shell .timeline-row-button,
+  .minimal-shell .mail-row-button {
+    align-items: start;
+    min-height: 76px;
+    padding: 11px 10px;
+    border-color: rgba(216, 166, 82, .085);
+    border-radius: 6px;
+    background:
+      linear-gradient(90deg, rgba(255, 255, 255, .032), transparent 72%),
+      rgba(8, 19, 19, .72);
+  }
+
+  .minimal-shell .mail-row-button {
+    min-height: 60px;
+  }
+
+  .minimal-shell .timeline-panel article.world-pulse-row,
+  .minimal-shell .world-pulse-row .timeline-row-button {
+    min-height: 96px;
+  }
+
+  .minimal-shell .timeline-panel h3,
+  .minimal-shell .mail-panel h3 {
+    margin: 0 0 4px;
+    font-size: 13.8px;
+    line-height: 1.18;
+  }
+
+  .minimal-shell .timeline-panel p,
+  .minimal-shell .mail-panel p {
+    margin: 0;
+    font-size: 12.2px;
+    line-height: 1.36;
+  }
+
+  .minimal-shell .timeline-panel time,
+  .minimal-shell .mail-panel time {
+    padding-top: 2px;
+  }
+}
