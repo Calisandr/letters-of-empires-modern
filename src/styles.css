@@ -9132,3 +9132,11 @@ textarea:focus-visible,
     transform: translate(10px, -50%);
   }
 }
+
+/* Sidebar rhythm: keep the pulse close to economy instead of pinning it to the bottom. */
+@media (min-width: 901px) {
+  .minimal-shell .empire-command {
+    margin-top: 10px;
+    gap: 10px;
+  }
+}
