@@ -1284,30 +1284,6 @@ function describePlanDecision(plan: OperationPlan, activeOrderCount: number, cur
   };
 }
 
-function pickCouncilChoicePlans(plans: OperationPlan[]) {
-  return [...plans].sort((left, right) => scoreOperationPlan(right) - scoreOperationPlan(left)).slice(0, 3);
-}
-
-function councilChoiceRole(plan: OperationPlan) {
-  if (plan.successChance >= 90 && plan.riskLevel === 'low') return 'Безопасный ход';
-  if (plan.riskLevel === 'high' || plan.riskLevel === 'critical') return 'Рискованный прорыв';
-  if (plan.kind === 'trade') return 'Торговое окно';
-  if (plan.kind === 'diplomacy') return 'Дипломатический канал';
-  if (plan.kind === 'military') return 'Военный ответ';
-  if (plan.kind === 'infrastructure') return 'Развитие державы';
-  return 'Спокойный маневр';
-}
-
-function councilChoiceHint(plan: OperationPlan, activeOrderCount: number) {
-  if (activeOrderCount >= 5) return 'Сначала освободите слот приказа.';
-  if (plan.riskLevel === 'high' || plan.riskLevel === 'critical') {
-    return 'Лучше открыть досье и уточнить, если ресурсы или дипломатия не готовы.';
-  }
-  if (plan.successChance >= 88) return 'Можно быстро утвердить после просмотра досье.';
-  if (plan.durationTurns > 2) return 'Длинный ход: проверьте, не закрывается ли окно раньше срока.';
-  return 'Проверьте цену и последствия, затем решайте.';
-}
-
 function buildCouncilStarterPrompts(selectedCountryName: string, worldTension: number) {
   const target = selectedCountryName || playerCountry.name;
   const pressurePrompt =
@@ -1332,6 +1308,16 @@ function buildCouncilStarterPrompts(selectedCountryName: string, worldTension: n
       detail: 'Полезно перед переговорами, войной или крупными расходами.',
     },
   ];
+}
+
+function councilChoiceRole(plan: OperationPlan) {
+  if (plan.successChance >= 90 && plan.riskLevel === 'low') return 'Безопасный ход';
+  if (plan.riskLevel === 'high' || plan.riskLevel === 'critical') return 'Рискованный прорыв';
+  if (plan.kind === 'trade') return 'Торговое окно';
+  if (plan.kind === 'diplomacy') return 'Дипломатический канал';
+  if (plan.kind === 'military') return 'Военный ответ';
+  if (plan.kind === 'infrastructure') return 'Развитие державы';
+  return 'Спокойный маневр';
 }
 
 function operationPlanDoctrine(plan: OperationPlan) {
@@ -2628,13 +2614,10 @@ function App() {
               input={chatInput}
               activeTab={activeChatTab}
               activeChannel={activeChatChannel}
-              operationPlans={operationPlans}
               selectedCountryName={gameState.selectedCountry?.name || 'Россия'}
               allianceNames={allianceNames}
-              openLetterCount={letters.filter((letter) => letter.status !== 'answered').length}
               turnNumber={turnNumber}
               orderCount={orders.filter((order) => order.statusClass !== 'cancelled').length}
-              turnObjective={turnObjective}
               worldTension={worldTension}
               onInputChange={setChatInput}
               onTabChange={(tab) => {
@@ -2642,9 +2625,6 @@ function App() {
                 showToast(`Канал "${tab}" открыт`);
               }}
               onSubmit={submitChat}
-              onRunPlan={openOperationPlanDossier}
-              onRefinePlan={refineOperationPlan}
-              onDismissPlan={dismissOperationPlan}
               messagesRef={chatMessagesRef}
             />
           </section>
@@ -3439,186 +3419,6 @@ function MapLegend() {
   );
 }
 
-function CouncilDecisionCard({
-  plan,
-  currentTurn,
-  onRunPlan,
-  onRefinePlan,
-  onDismissPlan,
-}: {
-  plan: OperationPlan;
-  currentTurn: number;
-  onRunPlan: (id: string) => void;
-  onRefinePlan: (id: string) => void;
-  onDismissPlan: (id: string) => void;
-}) {
-  const Icon = orderIcons[plan.iconKey];
-  const expiresIn = Math.max(0, plan.expiresTurn - currentTurn);
-  const refinements = plan.refinements || 0;
-
-  return (
-    <section className={`council-decision-card ${plan.riskLevel}`} aria-label="Решение Совета">
-      <header>
-        <span>Штабное решение</span>
-        <b>{planRiskLabel(plan.riskLevel)}</b>
-      </header>
-      <div className="council-decision-main">
-        <span className="council-decision-icon" aria-hidden="true">
-          <Icon />
-        </span>
-        <div>
-          <h3>{plan.title}</h3>
-          <p>{plan.summary}</p>
-        </div>
-      </div>
-      <dl>
-        <div>
-          <dt>Шанс</dt>
-          <dd>{plan.successChance}%</dd>
-        </div>
-        <div>
-          <dt>Срок</dt>
-          <dd>{plan.durationTurns} ход</dd>
-        </div>
-        <div>
-          <dt>Цена</dt>
-          <dd title={formatResourceCost(plan.cost)}>{formatCompactResourceCost(plan.cost)}</dd>
-        </div>
-        <div>
-          <dt>Окно</dt>
-          <dd>{expiresIn} ход</dd>
-        </div>
-      </dl>
-      <div className="council-decision-actions">
-        <button type="button" className="plan-run" onClick={() => onRunPlan(plan.id)}>
-          Утвердить
-        </button>
-        <button type="button" className="plan-refine" onClick={() => onRefinePlan(plan.id)} disabled={refinements >= 2}>
-          {refinements >= 2 ? 'Уточнено' : 'Уточнить'}
-        </button>
-        <button type="button" className="plan-dismiss" onClick={() => onDismissPlan(plan.id)}>
-          Отложить
-        </button>
-      </div>
-    </section>
-  );
-}
-
-function CouncilChoiceBoard({
-  plans,
-  selectedCountryName,
-  worldTension,
-  currentTurn,
-  activeOrderCount,
-  onInputChange,
-  onRunPlan,
-  onRefinePlan,
-  onDismissPlan,
-}: {
-  plans: OperationPlan[];
-  selectedCountryName: string;
-  worldTension: number;
-  currentTurn: number;
-  activeOrderCount: number;
-  onInputChange: (value: string) => void;
-  onRunPlan: (id: string) => void;
-  onRefinePlan: (id: string) => void;
-  onDismissPlan: (id: string) => void;
-}) {
-  const [primaryPlan, ...alternativePlans] = plans;
-  const starterPrompts = buildCouncilStarterPrompts(selectedCountryName, worldTension);
-
-  if (!primaryPlan) {
-    return (
-      <section className="council-choice-board empty" aria-label="Штабной выбор Совета">
-        <header>
-          <span>Штабной выбор</span>
-          <b>нужен замысел</b>
-        </header>
-        <p>
-          Выберите формулировку или напишите свою. Совет превратит её в проверяемый план с ценой, риском и сроком.
-        </p>
-        <div className="council-starter-prompts">
-          {starterPrompts.map((prompt) => (
-            <button key={prompt.label} type="button" onClick={() => onInputChange(prompt.text)}>
-              <b>{prompt.label}</b>
-              <span>{prompt.detail}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-    );
-  }
-
-  return (
-    <section className="council-choice-board has-plans" aria-label="Штабной выбор Совета">
-      <CouncilDecisionCard
-        plan={primaryPlan}
-        currentTurn={currentTurn}
-        onRunPlan={onRunPlan}
-        onRefinePlan={onRefinePlan}
-        onDismissPlan={onDismissPlan}
-      />
-      {alternativePlans.length ? (
-        <div className="council-next-steps" aria-label="Альтернативы Совета">
-          <header>
-            <span>Ещё варианты</span>
-            <b>{plans.length} хода на выбор</b>
-          </header>
-          {alternativePlans.map((plan) => {
-            const expiresIn = Math.max(0, plan.expiresTurn - currentTurn);
-            const refinements = plan.refinements || 0;
-
-            return (
-              <article key={plan.id} className={`council-next-step ${plan.riskLevel}`}>
-                <div>
-                  <span>{councilChoiceRole(plan)}</span>
-                  <h4>{plan.title}</h4>
-                  <p>{councilChoiceHint(plan, activeOrderCount)}</p>
-                </div>
-                <dl>
-                  <div>
-                    <dt>Шанс</dt>
-                    <dd>{plan.successChance}%</dd>
-                  </div>
-                  <div>
-                    <dt>Окно</dt>
-                    <dd>{expiresIn} ход</dd>
-                  </div>
-                </dl>
-                <div className="council-next-actions">
-                  <button
-                    type="button"
-                    className="plan-run"
-                    aria-label={`Открыть досье альтернативного плана: ${plan.title}`}
-                    onClick={() => onRunPlan(plan.id)}
-                    disabled={activeOrderCount >= 5}
-                  >
-                    Досье
-                  </button>
-                  <button
-                    type="button"
-                    className="plan-refine"
-                    aria-label={`Уточнить альтернативный план: ${plan.title}`}
-                    onClick={() => onRefinePlan(plan.id)}
-                    disabled={refinements >= 2}
-                  >
-                    {refinements >= 2 ? 'Готово' : 'Уточнить'}
-                  </button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="council-choice-note">
-          Совет держит один сильный вариант. Если он не подходит, уточните план или напишите новый замысел ниже.
-        </p>
-      )}
-    </section>
-  );
-}
-
 function TurnFlowStrip({
   activeChannel,
   openLetterCount,
@@ -3668,48 +3468,34 @@ function ChatPanel({
   input,
   activeTab,
   activeChannel,
-  operationPlans,
   selectedCountryName,
   allianceNames,
-  openLetterCount,
   turnNumber,
   orderCount,
-  turnObjective,
   worldTension,
   onInputChange,
   onTabChange,
   onSubmit,
-  onRunPlan,
-  onRefinePlan,
-  onDismissPlan,
   messagesRef,
 }: {
   messages: ChatMessage[];
   input: string;
   activeTab: ChatTabLabel;
   activeChannel: ChatChannel;
-  operationPlans: OperationPlan[];
   selectedCountryName: string;
   allianceNames: string[];
-  openLetterCount: number;
   turnNumber: number;
   orderCount: number;
-  turnObjective: TurnObjective;
   worldTension: number;
   onInputChange: (value: string) => void;
   onTabChange: (tab: ChatTabLabel) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onRunPlan: (id: string) => void;
-  onRefinePlan: (id: string) => void;
-  onDismissPlan: (id: string) => void;
   messagesRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const primeTimerRef = useRef<number | null>(null);
   const [inputPrimed, setInputPrimed] = useState(false);
   const alliesLabel = allianceNames.length ? allianceNames.join(', ') : 'нет надежного союза';
-  const councilChoicePlans = useMemo(() => pickCouncilChoicePlans(operationPlans), [operationPlans]);
-  const activeOrderCount = orderCount;
   const primeCouncilInput = useCallback(
     (value: string) => {
       onInputChange(value);
@@ -3837,21 +3623,6 @@ function ChatPanel({
             <b>{item.label}:</b> {item.value}
           </span>
         ))}
-      </div>
-      <div className={`council-decision-slot ${activeChannel === 'council' ? 'active' : ''}`} aria-live="polite">
-        {activeChannel === 'council' && councilChoicePlans.length ? (
-          <CouncilChoiceBoard
-            plans={councilChoicePlans}
-            selectedCountryName={selectedCountryName}
-            worldTension={worldTension}
-            currentTurn={turnNumber}
-            activeOrderCount={activeOrderCount}
-            onInputChange={primeCouncilInput}
-            onRunPlan={onRunPlan}
-            onRefinePlan={onRefinePlan}
-            onDismissPlan={onDismissPlan}
-          />
-        ) : null}
       </div>
       <div
         id="chatMessages"

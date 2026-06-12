@@ -111,7 +111,7 @@ async function readLayoutDiagnostics() {
       ordersPanelVisible: isVisible('.orders-panel'),
       diplomacyPanelVisible: isVisible('.diplomacy-panel'),
       turnFlowVisible: isVisible('.turn-flow'),
-      starterPromptsVisible: isVisible('.council-starter-prompts'),
+      inlineCouncilControlsVisible: isVisible('.council-decision-card, .council-decision-slot'),
       chatOverflowY: chatMessages ? getComputedStyle(chatMessages).overflowY : '',
       chatScrollHeight: chatMessages?.scrollHeight || 0,
       chatClientHeight: chatMessages?.clientHeight || 0,
@@ -250,40 +250,20 @@ try {
   await page.getByRole('tab', { name: 'Совет' }).click();
   await page.locator('#chatInput').fill('Совет, разведай Турцию и предложи безопасный план без резкой эскалации.');
   await page.locator('#chatForm').evaluate((form) => form.requestSubmit());
-  await page.waitForSelector('.council-decision-card');
-
-  const councilDecision = await page.evaluate(() => {
-    const card = document.querySelector('.council-decision-card');
-    const box = card?.getBoundingClientRect();
-
-    return {
-      exists: Boolean(card),
-      title: card?.querySelector('h3')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-      summary: card?.querySelector('p')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-      buttons: [...(card?.querySelectorAll('button') || [])].map((node) =>
-        node.textContent?.replace(/\s+/g, ' ').trim() || '',
-      ),
-      visibleHeight: box?.height || 0,
-    };
-  });
-
-  await page.locator('.council-decision-card .plan-run').click();
-  await page.waitForSelector('.operation-plan-dialog');
-  const planDialog = await page.evaluate(() => ({
-    title: document.querySelector('.operation-plan-dialog h2')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-    buttons: [...document.querySelectorAll('.operation-plan-dialog button')].map((node) =>
-      node.textContent?.replace(/\s+/g, ' ').trim() || '',
-    ),
-    visibleWidth: document.querySelector('.operation-plan-dialog')?.getBoundingClientRect().width || 0,
-  }));
-  await page.locator('.operation-plan-dialog .dialog-secondary.primary').click();
   await page.waitForTimeout(220);
 
-  const afterPlanApprove = await page.evaluate(() => ({
-    toast: document.querySelector('.toast.visible')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-    context: document.querySelector('.chat-context')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-    timelineTop: document.querySelector('.timeline-panel article h3')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-  }));
+  const councilAfterCommand = await page.evaluate(() => {
+    const messages = document.querySelector('.chat-messages');
+
+    return {
+      decisionCardCount: document.querySelectorAll('.council-decision-card').length,
+      decisionSlotCount: document.querySelectorAll('.council-decision-slot').length,
+      overflowY: messages ? getComputedStyle(messages).overflowY : '',
+      messageCount: messages?.querySelectorAll('p').length || 0,
+      context: document.querySelector('.chat-context')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      toast: document.querySelector('.toast.visible')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+    };
+  });
 
   const finalLayout = await readLayoutDiagnostics();
   await page.screenshot({ path: screenshotPath, fullPage: true });
@@ -303,7 +283,7 @@ try {
   assert(initialLayout.ordersPanelVisible === false, 'separate orders dashboard should be removed');
   assert(initialLayout.diplomacyPanelVisible === false, 'permanent diplomacy list should be removed');
   assert(initialLayout.turnFlowVisible === false, 'turn flow strip should be removed from the main screen');
-  assert(initialLayout.starterPromptsVisible === false, 'starter prompt buttons should not crowd the chat');
+  assert(initialLayout.inlineCouncilControlsVisible === false, 'inline council controls should not crowd the chat');
   assert(initialLayout.chatOverflowY === 'auto' || initialLayout.chatOverflowY === 'scroll', 'chat messages should be scrollable');
   assert(initialLayout.visibleRightPanels === 2, 'right rail should show only summary and mail');
   assert(initialLayout.timelineRows >= 2, 'world summary should still show events');
@@ -329,17 +309,10 @@ try {
   assert(chatScrollDiagnostics.messageCount >= 14, 'world chat should accept repeated messages');
   assert(chatScrollDiagnostics.scrollHeight > chatScrollDiagnostics.clientHeight, 'chat should have real scroll overflow');
   assert(chatScrollDiagnostics.scrollTop > 0, 'chat scroll position should be adjustable');
-  assert(councilDecision.exists, 'council command should create a decision card');
-  assert(councilDecision.title.length > 8, 'council decision should have a readable title');
-  assert(councilDecision.summary.length > 30, 'council decision should explain the plan');
-  assert(councilDecision.buttons.includes('Утвердить'), 'council decision should keep approve action');
-  assert(councilDecision.buttons.includes('Уточнить'), 'council decision should keep refine action');
-  assert(councilDecision.buttons.includes('Отложить'), 'council decision should keep dismiss action');
-  assert(councilDecision.visibleHeight > 70, 'council decision card should be visible');
-  assert(planDialog.title.length > 8, 'plan dossier should open from council decision');
-  assert(planDialog.buttons.includes('Утвердить приказ'), 'plan dossier should allow approving the order');
-  assert(planDialog.visibleWidth > 640, 'plan dossier should open as a readable modal');
-  assert(afterPlanApprove.toast.includes('Приказ') || afterPlanApprove.context.includes('Приказы'), 'approving a plan should update game state');
+  assert(councilAfterCommand.decisionCardCount === 0, 'council command should not render inline decision cards');
+  assert(councilAfterCommand.decisionSlotCount === 0, 'chat should not reserve an inline decision slot');
+  assert(councilAfterCommand.overflowY === 'auto' || councilAfterCommand.overflowY === 'scroll', 'council chat should stay scrollable');
+  assert(councilAfterCommand.messageCount >= 1, 'council command should keep normal chat messages visible');
   assert(finalLayout.quickActionsVisible === false, 'quick actions should stay removed after interactions');
   assert(finalLayout.ordersPanelVisible === false, 'orders panel should stay removed after interactions');
   assert(finalLayout.diplomacyPanelVisible === false, 'diplomacy panel should stay removed after interactions');
@@ -354,9 +327,7 @@ try {
     mapModeTitle,
     selectedCountry,
     chatScrollDiagnostics,
-    councilDecision,
-    planDialog,
-    afterPlanApprove,
+    councilAfterCommand,
     finalLayout,
     consoleErrors,
     failures,

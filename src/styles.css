@@ -4975,395 +4975,6 @@ textarea:focus-visible,
   white-space: nowrap;
 }
 
-.council-decision-slot {
-  height: 0;
-  overflow: hidden;
-}
-
-.council-decision-slot.active {
-  height: auto;
-  padding: 7px 12px 0;
-}
-
-.council-choice-board {
-  display: grid;
-  gap: 7px;
-  min-width: 0;
-}
-
-.council-choice-board.empty {
-  padding: 10px;
-  border: 1px solid rgba(205, 162, 85, .18);
-  border-radius: 7px;
-  background:
-    linear-gradient(135deg, rgba(95, 138, 90, .08), transparent 62%),
-    rgba(3, 10, 11, .68);
-}
-
-.council-choice-board.empty header,
-.council-next-steps header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-width: 0;
-}
-
-.council-choice-board.empty header span,
-.council-next-steps header span,
-.council-next-step span {
-  color: rgba(174, 190, 165, .84);
-  font-size: 12px;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-}
-
-.council-choice-board.empty header b,
-.council-next-steps header b {
-  color: #f1cf76;
-  font-size: 12.5px;
-  white-space: nowrap;
-}
-
-.council-choice-board.empty > p,
-.council-choice-note {
-  margin: 0;
-  color: rgba(226, 219, 188, .9);
-  font-size: 13px;
-  line-height: 1.38;
-}
-
-.council-starter-prompts {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 7px;
-}
-
-.council-starter-prompts button {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-  min-height: 58px;
-  padding: 9px;
-  border: 1px solid rgba(205, 162, 85, .2);
-  border-radius: 6px;
-  background: rgba(5, 13, 13, .7);
-  color: rgba(226, 219, 188, .9);
-  text-align: left;
-  cursor: pointer;
-  transition:
-    transform .18s ease,
-    border-color .18s ease,
-    background-color .18s ease,
-    box-shadow .18s ease;
-}
-
-.council-starter-prompts button b {
-  color: #f4d783;
-  font: 700 13.5px/1.12 var(--serif);
-}
-
-.council-starter-prompts button span {
-  color: rgba(177, 194, 169, .86);
-  font-size: 12.2px;
-  line-height: 1.28;
-}
-
-.council-starter-prompts button:hover,
-.council-starter-prompts button:focus-visible {
-  transform: translateY(-1px);
-  border-color: rgba(241, 205, 116, .42);
-  background:
-    linear-gradient(135deg, rgba(241, 205, 116, .08), transparent 70%),
-    rgba(8, 18, 17, .78);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, .22);
-}
-
-.council-next-steps {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-  padding: 7px;
-  border: 1px solid rgba(205, 162, 85, .14);
-  border-radius: 7px;
-  background: rgba(4, 11, 12, .48);
-}
-
-.council-next-step {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 92px 120px;
-  gap: 8px;
-  align-items: center;
-  min-width: 0;
-  padding: 7px;
-  border: 1px solid rgba(205, 162, 85, .12);
-  border-radius: 6px;
-  background: rgba(3, 9, 10, .54);
-}
-
-.council-next-step.high,
-.council-next-step.critical {
-  border-color: rgba(219, 101, 88, .28);
-}
-
-.council-next-step > div,
-.council-next-step dl,
-.council-next-actions {
-  min-width: 0;
-}
-
-.council-next-step h4,
-.council-next-step p,
-.council-next-step dl {
-  margin: 0;
-}
-
-.council-next-step h4 {
-  overflow: hidden;
-  color: #f4d783;
-  font: 700 13.6px/1.15 var(--serif);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.council-next-step p {
-  display: -webkit-box;
-  margin-top: 2px;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-  color: rgba(218, 209, 176, .84);
-  font-size: 12.2px;
-  line-height: 1.25;
-}
-
-.council-next-step dl {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 3px;
-}
-
-.council-next-step dl div {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  min-width: 0;
-  padding: 3px 5px;
-  border: 1px solid rgba(205, 162, 85, .12);
-  background: rgba(2, 7, 8, .42);
-}
-
-.council-next-step dt,
-.council-next-step dd {
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.council-next-step dt {
-  color: rgba(166, 185, 162, .78);
-  font-size: 11.2px;
-}
-
-.council-next-step dd {
-  color: #f2d27e;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.council-next-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 5px;
-}
-
-.council-next-actions button {
-  min-height: 28px;
-  border: 1px solid rgba(205, 162, 85, .28);
-  border-radius: 4px;
-  background: rgba(9, 17, 16, .78);
-  color: #d9bf77;
-  cursor: pointer;
-}
-
-.council-next-actions .plan-run {
-  border-color: rgba(226, 183, 100, .44);
-  background: rgba(86, 56, 23, .44);
-  color: #ffe08d;
-  font: 700 11.8px/1 var(--serif);
-}
-
-.council-next-actions button:disabled {
-  cursor: default;
-  opacity: .55;
-}
-
-.council-decision-card {
-  display: grid;
-  gap: 7px;
-  padding: 9px;
-  overflow: hidden;
-  border: 1px solid rgba(205, 162, 85, .2);
-  border-radius: 7px;
-  background:
-    linear-gradient(135deg, rgba(226, 183, 100, .08), transparent 58%),
-    rgba(3, 10, 11, .72);
-}
-
-.council-decision-card.medium {
-  border-color: rgba(224, 173, 76, .34);
-}
-
-.council-decision-card.high,
-.council-decision-card.critical {
-  border-color: rgba(219, 101, 88, .38);
-}
-
-.council-decision-card header,
-.council-decision-main,
-.council-decision-card dl,
-.council-decision-actions {
-  min-width: 0;
-}
-
-.council-decision-card header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.council-decision-card header span {
-  color: rgba(174, 190, 165, .82);
-  font-size: 10.8px;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-}
-
-.council-decision-card header b {
-  color: #f2d27e;
-  font-size: 11px;
-}
-
-.council-decision-main {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 9px;
-  align-items: start;
-}
-
-.council-decision-main > div {
-  min-width: 0;
-  overflow: hidden;
-}
-
-.council-decision-icon {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  border: 1px solid rgba(205, 162, 85, .28);
-  border-radius: 6px;
-  background: rgba(80, 57, 25, .28);
-  color: #e4bd66;
-}
-
-.council-decision-icon svg {
-  width: 17px;
-  height: 17px;
-}
-
-.council-decision-card h3,
-.council-decision-card p {
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.council-decision-card h3 {
-  color: #f4d783;
-  font: 700 13px/1.15 var(--serif);
-  white-space: nowrap;
-}
-
-.council-decision-card p {
-  display: -webkit-box;
-  margin-top: 2px;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-  color: rgba(218, 209, 176, .86);
-  font-size: 11.5px;
-  line-height: 1.25;
-}
-
-.council-decision-card dl {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 4px;
-  margin: 0;
-}
-
-.council-decision-card dl div {
-  min-width: 0;
-  padding: 5px 6px;
-  border: 1px solid rgba(205, 162, 85, .12);
-  background: rgba(2, 7, 8, .48);
-}
-
-.council-decision-card dt,
-.council-decision-card dd {
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.council-decision-card dt {
-  color: rgba(166, 185, 162, .78);
-  font-size: 10.5px;
-  text-transform: uppercase;
-}
-
-.council-decision-card dd {
-  color: #f2d27e;
-  font-size: 11.2px;
-  font-weight: 700;
-}
-
-.council-decision-actions {
-  display: grid;
-  grid-template-columns: minmax(120px, 1fr) minmax(92px, .72fr) minmax(82px, .62fr);
-  gap: 6px;
-}
-
-.council-decision-actions button {
-  min-height: 30px;
-  border: 1px solid rgba(205, 162, 85, .3);
-  border-radius: 4px;
-  background: rgba(9, 17, 16, .78);
-  color: #d9bf77;
-  cursor: pointer;
-}
-
-.council-decision-actions .plan-run {
-  border-color: rgba(226, 183, 100, .44);
-  background: rgba(86, 56, 23, .44);
-  color: #ffe08d;
-  font: 700 11.4px/1 var(--serif);
-}
-
-.council-decision-actions .plan-refine,
-.council-decision-actions .plan-dismiss {
-  font-size: 10.8px;
-}
-
-.council-decision-actions button:disabled {
-  cursor: default;
-  opacity: .55;
-}
-
 .chat-empty {
   display: grid;
   min-height: 100%;
@@ -6472,78 +6083,6 @@ textarea:focus-visible,
 
   .redesign-shell .turn-flow small {
     font-size: 10.4px;
-  }
-
-  .redesign-shell .council-decision-slot.active {
-    padding: 7px 14px 0;
-  }
-
-  .redesign-shell .council-decision-card {
-    grid-template-columns: minmax(0, 1fr) 138px;
-    grid-template-areas:
-      "head head"
-      "main actions"
-      "metrics actions";
-    gap: 5px;
-    padding: 8px;
-    border-color: rgba(215, 168, 87, .16);
-    background:
-      linear-gradient(135deg, rgba(241, 205, 116, .075), transparent 62%),
-      rgba(2, 8, 9, .72);
-  }
-
-  .redesign-shell .council-decision-card header {
-    grid-area: head;
-  }
-
-  .redesign-shell .council-decision-main {
-    grid-area: main;
-    grid-template-columns: 30px minmax(0, 1fr);
-    gap: 8px;
-  }
-
-  .redesign-shell .council-decision-icon {
-    width: 28px;
-    height: 28px;
-  }
-
-  .redesign-shell .council-decision-card h3 {
-    display: -webkit-box;
-    overflow: hidden;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    font-size: 13px;
-    line-height: 1.22;
-    white-space: normal;
-  }
-
-  .redesign-shell .council-decision-card p {
-    display: none;
-    font-size: 11.2px;
-  }
-
-  .redesign-shell .council-decision-card dl {
-    grid-area: metrics;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 3px;
-  }
-
-  .redesign-shell .council-decision-card dl div {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 4px 6px;
-  }
-
-  .redesign-shell .council-decision-actions button {
-    min-height: 24px;
-  }
-
-  .redesign-shell .council-decision-actions {
-    grid-area: actions;
-    grid-template-columns: 1fr;
-    gap: 4px;
   }
 
   .redesign-shell .chat-messages {
@@ -7754,93 +7293,6 @@ textarea:focus-visible,
     font-size: 10.3px;
   }
 
-  .minimal-shell .council-decision-slot.active {
-    padding: 6px 14px 0;
-  }
-
-  .minimal-shell .council-decision-slot.active:empty {
-    display: none;
-    padding: 0;
-  }
-
-  .minimal-shell .council-choice-board.has-plans {
-    gap: 5px;
-  }
-
-  .minimal-shell .council-next-steps {
-    gap: 4px;
-    max-height: 68px;
-    overflow: hidden;
-    padding: 0;
-    border-color: rgba(215, 168, 87, .075);
-    background: transparent;
-    opacity: .72;
-  }
-
-  .minimal-shell .council-next-steps header {
-    display: none;
-  }
-
-  .minimal-shell .council-next-step {
-    grid-template-columns: minmax(0, 1fr) 78px 104px;
-    min-height: 56px;
-    padding: 6px;
-    border-color: rgba(215, 168, 87, .08);
-    background: rgba(2, 7, 8, .24);
-  }
-
-  .minimal-shell .council-next-step h4 {
-    font-size: 12.4px;
-  }
-
-  .minimal-shell .council-next-step p {
-    display: none;
-  }
-
-  .minimal-shell .council-next-step dl div {
-    padding: 2px 4px;
-    border-color: rgba(215, 168, 87, .06);
-  }
-
-  .minimal-shell .council-next-step dt {
-    font-size: 10px;
-  }
-
-  .minimal-shell .council-next-step dd {
-    font-size: 10.8px;
-  }
-
-  .minimal-shell .council-next-actions {
-    gap: 3px;
-  }
-
-  .minimal-shell .council-next-actions button {
-    min-height: 24px;
-    padding-inline: 4px;
-    font-size: 10.4px;
-  }
-
-  .minimal-shell .council-decision-card {
-    grid-template-columns: minmax(0, 1fr) 126px;
-    gap: 5px 8px;
-    padding: 8px;
-    border-color: rgba(215, 168, 87, .12);
-    background: rgba(2, 8, 9, .52);
-  }
-
-  .minimal-shell .council-decision-card h3 {
-    font-size: 13.4px;
-  }
-
-  .minimal-shell .council-decision-card dl div {
-    border-color: rgba(215, 168, 87, .08);
-    background: rgba(2, 7, 8, .28);
-  }
-
-  .minimal-shell .council-decision-actions button {
-    min-height: 25px;
-  }
-
   .minimal-shell .chat-messages {
     min-height: 0;
     overflow-y: auto;
@@ -8656,23 +8108,6 @@ textarea:focus-visible,
     border-bottom-color: rgba(216, 166, 82, .08);
     color: rgba(203, 214, 188, .86);
     font-size: 13px;
-  }
-
-  .minimal-shell .council-decision-slot.active {
-    padding: 8px 16px 0;
-  }
-
-  .minimal-shell .council-decision-card {
-    border-color: rgba(216, 166, 82, .18);
-    border-radius: 7px;
-    background:
-      linear-gradient(90deg, rgba(242, 207, 120, .065), transparent 78%),
-      rgba(3, 12, 13, .72);
-  }
-
-  .minimal-shell .council-decision-card h3 {
-    color: #ffe193;
-    font-size: 14px;
   }
 
   .minimal-shell .chat-messages {
@@ -9577,22 +9012,68 @@ textarea:focus-visible,
 /* Economy readability: give the income column enough room so green values do not hug the frame. */
 @media (min-width: 901px) {
   .minimal-shell .empire-economy {
-    padding-right: 14px;
+    padding-right: 12px;
   }
 
   .minimal-shell .resource-list li {
-    grid-template-columns: minmax(66px, 1fr) max-content minmax(80px, max-content);
+    grid-template-columns: minmax(70px, 1fr) minmax(48px, max-content) minmax(68px, max-content);
     column-gap: 5px;
   }
 
   .minimal-shell .resource-list em {
-    box-sizing: border-box;
-    min-width: 80px;
+    min-width: 0;
     justify-self: end;
-    padding: 1px 9px 1px 6px;
-    border: 1px solid rgba(117, 219, 126, .14);
-    border-radius: 999px;
-    background: rgba(79, 185, 88, .055);
+    padding-right: 3px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     text-align: right;
+  }
+}
+
+/* Keep map intelligence readable after the command-first redesign. */
+@media (min-width: 901px) {
+  .minimal-shell .country-intel {
+    top: 116px;
+    left: 16px;
+    width: 300px;
+    max-height: calc(100% - 136px);
+    padding: 12px;
+    border-radius: 8px;
+  }
+
+  .minimal-shell .country-intel header {
+    grid-template-columns: 32px minmax(0, 1fr) 32px;
+    gap: 10px;
+    padding-bottom: 10px;
+  }
+
+  .minimal-shell .country-intel header .flag {
+    --flag-w: 28px;
+    --flag-h: 19px;
+  }
+
+  .minimal-shell .country-intel-close {
+    width: 32px;
+    height: 32px;
+  }
+
+  .minimal-shell .country-intel dl {
+    gap: 8px;
+    margin-block: 10px;
+  }
+
+  .minimal-shell .country-intel dl div,
+  .minimal-shell .country-intent {
+    border-radius: 4px;
+  }
+
+  .minimal-shell .country-intel-actions {
+    gap: 7px;
+  }
+
+  .minimal-shell .country-intel-action {
+    min-height: 34px;
+    font-size: 11.5px;
   }
 }
