@@ -44,7 +44,7 @@ import {
 } from 'lucide-react';
 import worldMapSvg from './assets/world-map.svg?raw';
 import { canPay, getLetterResponseOptions, getLetterRuntimeId, oncePerTurnQuickActions } from './game/engine';
-import { formatClock, formatResourceTrend, formatResourceValue } from './game/formatters';
+import { formatResourceTrend, formatResourceValue } from './game/formatters';
 import { playerCountry } from './game/initialState';
 import { buildMapSignals, filterMapSignalsForMode, type MapModeId, type MapSignal } from './game/mapIntel';
 import { gameReducer } from './game/reducer';
@@ -1792,7 +1792,6 @@ function App() {
   const [pendingQuickAction, setPendingQuickAction] = useState<QuickActionId | null>(null);
   const [pendingOperationPlanId, setPendingOperationPlanId] = useState<string | null>(null);
   const [turnReportOpen, setTurnReportOpen] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(18 * 3600 + 42 * 60 + 31);
   const [toast, setToast] = useState<ToastState | null>(null);
   const {
     resources,
@@ -1806,7 +1805,6 @@ function App() {
     worldTension,
     lastTurnReport,
     chatMessages,
-    quickActionTurns,
     turnNumber,
   } = gameState;
 
@@ -1826,7 +1824,6 @@ function App() {
   } | null>(null);
   const chatMessagesRef = useRef<HTMLDivElement | null>(null);
   const previousChatScrollRef = useRef<{ tab: ChatTabLabel; count: number } | null>(null);
-  const turnLockRef = useRef(false);
   const seenTurnReportRef = useRef(lastTurnReport?.turn ?? null);
   const pendingOperationPlan = useMemo(
     () => operationPlans.find((plan) => plan.id === pendingOperationPlanId) || null,
@@ -1921,14 +1918,6 @@ function App() {
     seenTurnReportRef.current = lastTurnReport.turn;
     setTurnReportOpen(true);
   }, [lastTurnReport]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setSecondsLeft((current) => Math.max(0, current - 1));
-    }, 1000);
-
-    return () => window.clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     return () => {
@@ -2316,17 +2305,6 @@ function App() {
     }
   };
 
-  const handleEndTurn = () => {
-    if (turnLockRef.current) return;
-    turnLockRef.current = true;
-    dispatchGame({ type: 'END_TURN' });
-    setSecondsLeft(18 * 3600 + 42 * 60 + 31);
-
-    window.setTimeout(() => {
-      turnLockRef.current = false;
-    }, 420);
-  };
-
   return (
     <>
       <div className={appClassName} data-routes={mapLayers.routes ? 'on' : 'off'}>
@@ -2348,15 +2326,10 @@ function App() {
         ) : null}
 
         <EmpirePanel
-          clock={formatClock(secondsLeft)}
           resources={resources}
           nations={nations}
           turnObjective={turnObjective}
           worldTension={worldTension}
-          quickActionTurns={quickActionTurns}
-          turnNumber={turnNumber}
-          onEndTurn={handleEndTurn}
-          onQuickAction={handleQuickAction}
         />
 
         <main className="main-area">
@@ -2983,25 +2956,15 @@ function TurnObjectiveCard({ objective }: { objective: TurnObjective }) {
 }
 
 function EmpirePanel({
-  clock,
   resources,
   nations,
   turnObjective,
   worldTension,
-  quickActionTurns,
-  turnNumber,
-  onEndTurn,
-  onQuickAction,
 }: {
-  clock: string;
   resources: ResourceState[];
   nations: NationProfile[];
   turnObjective: TurnObjective;
   worldTension: number;
-  quickActionTurns: Partial<Record<QuickActionId, number>>;
-  turnNumber: number;
-  onEndTurn: () => void;
-  onQuickAction: (id: QuickActionId) => void;
 }) {
   const russia = nations.find((nation) => nation.id === 'russia');
   const stability = russia?.stability ?? 72;
@@ -3066,19 +3029,6 @@ function EmpirePanel({
             </div>
           </div>
           <TurnObjectiveCard objective={turnObjective} />
-          <div className="turn-info">
-            <div>
-              <small>Текущий ход</small>
-              <strong>{turnNumber}</strong>
-            </div>
-            <div>
-              <small>До конца хода</small>
-              <strong id="turnClock">{clock}</strong>
-            </div>
-            <button className="end-turn-button" type="button" onClick={onEndTurn}>
-              Завершить ход
-            </button>
-          </div>
         </div>
       </section>
       <footer className="server-line">

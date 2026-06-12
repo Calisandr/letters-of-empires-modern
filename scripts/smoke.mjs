@@ -72,7 +72,6 @@ async function readLayoutDiagnostics() {
         return style.display !== 'none' && box.height > 0 && box.width > 0;
       }).length,
       mailBadge: document.querySelector('.primary-nav .pill')?.textContent?.trim() || '',
-      endTurnText: document.querySelector('.end-turn-button')?.textContent?.replace(/\s+/g, ' ').trim() || '',
     };
   });
 }
@@ -194,18 +193,6 @@ try {
     timelineTop: document.querySelector('.timeline-panel article h3')?.textContent?.replace(/\s+/g, ' ').trim() || '',
   }));
 
-  const beforeTurn = await page.locator('.turn-info strong').first().textContent();
-  await page.locator('.end-turn-button').click();
-  await page.waitForSelector('.turn-report');
-  const turnReport = await page.evaluate(() => ({
-    title: document.querySelector('.turn-report h2')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-    causeHeading: document.querySelector('.report-causality h3')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-    rows: document.querySelectorAll('.report-causality li').length,
-  }));
-  await page.locator('.turn-report .panel-heading button[aria-label]').click();
-  await page.waitForFunction(() => !document.querySelector('.turn-report'));
-  const afterTurn = await page.locator('.turn-info strong').first().textContent();
-
   const finalLayout = await readLayoutDiagnostics();
   await page.screenshot({ path: screenshotPath, fullPage: true });
 
@@ -229,7 +216,6 @@ try {
   assert(initialLayout.visibleRightPanels === 2, 'right rail should show only summary and mail');
   assert(initialLayout.timelineRows >= 2, 'world summary should still show events');
   assert(initialLayout.mailRows >= 2, 'mail summary should still show letters');
-  assert(initialLayout.endTurnText.includes('Завершить ход'), 'end turn action should remain');
   assert(mapModeTitle?.includes('Стратегическая карта'), 'map mode switch should work');
   assert(zoomTransform.includes('matrix') || zoomTransform.includes('1.12'), 'zoom should change map transform');
   assert(selectedCountry.selected === 'France', 'country click should select France');
@@ -250,10 +236,6 @@ try {
   assert(planDialog.buttons.includes('Утвердить приказ'), 'plan dossier should allow approving the order');
   assert(planDialog.visibleWidth > 640, 'plan dossier should open as a readable modal');
   assert(afterPlanApprove.toast.includes('Приказ') || afterPlanApprove.context.includes('Приказы'), 'approving a plan should update game state');
-  assert(/ход/i.test(turnReport.title), 'ending turn should open turn report');
-  assert(turnReport.causeHeading === 'Почему так вышло', 'turn report should explain causes');
-  assert(turnReport.rows >= 2, 'turn report should show cause/effect rows');
-  assert(Number(afterTurn) === Number(beforeTurn) + 1, 'end turn should advance turn number');
   assert(finalLayout.quickActionsVisible === false, 'quick actions should stay removed after interactions');
   assert(finalLayout.ordersPanelVisible === false, 'orders panel should stay removed after interactions');
   assert(finalLayout.diplomacyPanelVisible === false, 'diplomacy panel should stay removed after interactions');
@@ -269,9 +251,6 @@ try {
     councilDecision,
     planDialog,
     afterPlanApprove,
-    turnReport,
-    beforeTurn,
-    afterTurn,
     finalLayout,
     consoleErrors,
     failures,
