@@ -9016,7 +9016,7 @@ textarea:focus-visible,
   }
 
   .minimal-shell .resource-list li {
-    grid-template-columns: minmax(62px, 1fr) max-content max-content;
+    grid-template-columns: minmax(62px, 1fr) 50px 60px;
     column-gap: 4px;
   }
 
@@ -9028,12 +9028,22 @@ textarea:focus-visible,
 
   .minimal-shell .resource-list em {
     min-width: 0;
-    justify-self: end;
-    padding-right: 2px;
+    justify-self: stretch;
+    padding-right: 0;
     border: 0;
     border-radius: 0;
     background: transparent;
+    text-align: left;
+  }
+
+  .minimal-shell .resource-list b {
+    justify-self: end;
     text-align: right;
+  }
+
+  .minimal-shell .resource-list b,
+  .minimal-shell .resource-list em {
+    font-variant-numeric: tabular-nums;
   }
 }
 

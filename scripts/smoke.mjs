@@ -254,20 +254,28 @@ try {
     const panelBox = panel.getBoundingClientRect();
     const rows = [...panel.querySelectorAll('.resource-list li')].map((row) => {
       const label = row.querySelector('span');
+      const value = row.querySelector('b');
       const trend = row.querySelector('em');
+      const valueBox = value?.getBoundingClientRect();
       const trendBox = trend?.getBoundingClientRect();
 
       return {
         label: label?.textContent?.trim() || '',
         labelClipped: label ? label.scrollWidth > label.clientWidth + 1 : true,
         trendOverflow: trendBox ? trendBox.right > panelBox.right - 3 : true,
+        valueRight: valueBox?.right || 0,
+        trendLeft: trendBox?.left || 0,
       };
     });
+    const valueRights = rows.map((row) => row.valueRight).filter(Boolean);
+    const trendLefts = rows.map((row) => row.trendLeft).filter(Boolean);
 
     return {
       exists: true,
       clippedRows: rows.filter((row) => row.labelClipped).map((row) => row.label),
       overflowingRows: rows.filter((row) => row.trendOverflow).map((row) => row.label),
+      valueRightSpread: valueRights.length ? Math.max(...valueRights) - Math.min(...valueRights) : 999,
+      trendLeftSpread: trendLefts.length ? Math.max(...trendLefts) - Math.min(...trendLefts) : 999,
     };
   });
 
@@ -336,6 +344,8 @@ try {
   assert(economyLayout.exists, 'economy panel should exist');
   assert(economyLayout.clippedRows.length === 0, `economy labels should not be clipped: ${economyLayout.clippedRows.join(', ')}`);
   assert(economyLayout.overflowingRows.length === 0, `economy trends should stay inside the panel: ${economyLayout.overflowingRows.join(', ')}`);
+  assert(economyLayout.valueRightSpread <= 1, 'economy values should share the same right edge');
+  assert(economyLayout.trendLeftSpread <= 1, 'economy trends should start from the same column');
   assert(councilAfterCommand.decisionCardCount === 0, 'council command should not render inline decision cards');
   assert(councilAfterCommand.decisionSlotCount === 0, 'chat should not reserve an inline decision slot');
   assert(councilAfterCommand.overflowY === 'auto' || councilAfterCommand.overflowY === 'scroll', 'council chat should stay scrollable');
