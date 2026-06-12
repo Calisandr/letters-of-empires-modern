@@ -9573,3 +9573,16 @@ textarea:focus-visible,
   flex: 0 0 auto;
   background-size: cover;
 }
+
+/* Economy readability: give the income column enough room so green values do not hug the frame. */
+@media (min-width: 901px) {
+  .minimal-shell .resource-list li {
+    grid-template-columns: minmax(54px, 1fr) 50px 76px;
+    column-gap: 4px;
+  }
+
+  .minimal-shell .resource-list em {
+    padding-right: 6px;
+    text-align: right;
+  }
+}
