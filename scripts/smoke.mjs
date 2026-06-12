@@ -1,8 +1,39 @@
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
+import { createServer, preview } from 'vite';
 
-const baseUrl = process.env.SMOKE_URL || 'http://127.0.0.1:5173/';
 const screenshotPath = 'tmp/playwright/modern-dashboard.png';
+let server = null;
+const usePreviewServer = process.argv.includes('--preview');
+let baseUrl = usePreviewServer ? '' : process.env.SMOKE_URL || '';
+
+if (!baseUrl) {
+  server = usePreviewServer
+    ? await preview({
+        logLevel: 'error',
+        preview: {
+          host: '127.0.0.1',
+          port: 0,
+        },
+      })
+    : await createServer({
+        logLevel: 'error',
+        server: {
+          host: '127.0.0.1',
+          port: 0,
+        },
+      });
+
+  if ('listen' in server && typeof server.listen === 'function') {
+    await server.listen();
+  }
+
+  baseUrl = server.resolvedUrls?.local[0] || '';
+}
+
+if (!baseUrl) {
+  throw new Error('Smoke test could not resolve an application URL');
+}
 
 await mkdir('tmp/playwright', { recursive: true });
 
@@ -13,6 +44,22 @@ const page = await browser.newPage({
 });
 const consoleErrors = [];
 const failures = [];
+
+async function closeServer(serverToClose) {
+  if (!serverToClose) return;
+  if ('close' in serverToClose && typeof serverToClose.close === 'function') {
+    await serverToClose.close();
+    return;
+  }
+  if (serverToClose.httpServer?.close) {
+    await new Promise((resolve, reject) => {
+      serverToClose.httpServer.close((error) => {
+        if (error) reject(error);
+        else resolve();
+      });
+    });
+  }
+}
 
 function assert(condition, message) {
   if (!condition) failures.push(message);
@@ -264,4 +311,5 @@ try {
   }
 } finally {
   await browser.close();
+  await closeServer(server);
 }

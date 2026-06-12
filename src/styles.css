@@ -6760,12 +6760,12 @@ textarea:focus-visible,
 
 @media (min-width: 901px) {
   .redesign-shell {
-    grid-template-columns: 260px minmax(740px, 1fr) 340px;
-    min-width: 1120px;
+    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) minmax(260px, 340px);
+    min-width: 0;
   }
 
   .redesign-shell .topbar {
-    grid-template-columns: 260px minmax(420px, 1fr) auto;
+    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) auto;
   }
 
   .redesign-shell .brand {
@@ -6980,9 +6980,9 @@ textarea:focus-visible,
     --panel-bg-strong: rgba(5, 13, 14, .92);
     --panel-line: rgba(215, 168, 87, .11);
     --panel-line-soft: rgba(215, 168, 87, .065);
-    grid-template-columns: 252px minmax(860px, 1fr) 264px;
+    grid-template-columns: minmax(220px, 252px) minmax(0, 1fr) minmax(240px, 264px);
     grid-template-rows: 58px minmax(0, 1fr);
-    min-width: 1120px;
+    min-width: 0;
   }
 
   .minimal-shell::before {
@@ -6996,7 +6996,7 @@ textarea:focus-visible,
   }
 
   .minimal-shell .topbar {
-    grid-template-columns: 252px minmax(420px, 1fr) auto;
+    grid-template-columns: minmax(220px, 252px) minmax(0, 1fr) auto;
     height: 58px;
     border-bottom-color: rgba(215, 168, 87, .11);
     box-shadow: 0 14px 34px rgba(0, 0, 0, .28);
@@ -7869,7 +7869,7 @@ textarea:focus-visible,
 
   .minimal-shell .topbar {
     height: 64px;
-    grid-template-columns: 252px minmax(420px, 1fr) auto;
+    grid-template-columns: minmax(220px, 252px) minmax(0, 1fr) auto;
     border-bottom-color: rgba(216, 166, 82, .18);
     background:
       linear-gradient(180deg, rgba(8, 17, 19, .98), rgba(3, 8, 9, .97)),
@@ -8779,7 +8779,7 @@ textarea:focus-visible,
   }
 
   .minimal-shell .main-area {
-    grid-template-rows: minmax(520px, 1fr) 268px;
+    grid-template-rows: minmax(400px, 1fr) minmax(220px, 268px);
     gap: 12px;
     padding: 12px 10px;
   }
@@ -9112,6 +9112,13 @@ textarea:focus-visible,
   .minimal-shell .route-toggle span {
     position: relative;
     padding-left: 34px;
+  }
+
+  .minimal-shell .route-toggle:focus-within {
+    border-color: rgba(241, 205, 116, .56);
+    box-shadow:
+      0 0 0 2px rgba(241, 205, 116, .12),
+      0 0 22px rgba(241, 205, 116, .12);
   }
 
   .minimal-shell .route-toggle span::before,

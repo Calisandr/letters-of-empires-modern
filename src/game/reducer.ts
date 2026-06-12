@@ -56,25 +56,9 @@ function planKindFromOrder(order: OrderDraft): OperationPlanKind {
   return 'stability';
 }
 
-function fallbackRelationForSelectedStatus(status: string) {
-  if (status === 'russia') return 200;
-  if (status === 'ally') return 115;
-  if (status === 'friendly') return 64;
-  if (status === 'neutral') return 0;
-  if (status === 'risk') return -34;
-  if (status === 'hostile') return -78;
-  return -6;
-}
-
-function diplomacyDeltaForCouncilOrder(state: GameState, delta: Record<string, number> = {}) {
+function diplomacyDeltaForCouncilOrder(delta: Record<string, number> = {}) {
   return Object.fromEntries(
-    Object.entries(delta).map(([countryName, change]) => {
-      const known = state.diplomacy.some((relation) => relation.name === countryName);
-      const selected = state.selectedCountry?.name === countryName ? state.selectedCountry : null;
-      const base = !known && selected ? fallbackRelationForSelectedStatus(selected.status) : 0;
-
-      return [countryName, base + change];
-    }),
+    Object.entries(delta).map(([countryName, change]) => [countryName, change]),
   );
 }
 
@@ -137,7 +121,7 @@ function effectToCouncilProposal(state: GameState, effect: EngineEffect, sourceT
 
   if (effect.kind === 'diplomacy-delta') {
     const target = Object.keys(effect.diplomacyDelta || {})[0] || state.selectedCountry?.name || 'Франция';
-    const diplomacyDelta = diplomacyDeltaForCouncilOrder(state, effect.diplomacyDelta);
+    const diplomacyDelta = diplomacyDeltaForCouncilOrder(effect.diplomacyDelta);
 
     return orderToCouncilProposal(
       state,

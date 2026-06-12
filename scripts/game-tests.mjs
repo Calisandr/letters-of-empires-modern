@@ -210,6 +210,25 @@ try {
     assert.equal(reopened[0].time, 'только что');
   });
 
+  test('duplicate incoming letter reopens old item even below the first row', () => {
+    const answeredLetter = {
+      ...initialGameState.letters[1],
+      status: 'answered',
+      answeredBy: 'Старый ответ',
+      time: 'решено',
+    };
+    const letters = [initialGameState.letters[0], answeredLetter, ...initialGameState.letters.slice(2)];
+    const reopened = pushLetter(letters, {
+      ...initialGameState.letters[1],
+      time: 'только что',
+    });
+
+    assert.equal(reopened.filter((letter) => letter.from === answeredLetter.from && letter.subject === answeredLetter.subject).length, 1);
+    assert.equal(reopened[0].from, answeredLetter.from);
+    assert.equal(reopened[0].status, 'open');
+    assert.equal(reopened[0].answeredBy, undefined);
+  });
+
   test('diplomatic council command prepares and resolves a safe relation order', () => {
     const selected = gameReducer(clone(initialGameState), {
       type: 'SELECT_COUNTRY',
@@ -230,6 +249,23 @@ try {
     assert.equal(approved.orders.length, selected.orders.length + 1);
     assert.ok(resolved.diplomacy.find((relation) => relation.name === 'Франция').score > selected.diplomacy.find((relation) => relation.name === 'Франция').score);
     assert.ok(resolved.letters.some((letter) => letter.from === 'Франция'));
+  });
+
+  test('new target council diplomacy stores only a delta, not base relation', () => {
+    const selected = gameReducer(clone(initialGameState), {
+      type: 'SELECT_COUNTRY',
+      country: { key: 'Brazil', name: 'Бразилия', status: 'friendly' },
+    });
+    const next = gameReducer(selected, {
+      type: 'SUBMIT_COUNCIL_MESSAGE',
+      text: 'Улучшить отношения и начать переговоры с выбранной страной',
+      time: '13:12',
+    });
+    const plan = next.operationPlans[0];
+    const delta = plan.diplomacyDelta?.['Бразилия'];
+
+    assert.ok(delta);
+    assert.ok(delta > 0 && delta <= 10);
   });
 
   test('country intel envoy creates diplomacy for a new map country', () => {
@@ -355,6 +391,20 @@ try {
     assert.equal(order.target, 'Бразилия');
     assert.equal(order.iconKey, 'anchor');
     assert.ok(next.diplomacy.some((item) => item.name === 'Бразилия'));
+  });
+
+  test('failed country intel trade mission does not create target diplomacy or dossier', () => {
+    const country = { key: 'Brazil', name: 'Бразилия', status: 'friendly' };
+    const drained = {
+      ...clone(initialGameState),
+      resources: initialGameState.resources.map((resource) => ({ ...resource, value: 0 })),
+    };
+    const next = gameReducer(drained, { type: 'RUN_COUNTRY_INTEL_ACTION', id: 'trade-mission', country });
+
+    assert.equal(next.lastNotice.kind, 'error');
+    assert.equal(next.orders.length, drained.orders.length);
+    assert.equal(next.diplomacy.some((item) => item.name === 'Бразилия'), false);
+    assert.equal(next.nations.some((item) => item.name === 'Бразилия'), false);
   });
 
   test('map intel highlights trade and strategy targets from game state', () => {
@@ -485,6 +535,8 @@ try {
 
     assert.equal(next.lastNotice.kind, 'error');
     assert.equal(next.lastTurnReport.strategicResponses.find((item) => item.id === response.id).used, undefined);
+    assert.deepEqual(next.diplomacy, drained.diplomacy);
+    assert.deepEqual(next.nations, drained.nations);
   });
 
   test('completed orders can change nation dossier pressure and threat', () => {
@@ -708,6 +760,81 @@ try {
       if (previousWindow === undefined) {
         delete globalThis.window;
       } else {
+        globalThis.window = previousWindow;
+      }
+    }
+  });
+
+  test('loadGameState ignores null objects inside saved arrays', () => {
+    const previousWindow = globalThis.window;
+    const saved = JSON.stringify({
+      ...initialGameState,
+      resources: [null],
+      letters: [null, initialGameState.letters[0]],
+      diplomacy: [null, initialGameState.diplomacy[0]],
+      nations: [null, initialGameState.nations[0]],
+      chatMessages: [null, initialGameState.chatMessages[0]],
+    });
+
+    globalThis.window = {
+      localStorage: {
+        getItem: () => saved,
+        setItem: () => undefined,
+        removeItem: () => undefined,
+      },
+    };
+
+    try {
+      const loaded = loadGameState();
+
+      assert.equal(loaded.resources.length, initialGameState.resources.length);
+      const costlyOrder = createStrategicOrder(loaded, {
+        iconKey: 'landmark',
+        title: 'Impossible order',
+        owner: 'Council',
+        target: 'Moscow',
+        remainingTurns: 1,
+        totalTurns: 1,
+        cost: { gold: Number.MAX_SAFE_INTEGER },
+        completeText: 'Should not complete.',
+      });
+      assert.equal(costlyOrder.orders.length, loaded.orders.length);
+      assert.equal(costlyOrder.lastNotice.kind, 'error');
+      assert.equal(loaded.letters.length, 1);
+      assert.equal(loaded.letters[0].from, initialGameState.letters[0].from);
+      assert.equal(loaded.diplomacy.length, 1);
+      assert.equal(loaded.nations.length, 1);
+      assert.equal(loaded.chatMessages.length, 1);
+      assert.equal(loaded.chatMessages[0].channel, initialGameState.chatMessages[0].channel);
+    } finally {
+      if (previousWindow === undefined) {
+        delete globalThis.window;
+      } else {
+        globalThis.window = previousWindow;
+      }
+    }
+  });
+
+  test('loadGameState falls back when localStorage access is blocked', () => {
+    const previousWindow = globalThis.window;
+
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: Object.create(null, {
+        localStorage: {
+          get() {
+            throw new Error('blocked');
+          },
+        },
+      }),
+    });
+
+    try {
+      const loaded = loadGameState();
+      assert.equal(loaded, initialGameState);
+    } finally {
+      delete globalThis.window;
+      if (previousWindow !== undefined) {
         globalThis.window = previousWindow;
       }
     }

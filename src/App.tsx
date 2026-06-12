@@ -198,11 +198,11 @@ const countryNames: Record<string, string> = {
   Venezuela: 'Венесуэла',
   Tanzania: 'Танзания',
   'W. Sahara': 'Западная Сахара',
+  Cyprus: 'Кипр',
+  'N. Cyprus': 'Северный Кипр',
+  Somalia: 'Сомали',
+  Somaliland: 'Сомалиленд',
 };
-
-const countryKeyByLocalizedName = Object.fromEntries(
-  Object.entries(countryNames).map(([key, name]) => [name, key]),
-) as Record<string, string>;
 
 const countryFlagCodes: Record<string, string> = {
   Afghanistan: 'AF',
@@ -398,6 +398,57 @@ const codeByFlagClass = Object.fromEntries(
   Object.entries(flagClassByCode).map(([code, className]) => [className, code]),
 ) as Record<string, string>;
 
+const countryKeyByFlagAlias: Record<string, string> = {
+  argentina: 'Argentina',
+  brazil: 'Brazil',
+  germany: 'Germany',
+  france: 'France',
+  india: 'India',
+  japan: 'Japan',
+  russia: 'Russia',
+  spain: 'Spain',
+  turkey: 'Turkey',
+  uk: 'United Kingdom',
+  ukraine: 'Ukraine',
+  china: 'China',
+};
+
+function createRussianRegionNames() {
+  try {
+    return typeof Intl.DisplayNames === 'function'
+      ? new Intl.DisplayNames(['ru'], { type: 'region' })
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+const russianRegionNames = createRussianRegionNames();
+
+function getRussianRegionName(code: string) {
+  try {
+    return russianRegionNames?.of(code) || '';
+  } catch {
+    return '';
+  }
+}
+
+const countryDisplayNames: Record<string, string> = {
+  ...Object.fromEntries(
+    Object.entries(countryFlagCodes).map(([key, code]) => [key, getRussianRegionName(code) || key]),
+  ),
+  ...countryNames,
+};
+
+function getCountryDisplayName(countryKey: string) {
+  return countryDisplayNames[countryKey] || countryKey;
+}
+
+const countryKeyByLocalizedName = Object.fromEntries([
+  ...Object.entries(countryDisplayNames).map(([key, name]) => [name, key]),
+  ...Object.keys(countryFlagCodes).map((key) => [key, key]),
+]) as Record<string, string>;
+
 const quickActions: Array<{
   id: QuickActionId;
   label: string;
@@ -484,7 +535,7 @@ function renderWorldMapSvg(selectedCountryKey?: string | null) {
     /<path class="country([^"]*)" data-name="([^"]+)" data-status="([^"]+)"/g,
     (_match, classNames: string, countryKey: string, status: string) => {
       const selectedClass = selectedCountryKey && countryKey === selectedCountryKey ? ' selected' : '';
-      const label = escapeHtmlAttribute(`Выбрать страну: ${countryNames[countryKey] || countryKey}`);
+      const label = escapeHtmlAttribute(`Выбрать страну: ${getCountryDisplayName(countryKey)}`);
 
       return `<path class="country${classNames}${selectedClass}" data-name="${countryKey}" data-status="${status}" role="button" tabindex="0" aria-label="${label}"`;
     },
@@ -670,8 +721,9 @@ function clampStat(value: number) {
 }
 
 function getCountryFlagView(countryKey?: string, countryName?: string, fallbackFlag?: string) {
+  const normalizedFallbackKey = fallbackFlag ? countryKeyByFlagAlias[fallbackFlag] || fallbackFlag : '';
   const legacyCode = fallbackFlag ? codeByFlagClass[fallbackFlag] : undefined;
-  const fallbackCode = fallbackFlag ? countryFlagCodes[fallbackFlag] : undefined;
+  const fallbackCode = normalizedFallbackKey ? countryFlagCodes[normalizedFallbackKey] : undefined;
   const code = countryFlagCodes[countryKey || ''] || countryFlagCodes[countryName || ''] || fallbackCode || legacyCode;
   if (code) return { className: `flag-svg fi fi-${code.toLowerCase()}`, code };
   if (fallbackFlag && fallbackFlag !== 'neutral') return { className: fallbackFlag, code: '' };
@@ -867,7 +919,10 @@ function getCountryIntel(
     relation,
     flag,
     visibility: relationVisibility(relation, selected.status),
-    statusLabel: statusText[selected.status] || statusText.common,
+    statusLabel:
+      selected.status === 'russia'
+        ? statusText.russia
+        : diplomaticRelation?.status || statusText[diplomaticRelation?.tone || selected.status] || statusText.common,
     relatedEvent,
     isDetailed: Boolean(detailedNation),
   };
@@ -1783,7 +1838,6 @@ function App() {
   const [activeMapMenu, setActiveMapMenu] = useState<'layers' | 'mode' | null>(null);
   const [mapModeIndex, setMapModeIndex] = useState(0);
   const [countryAnchors, setCountryAnchors] = useState<Record<string, CountryAnchor>>({});
-  const [closedIntelKey, setClosedIntelKey] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [chatInput, setChatInput] = useState('');
   const [activeChatTab, setActiveChatTab] = useState<ChatTabLabel>('Совет');
@@ -1897,8 +1951,6 @@ function App() {
     [diplomacy, gameState.selectedCountry, letters, nations, operationPlans, orders, worldTension],
   );
 
-  const activeIntelKey = gameState.selectedCountry?.key || 'Russia';
-
   useEffect(() => {
     saveGameState(gameState);
   }, [gameState]);
@@ -1968,8 +2020,6 @@ function App() {
   };
 
   const toggleMapLayer = (id: MapLayerId) => {
-    if (id === 'intel') setClosedIntelKey(null);
-
     setMapLayers((current) => {
       const next = { ...current, [id]: !current[id] };
       showToast(`${mapLayerOptions.find((item) => item.id === id)?.label}: ${next[id] ? 'показано' : 'скрыто'}`);
@@ -2002,16 +2052,17 @@ function App() {
     const sourceName = country.dataset.name || '';
     const status = country.dataset.status || 'common';
     const signal = mapSignalByKey.get(sourceName);
-    const tooltipKey = `${sourceName}:${signal?.shortStatus || status}:${signal?.severity || 0}`;
+    const liveStatus = signal?.status || status;
+    const tooltipKey = `${sourceName}:${signal?.shortStatus || liveStatus}:${signal?.severity || 0}`;
 
     if (activeTooltipCountryRef.current !== tooltipKey) {
       const title = tooltipNode.querySelector('strong');
       const subtitle = tooltipNode.querySelector('small');
 
-      if (title) title.textContent = countryNames[sourceName] || sourceName;
+      if (title) title.textContent = getCountryDisplayName(sourceName);
       if (subtitle) subtitle.textContent = signal
-        ? `${statusText[status] || statusText.common} · ${signal.shortStatus}`
-        : statusText[status] || statusText.common;
+        ? `${statusText[liveStatus] || statusText.common} · ${signal.shortStatus}`
+        : statusText[liveStatus] || statusText.common;
 
       activeTooltipCountryRef.current = tooltipKey;
     }
@@ -2072,11 +2123,11 @@ function App() {
 
   const selectCountry = useCallback((country: SVGElement) => {
     const sourceName = country.dataset.name || '';
-    const name = countryNames[sourceName] || sourceName;
-    const status = country.dataset.status || 'common';
+    const name = getCountryDisplayName(sourceName);
+    const signal = mapSignalByKey.get(sourceName);
+    const status = signal?.status || country.dataset.status || 'common';
 
     applySelectedCountryClass(sourceName);
-    setClosedIntelKey(null);
     setActiveMapMenu(null);
 
     dispatchGame({
@@ -2089,11 +2140,10 @@ function App() {
     });
 
     window.requestAnimationFrame(() => applySelectedCountryClass(sourceName));
-  }, [applySelectedCountryClass]);
+  }, [applySelectedCountryClass, mapSignalByKey]);
 
   const closeCountryIntel = useCallback(() => {
     applySelectedCountryClass('');
-    setClosedIntelKey(null);
     dispatchGame({ type: 'CLEAR_SELECTED_COUNTRY' });
   }, [applySelectedCountryClass]);
 
@@ -2108,6 +2158,7 @@ function App() {
       if (!country) return;
 
       event.preventDefault();
+      event.stopPropagation();
       selectCountry(country);
     };
 
@@ -2131,7 +2182,7 @@ function App() {
 
     countries.forEach((country) => {
       const sourceName = country.dataset.name || '';
-      const name = countryNames[sourceName] || sourceName;
+      const name = getCountryDisplayName(sourceName);
       country.setAttribute('role', 'button');
       country.setAttribute('tabindex', '0');
       country.setAttribute('aria-label', `Выбрать страну: ${name}`);
@@ -2216,6 +2267,7 @@ function App() {
     if (!country) return;
 
     event.preventDefault();
+    event.stopPropagation();
     selectCountry(country);
   };
 
@@ -2399,7 +2451,7 @@ function App() {
                   onSelectCountry={selectCountryByKey}
                 />
               </WorldMapLayer>
-              {mapLayers.intel && gameState.selectedCountry && closedIntelKey !== activeIntelKey ? (
+              {mapLayers.intel && gameState.selectedCountry ? (
                 <CountryIntelPanel
                   selectedCountry={gameState.selectedCountry}
                   nations={nations}
@@ -2983,7 +3035,7 @@ function EmpirePanel({
         <div className="empire-identity">
           <h1>{playerCountry.name}</h1>
           <div className="state-flag" aria-label={`Флаг страны: ${playerCountry.name}`}>
-            <span className={`flag ${playerCountry.flag}`} />
+            <CountryFlagMark countryKey="Russia" countryName={playerCountry.name} fallbackFlag={playerCountry.flag} />
           </div>
           <div className="ruler-block">
             <span className="avatar-slot ruler-avatar" aria-hidden="true" />
@@ -3444,19 +3496,24 @@ function ChatPanel({
     >
       <div className="chat-tabs" role="tablist" aria-label="Каналы чата">
         <b>{config.title}</b>
-        {chatTabs.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tab}
-            aria-controls="chatMessages"
-            className={activeTab === tab ? 'active' : ''}
-            onClick={() => onTabChange(tab)}
-          >
-            {tab}
-          </button>
-        ))}
+        {chatTabs.map((tab) => {
+          const tabId = `chatTab-${chatChannelByTab[tab]}`;
+
+          return (
+            <button
+              id={tabId}
+              key={tab}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab}
+              aria-controls="chatMessages"
+              className={activeTab === tab ? 'active' : ''}
+              onClick={() => onTabChange(tab)}
+            >
+              {tab}
+            </button>
+          );
+        })}
       </div>
       <div className="chat-context" aria-label={config.aria}>
         {config.context.map((item) => (
@@ -3480,12 +3537,18 @@ function ChatPanel({
           />
         ) : null}
       </div>
-      <div id="chatMessages" className="chat-messages" ref={messagesRef}>
+      <div
+        id="chatMessages"
+        className="chat-messages"
+        role="tabpanel"
+        aria-labelledby={`chatTab-${activeChannel}`}
+        ref={messagesRef}
+      >
         {messages.length ? (
           messages.map((message) => (
             <p key={message.id}>
               <time>{message.time}</time>
-              <span className={`flag ${message.flag}`} />
+              <CountryFlagMark countryKey={countryKeyByLocalizedName[message.faction]} countryName={message.faction} fallbackFlag={message.flag} />
               <b>{message.faction}:</b>
               <span className="chat-text">{message.text}</span>
             </p>
@@ -4135,7 +4198,7 @@ function ChronicleDialog({ entry, onClose }: { entry: ChronicleEntry; onClose: (
         aria-describedby="chronicleDialogBody"
       >
         <header className="dialog-heading">
-          {entry.flag ? <span className={`flag ${entry.flag}`} /> : <span className={`event-icon ${entry.tone}`}>{entry.icon || '•'}</span>}
+          {entry.flag ? <CountryFlagMark countryName={entry.actor} fallbackFlag={entry.flag} /> : <span className={`event-icon ${entry.tone}`}>{entry.icon || '•'}</span>}
           <div>
             <small>{entry.kind === 'world' ? 'Событие мира' : 'Запись хроники'}</small>
             <h2 id="chronicleDialogTitle">{entry.title}</h2>
@@ -4218,12 +4281,66 @@ function ChronicleArchiveDialog({ entries, onOpenEntry, onClose }: { entries: Ch
         <div className="chronicle-archive-list">
           {entries.map((entry) => (
             <button key={entry.id} type="button" className={`chronicle-archive-row ${entry.tone}`} onClick={() => onOpenEntry(entry.id)}>
-              {entry.flag ? <span className={`flag ${entry.flag}`} /> : <span className={`event-icon ${entry.tone}`}>{entry.icon || '•'}</span>}
+              {entry.flag ? <CountryFlagMark countryName={entry.actor} fallbackFlag={entry.flag} /> : <span className={`event-icon ${entry.tone}`}>{entry.icon || '•'}</span>}
               <div>
                 <b>{entry.title}</b>
                 <p>{entry.text}</p>
               </div>
               <time>{entry.time}</time>
+            </button>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MailArchiveDialog({ entries, onOpenEntry, onClose }: { entries: LetterEntry[]; onOpenEntry: (id: string) => void; onClose: () => void }) {
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    closeRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section className="chronicle-archive-dialog mail-archive-dialog framed-panel" role="dialog" aria-modal="true" aria-labelledby="mailArchiveTitle">
+        <header className="dialog-heading">
+          <span className="event-icon bronze">✉</span>
+          <div>
+            <small>Канцелярия</small>
+            <h2 id="mailArchiveTitle">Все письма</h2>
+            <p>{entries.length} последних донесений</p>
+          </div>
+          <em>архив</em>
+          <button ref={closeRef} type="button" className="dialog-close" aria-label="Закрыть архив писем" onClick={onClose}>
+            <X aria-hidden="true" />
+          </button>
+        </header>
+        <div className="chronicle-archive-list">
+          {entries.map(({ letter, id }) => (
+            <button key={id} type="button" className={`chronicle-archive-row ${letter.tone}`} onClick={() => onOpenEntry(id)}>
+              <CountryFlagMark countryKey={countryKeyByLocalizedName[letter.from]} countryName={letter.from} fallbackFlag={countryKeyByLocalizedName[letter.from]} />
+              <div>
+                <b>{letter.from}</b>
+                <p>{letter.subject}</p>
+              </div>
+              <time>{letter.status === 'answered' ? 'решено' : letter.time}</time>
             </button>
           ))}
         </div>
@@ -4453,6 +4570,7 @@ function RightPanel({
   const [openChronicleId, setOpenChronicleId] = useState<string | null>(null);
   const [isChronicleArchiveOpen, setIsChronicleArchiveOpen] = useState(false);
   const [openLetterId, setOpenLetterId] = useState<string | null>(null);
+  const [isMailArchiveOpen, setIsMailArchiveOpen] = useState(false);
   const [openDiplomacyName, setOpenDiplomacyName] = useState<string | null>(null);
   const chronicleEntries = useMemo<ChronicleEntry[]>(() => {
     const entries: ChronicleEntry[] = [];
@@ -4541,7 +4659,7 @@ function RightPanel({
                 aria-expanded={openChronicleId === entry.id}
                 onClick={() => setOpenChronicleId(entry.id)}
               >
-                {entry.flag ? <span className={`flag ${entry.flag}`} /> : <span className={`event-icon ${entry.tone}`}>{entry.icon}</span>}
+                {entry.flag ? <CountryFlagMark countryName={entry.actor} fallbackFlag={entry.flag} /> : <span className={`event-icon ${entry.tone}`}>{entry.icon}</span>}
                 <div>
                   {entry.kind === 'world' ? <span className="timeline-kind">Главное событие</span> : null}
                   <h3>{entry.title}</h3>
@@ -4591,7 +4709,7 @@ function RightPanel({
             );
           })}
         </div>
-        <button className="show-all" type="button" onClick={() => showToast('Показать все письма')}>
+        <button className="show-all" type="button" aria-haspopup="dialog" onClick={() => setIsMailArchiveOpen(true)}>
           Показать все письма
         </button>
       </section>
@@ -4653,6 +4771,16 @@ function RightPanel({
         responses={openLetterResponses}
         onRespond={onRespondLetter}
         onClose={() => setOpenLetterId(null)}
+      />
+    ) : null}
+    {isMailArchiveOpen ? (
+      <MailArchiveDialog
+        entries={letterEntries}
+        onOpenEntry={(id) => {
+          setIsMailArchiveOpen(false);
+          setOpenLetterId(id);
+        }}
+        onClose={() => setIsMailArchiveOpen(false)}
       />
     ) : null}
     {openDiplomacyItem ? (

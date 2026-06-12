@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "typecheck": "tsc -b",
     "test": "node scripts/game-tests.mjs",
     "build": "tsc -b && vite build",
     "smoke": "node scripts/smoke.mjs",
+    "smoke:preview": "node scripts/smoke.mjs --preview",
+    "check": "npm run typecheck && npm test && npm run build && npm run smoke:preview",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {

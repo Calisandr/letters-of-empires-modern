@@ -1,14 +1,37 @@
 import { GAME_STATE_VERSION, initialGameState } from './initialState';
-import type { ChatChannel, ChatMessage, GameState } from './types';
+import type {
+  ChatChannel,
+  ChatMessage,
+  DiplomacyRelation,
+  GameState,
+  Letter,
+  NationProfile,
+  OperationPlan,
+  Order,
+  ResourceState,
+  TimelineEvent,
+  WorldEvent,
+} from './types';
 
 const SAVE_KEY = 'letters-of-empires:game:v1';
 
-function isStorageAvailable() {
-  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+function getLocalStorage(): Storage | null {
+  try {
+    if (typeof window === 'undefined') return null;
+    return window.localStorage || null;
+  } catch {
+    return null;
+  }
 }
 
-function arrayOrDefault<T>(value: unknown, fallback: T[]): T[] {
-  return Array.isArray(value) ? (value as T[]) : fallback;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function recordArrayOrDefault<T extends object>(value: unknown, fallback: T[]): T[] {
+  if (!Array.isArray(value)) return fallback;
+  const records = value.filter(isRecord) as T[];
+  return records.length === 0 && value.length > 0 && fallback.length > 0 ? fallback : records;
 }
 
 function objectOrDefault<T extends object>(value: unknown, fallback: T): T {
@@ -41,7 +64,7 @@ function inferChatChannel(message: Partial<ChatMessage>): ChatChannel {
 }
 
 function normalizeChatMessages(value: unknown) {
-  return arrayOrDefault<Partial<ChatMessage>>(value, initialGameState.chatMessages).map((message, index) => ({
+  return recordArrayOrDefault<Partial<ChatMessage>>(value, initialGameState.chatMessages).map((message, index) => ({
     id: stringOrDefault(message.id, `chat-repaired-${index}`),
     channel: inferChatChannel(message),
     time: stringOrDefault(message.time, '--:--'),
@@ -56,10 +79,11 @@ function normalizeChatMessages(value: unknown) {
 }
 
 export function loadGameState(): GameState {
-  if (!isStorageAvailable()) return initialGameState;
+  const storage = getLocalStorage();
+  if (!storage) return initialGameState;
 
   try {
-    const raw = window.localStorage.getItem(SAVE_KEY);
+    const raw = storage.getItem(SAVE_KEY);
     if (!raw) return initialGameState;
 
     const parsed = JSON.parse(raw) as Partial<GameState>;
@@ -68,14 +92,14 @@ export function loadGameState(): GameState {
     return {
       ...initialGameState,
       ...parsed,
-      resources: arrayOrDefault(parsed.resources, initialGameState.resources),
-      orders: arrayOrDefault(parsed.orders, initialGameState.orders),
-      operationPlans: arrayOrDefault(parsed.operationPlans, initialGameState.operationPlans),
-      timelineEvents: arrayOrDefault(parsed.timelineEvents, initialGameState.timelineEvents),
-      letters: arrayOrDefault(parsed.letters, initialGameState.letters),
-      diplomacy: arrayOrDefault(parsed.diplomacy, initialGameState.diplomacy),
-      nations: arrayOrDefault(parsed.nations, initialGameState.nations),
-      worldEvents: arrayOrDefault(parsed.worldEvents, initialGameState.worldEvents),
+      resources: recordArrayOrDefault<ResourceState>(parsed.resources, initialGameState.resources),
+      orders: recordArrayOrDefault<Order>(parsed.orders, initialGameState.orders),
+      operationPlans: recordArrayOrDefault<OperationPlan>(parsed.operationPlans, initialGameState.operationPlans),
+      timelineEvents: recordArrayOrDefault<TimelineEvent>(parsed.timelineEvents, initialGameState.timelineEvents),
+      letters: recordArrayOrDefault<Letter>(parsed.letters, initialGameState.letters),
+      diplomacy: recordArrayOrDefault<DiplomacyRelation>(parsed.diplomacy, initialGameState.diplomacy),
+      nations: recordArrayOrDefault<NationProfile>(parsed.nations, initialGameState.nations),
+      worldEvents: recordArrayOrDefault<WorldEvent>(parsed.worldEvents, initialGameState.worldEvents),
       chatMessages: normalizeChatMessages(parsed.chatMessages),
       quickActionTurns: objectOrDefault(parsed.quickActionTurns, initialGameState.quickActionTurns),
       selectedCountry: nullableObjectOrDefault(parsed.selectedCountry, initialGameState.selectedCountry),
@@ -92,7 +116,8 @@ export function loadGameState(): GameState {
 }
 
 export function saveGameState(state: GameState) {
-  if (!isStorageAvailable()) return;
+  const storage = getLocalStorage();
+  if (!storage) return;
 
   try {
     const serializableState: GameState = {
@@ -100,13 +125,19 @@ export function saveGameState(state: GameState) {
       actionStatus: { kind: 'idle', message: '' },
       lastNotice: null,
     };
-    window.localStorage.setItem(SAVE_KEY, JSON.stringify(serializableState));
+    storage.setItem(SAVE_KEY, JSON.stringify(serializableState));
   } catch {
     // localStorage can be unavailable in private mode; the game still works in memory.
   }
 }
 
 export function clearGameState() {
-  if (!isStorageAvailable()) return;
-  window.localStorage.removeItem(SAVE_KEY);
+  const storage = getLocalStorage();
+  if (!storage) return;
+
+  try {
+    storage.removeItem(SAVE_KEY);
+  } catch {
+    // localStorage can be unavailable in private mode; the game still works in memory.
+  }
 }

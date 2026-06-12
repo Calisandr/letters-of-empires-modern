@@ -530,20 +530,25 @@ export function pushTimeline(events: TimelineEvent[], event: Omit<TimelineEvent,
 }
 
 export function pushLetter(letters: Letter[], letter: Letter) {
-  const latest = letters[0];
+  const existingIndex = letters.findIndex((item) => item.from === letter.from && item.subject === letter.subject);
+  const existingLetter = existingIndex >= 0 ? letters[existingIndex] : null;
 
-  if (latest?.from === letter.from && latest.subject === letter.subject) {
+  if (existingLetter) {
     const status = letter.status ?? 'open';
     const mergedLetter: Letter = {
-      ...latest,
+      ...existingLetter,
       ...letter,
       time: letter.time,
       status,
-      answeredBy: status === 'answered' ? letter.answeredBy ?? latest.answeredBy : undefined,
-      responses: letter.responses ?? (status === 'answered' ? latest.responses : undefined),
+      answeredBy: status === 'answered' ? letter.answeredBy ?? existingLetter.answeredBy : undefined,
+      responses: letter.responses ?? (status === 'answered' ? existingLetter.responses : undefined),
     };
 
-    return [mergedLetter, ...letters.slice(1)];
+    return [
+      mergedLetter,
+      ...letters.slice(0, existingIndex),
+      ...letters.slice(existingIndex + 1),
+    ].slice(0, MAX_LETTERS);
   }
 
   return [letter, ...letters].slice(0, MAX_LETTERS);
@@ -700,7 +705,7 @@ export function createStrategicOrder(state: GameState, order: OrderDraft): GameS
         ...state.orders,
         {
           ...order,
-          id: `player-order-${Date.now()}-${nextId}`,
+          id: `player-order-${state.turnNumber}-${nextId}`,
           status: order.remainingTurns <= 1 ? 'В работе' : 'В пути',
           statusClass,
           due: formatOrderDue(order.remainingTurns),
@@ -824,17 +829,7 @@ export function runCountryIntelAction(state: GameState, id: CountryIntelActionId
   }
 
   if (id === 'trade-mission') {
-    const preparedState = {
-      ...state,
-      diplomacy: isOwnCountry ? state.diplomacy : upsertDiplomacyTarget(state.diplomacy, country, 0),
-      nations: upsertNationTarget(state.nations, country, {
-        relation,
-        pressure: baseNation.pressure - (relation < -40 ? 0 : 2),
-        lastAction: `Торговый совет готовит маршрут к цели "${country.name}".`,
-      }),
-    };
-
-    return createStrategicOrder(preparedState, {
+    const nextState = createStrategicOrder(state, {
       iconKey: 'anchor',
       title: isOwnCountry ? 'Укрепить внутренние торговые линии' : `Открыть торговую миссию: ${country.name}`,
       owner: 'Торговый совет',
@@ -853,6 +848,18 @@ export function runCountryIntelAction(state: GameState, id: CountryIntelActionId
       failureDiplomacyDelta: isOwnCountry ? undefined : { [country.name]: relation < -40 ? -4 : -1 },
       failureText: `Торговая миссия к цели "${country.name}" сорвалась: часть товаров потеряна, доверие к маршруту снизилось.`,
     });
+
+    if (nextState.lastNotice?.kind !== 'success') return nextState;
+
+    return {
+      ...nextState,
+      diplomacy: isOwnCountry ? nextState.diplomacy : upsertDiplomacyTarget(nextState.diplomacy, country, 0),
+      nations: upsertNationTarget(nextState.nations, country, {
+        relation,
+        pressure: baseNation.pressure - (relation < -40 ? 0 : 2),
+        lastAction: `Торговый совет готовит маршрут к цели "${country.name}".`,
+      }),
+    };
   }
 
   const planningCost: ResourceDelta = { gold: isOwnCountry ? 120 : 180 };
@@ -899,6 +906,30 @@ function countryFromStrategicTarget(state: GameState, target: string): SelectedC
   };
 }
 
+function prepareDiplomacyTargetsForOrder(state: GameState, order: OrderDraft): GameState {
+  return Object.keys(order.diplomacyDelta || {}).reduce<GameState>((nextState, name) => {
+    if (nextState.diplomacy.some((relation) => relation.name === name)) return nextState;
+
+    const country = nextState.selectedCountry?.name === name
+      ? nextState.selectedCountry
+      : countryFromStrategicTarget(nextState, name);
+    const relation = fallbackRelationForStatus(country.status);
+    const baseNation = nextState.nations.find((nation) => nation.name === name) ||
+      buildFallbackNationProfile(country, relation);
+
+    return {
+      ...nextState,
+      diplomacy: upsertDiplomacyTarget(nextState.diplomacy, country, 0),
+      nations: upsertNationTarget(nextState.nations, country, {
+        relation,
+        pressure: baseNation.pressure,
+        threat: baseNation.threat,
+        lastAction: 'Досье открыто через утвержденный приказ Совета.',
+      }),
+    };
+  }, state);
+}
+
 function markStrategicResponseUsed(state: GameState, responseId: string): GameState {
   if (!state.lastTurnReport?.strategicResponses?.length) return state;
 
@@ -930,18 +961,7 @@ export function runStrategicResponse(state: GameState, responseId: string): Game
     buildFallbackNationProfile(country, relation);
 
   if (response.kind === 'secure-trade') {
-    const preparedState = {
-      ...state,
-      diplomacy: upsertDiplomacyTarget(state.diplomacy, country, 0),
-      nations: upsertNationTarget(state.nations, country, {
-        relation,
-        pressure: baseNation.pressure - 2,
-        threat: baseNation.threat - 1,
-        lastAction: `Штаб закрепляет торговое окно с целью "${country.name}".`,
-      }),
-    };
-
-    const nextState = createStrategicOrder(preparedState, {
+    const nextState = createStrategicOrder(state, {
       iconKey: 'anchor',
       title: `Закрепить торговый коридор: ${country.name}`,
       owner: 'Оперативный торговый штаб',
@@ -961,22 +981,24 @@ export function runStrategicResponse(state: GameState, responseId: string): Game
       failureText: `Попытка закрепить торговый коридор с целью "${country.name}" сорвалась: часть товаров потеряна, доверие к маршруту снизилось.`,
     });
 
-    return nextState.lastNotice?.kind === 'success' ? markStrategicResponseUsed(nextState, responseId) : nextState;
-  }
+    if (nextState.lastNotice?.kind !== 'success') return nextState;
 
-  if (response.kind === 'counter-threat') {
-    const preparedState = {
-      ...state,
-      diplomacy: upsertDiplomacyTarget(state.diplomacy, country, 0),
-      nations: upsertNationTarget(state.nations, country, {
+    const preparedNextState = {
+      ...nextState,
+      diplomacy: upsertDiplomacyTarget(nextState.diplomacy, country, 0),
+      nations: upsertNationTarget(nextState.nations, country, {
         relation,
-        pressure: baseNation.pressure + 2,
-        threat: baseNation.threat + 1,
-        lastAction: `Российский штаб готовит контрмеры против давления цели "${country.name}".`,
+        pressure: baseNation.pressure - 2,
+        threat: baseNation.threat - 1,
+        lastAction: `Штаб закрепляет торговое окно с целью "${country.name}".`,
       }),
     };
 
-    const nextState = createStrategicOrder(preparedState, {
+    return markStrategicResponseUsed(preparedNextState, responseId);
+  }
+
+  if (response.kind === 'counter-threat') {
+    const nextState = createStrategicOrder(state, {
       iconKey: 'shield',
       title: `Контрмеры против давления: ${country.name}`,
       owner: 'Оперативный штаб',
@@ -996,7 +1018,20 @@ export function runStrategicResponse(state: GameState, responseId: string): Game
       failureText: `Контрмеры против цели "${country.name}" раскрыты слишком рано: противник усилил давление, часть снабжения потеряна.`,
     });
 
-    return nextState.lastNotice?.kind === 'success' ? markStrategicResponseUsed(nextState, responseId) : nextState;
+    if (nextState.lastNotice?.kind !== 'success') return nextState;
+
+    const preparedNextState = {
+      ...nextState,
+      diplomacy: upsertDiplomacyTarget(nextState.diplomacy, country, 0),
+      nations: upsertNationTarget(nextState.nations, country, {
+        relation,
+        pressure: baseNation.pressure + 2,
+        threat: baseNation.threat + 1,
+        lastAction: `Российский штаб готовит контрмеры против давления цели "${country.name}".`,
+      }),
+    };
+
+    return markStrategicResponseUsed(preparedNextState, responseId);
   }
 
   if (response.kind === 'recon-intent') {
@@ -1136,12 +1171,14 @@ export function runOperationPlan(state: GameState, planIdToRun: string): GameSta
     );
   }
 
-  const nextState = createStrategicOrder(state, operationPlanToOrder(plan));
+  const order = operationPlanToOrder(plan);
+  const nextState = createStrategicOrder(state, order);
   if (nextState.lastNotice?.kind !== 'success') return nextState;
+  const preparedNextState = prepareDiplomacyTargetsForOrder(nextState, order);
 
   return {
-    ...nextState,
-    operationPlans: nextState.operationPlans.filter((item) => item.id !== planIdToRun),
+    ...preparedNextState,
+    operationPlans: preparedNextState.operationPlans.filter((item) => item.id !== planIdToRun),
   };
 }
 
