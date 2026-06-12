@@ -9009,36 +9009,59 @@ textarea:focus-visible,
   background-size: cover;
 }
 
-/* Economy readability: give the income column enough room so green values do not hug the frame. */
+/* Economy ledger: split dense resources into compact readable tiles. */
 @media (min-width: 901px) {
   .minimal-shell .empire-economy {
-    padding: 10px 6px 10px 10px;
+    padding: 11px 10px 12px;
+  }
+
+  .minimal-shell .resource-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
   }
 
   .minimal-shell .resource-list li {
-    grid-template-columns: minmax(62px, 1fr) 50px 60px;
-    column-gap: 4px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+    min-height: 55px;
+    padding: 7px 8px;
+    border: 1px solid rgba(216, 166, 82, .08);
+    border-bottom-color: rgba(216, 166, 82, .08);
+    border-radius: 5px;
+    background:
+      linear-gradient(180deg, rgba(242, 207, 120, .035), transparent 72%),
+      rgba(3, 12, 13, .46);
   }
 
   .minimal-shell .resource-list span {
     overflow: hidden;
+    color: rgba(191, 204, 184, .78);
+    font-size: 12.4px;
+    line-height: 1.1;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .minimal-shell .resource-list em {
     min-width: 0;
-    justify-self: stretch;
-    padding-right: 0;
+    justify-self: start;
     border: 0;
     border-radius: 0;
     background: transparent;
+    color: #7df08a;
+    font-size: 12.4px;
+    line-height: 1;
     text-align: left;
   }
 
   .minimal-shell .resource-list b {
-    justify-self: end;
-    text-align: right;
+    justify-self: start;
+    color: #f3d484;
+    font-size: 15px;
+    line-height: 1;
+    text-align: left;
   }
 
   .minimal-shell .resource-list b,

@@ -251,8 +251,8 @@ try {
     const panel = document.querySelector('.empire-economy');
     if (!panel) return { exists: false, clippedRows: [], overflowingRows: [] };
 
-    const panelBox = panel.getBoundingClientRect();
     const rows = [...panel.querySelectorAll('.resource-list li')].map((row) => {
+      const rowBox = row.getBoundingClientRect();
       const label = row.querySelector('span');
       const value = row.querySelector('b');
       const trend = row.querySelector('em');
@@ -262,20 +262,19 @@ try {
       return {
         label: label?.textContent?.trim() || '',
         labelClipped: label ? label.scrollWidth > label.clientWidth + 1 : true,
-        trendOverflow: trendBox ? trendBox.right > panelBox.right - 3 : true,
-        valueRight: valueBox?.right || 0,
-        trendLeft: trendBox?.left || 0,
+        valueOverflow: valueBox ? valueBox.left < rowBox.left + 3 || valueBox.right > rowBox.right - 3 : true,
+        trendOverflow: trendBox ? trendBox.left < rowBox.left + 3 || trendBox.right > rowBox.right - 3 : true,
+        rowHeight: rowBox.height,
       };
     });
-    const valueRights = rows.map((row) => row.valueRight).filter(Boolean);
-    const trendLefts = rows.map((row) => row.trendLeft).filter(Boolean);
+    const gridColumns = getComputedStyle(panel.querySelector('.resource-list')).gridTemplateColumns.split(' ').length;
 
     return {
       exists: true,
+      gridColumns,
       clippedRows: rows.filter((row) => row.labelClipped).map((row) => row.label),
-      overflowingRows: rows.filter((row) => row.trendOverflow).map((row) => row.label),
-      valueRightSpread: valueRights.length ? Math.max(...valueRights) - Math.min(...valueRights) : 999,
-      trendLeftSpread: trendLefts.length ? Math.max(...trendLefts) - Math.min(...trendLefts) : 999,
+      overflowingRows: rows.filter((row) => row.valueOverflow || row.trendOverflow).map((row) => row.label),
+      shortRows: rows.filter((row) => row.rowHeight < 48).map((row) => row.label),
     };
   });
 
@@ -342,10 +341,10 @@ try {
   assert(chatScrollDiagnostics.scrollHeight > chatScrollDiagnostics.clientHeight, 'chat should have real scroll overflow');
   assert(chatScrollDiagnostics.scrollTop > 0, 'chat scroll position should be adjustable');
   assert(economyLayout.exists, 'economy panel should exist');
+  assert(economyLayout.gridColumns === 2, 'economy resources should use a two-column tile layout');
   assert(economyLayout.clippedRows.length === 0, `economy labels should not be clipped: ${economyLayout.clippedRows.join(', ')}`);
-  assert(economyLayout.overflowingRows.length === 0, `economy trends should stay inside the panel: ${economyLayout.overflowingRows.join(', ')}`);
-  assert(economyLayout.valueRightSpread <= 1, 'economy values should share the same right edge');
-  assert(economyLayout.trendLeftSpread <= 1, 'economy trends should start from the same column');
+  assert(economyLayout.overflowingRows.length === 0, `economy values should stay inside their tiles: ${economyLayout.overflowingRows.join(', ')}`);
+  assert(economyLayout.shortRows.length === 0, `economy tiles should have enough breathing room: ${economyLayout.shortRows.join(', ')}`);
   assert(councilAfterCommand.decisionCardCount === 0, 'council command should not render inline decision cards');
   assert(councilAfterCommand.decisionSlotCount === 0, 'chat should not reserve an inline decision slot');
   assert(councilAfterCommand.overflowY === 'auto' || councilAfterCommand.overflowY === 'scroll', 'council chat should stay scrollable');
