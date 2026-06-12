@@ -1727,6 +1727,27 @@ function MapToolbarMenu({
             </small>
           </button>
         ))}
+        <div className="map-menu-section" role="separator">
+          Слои карты
+        </div>
+        {mapLayerOptions
+          .filter((layer) => layer.id !== 'routes')
+          .map((layer) => (
+            <button
+              key={layer.id}
+              type="button"
+              role="menuitemcheckbox"
+              aria-checked={mapLayers[layer.id]}
+              className={`layer-option ${mapLayers[layer.id] ? 'active' : ''}`}
+              onClick={() => onToggleLayer(layer.id)}
+            >
+              <span className="layer-check" aria-hidden="true">
+                {mapLayers[layer.id] ? '✓' : ''}
+              </span>
+              <span>{layer.label}</span>
+              <small>{layer.description}</small>
+            </button>
+          ))}
       </div>
     );
   }
@@ -2365,6 +2386,7 @@ function App() {
                 aria-expanded={activeMapMenu === 'mode'}
                 onClick={handleMapModeClick}
               >
+                <Layers aria-hidden="true" />
                 {mapModes[mapModeIndex].title}
                 <ChevronDown aria-hidden="true" />
               </button>
@@ -2982,6 +3004,10 @@ function EmpirePanel({
   onQuickAction: (id: QuickActionId) => void;
 }) {
   const russia = nations.find((nation) => nation.id === 'russia');
+  const stability = russia?.stability ?? 72;
+  const army = russia?.army ?? 78;
+  const meterStyle = (value: number): CSSProperties =>
+    ({ '--value': `${Math.max(0, Math.min(100, value))}%` }) as CSSProperties;
 
   return (
     <motion.aside
@@ -3025,15 +3051,18 @@ function EmpirePanel({
           <div className="empire-pulse">
             <div>
               <span>Стабильность</span>
-              <b>{russia?.stability ?? 72}/100</b>
+              <b>{stability}/100</b>
+              <i style={meterStyle(stability)} aria-hidden="true" />
             </div>
             <div>
               <span>Армия</span>
-              <b>{russia?.army ?? 78}/100</b>
+              <b>{army}/100</b>
+              <i style={meterStyle(army)} aria-hidden="true" />
             </div>
             <div>
               <span>Напряжение мира</span>
               <b className={worldTension >= 70 ? 'danger' : worldTension >= 50 ? 'warn' : ''}>{worldTension}/100</b>
+              <i style={meterStyle(worldTension)} aria-hidden="true" />
             </div>
           </div>
           <TurnObjectiveCard objective={turnObjective} />

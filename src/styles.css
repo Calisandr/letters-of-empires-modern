@@ -8912,3 +8912,223 @@ textarea:focus-visible,
     padding-top: 2px;
   }
 }
+
+/* Reference pulse meters: clean horizontal gauges like the target mockup. */
+@media (min-width: 901px) {
+  .minimal-shell .empire-pulse {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 9px;
+    overflow: visible;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .minimal-shell .empire-pulse div,
+  .minimal-shell .empire-pulse div:nth-of-type(-n+2),
+  .minimal-shell .empire-pulse div:nth-of-type(3) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    align-items: center;
+    gap: 5px 10px;
+    min-height: 27px;
+    padding: 0;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .minimal-shell .empire-pulse div::after,
+  .minimal-shell .empire-pulse div:nth-of-type(2)::after,
+  .minimal-shell .empire-pulse div:nth-of-type(3)::after {
+    content: none;
+  }
+
+  .minimal-shell .empire-pulse span,
+  .minimal-shell .empire-pulse b {
+    font-family: var(--sans);
+    font-size: 13px;
+    line-height: 1.1;
+  }
+
+  .minimal-shell .empire-pulse span {
+    overflow: hidden;
+    color: rgba(209, 217, 191, .78);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .minimal-shell .empire-pulse b {
+    color: #f5d783;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .minimal-shell .empire-pulse i {
+    grid-column: 1 / -1;
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 5px;
+    border-radius: 999px;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, .1), transparent),
+      rgba(255, 255, 255, .075);
+    box-shadow:
+      inset 0 1px 2px rgba(0, 0, 0, .68),
+      0 0 0 1px rgba(255, 255, 255, .025);
+  }
+
+  .minimal-shell .empire-pulse i::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--value, 0%);
+    border-radius: inherit;
+    background: linear-gradient(90deg, #4f9a49, #9be374);
+    box-shadow: 0 0 10px rgba(104, 210, 98, .28);
+  }
+
+  .minimal-shell .empire-pulse i::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: var(--value, 0%);
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: #ffe7a0;
+    box-shadow:
+      0 0 0 1px rgba(28, 20, 6, .82),
+      0 0 10px rgba(255, 231, 160, .42);
+    transform: translate(-50%, -50%);
+  }
+
+  .minimal-shell .empire-pulse div:nth-of-type(2) i::before {
+    background: linear-gradient(90deg, #7f6737, #e1b456);
+    box-shadow: 0 0 10px rgba(225, 180, 86, .26);
+  }
+
+  .minimal-shell .empire-pulse div:nth-of-type(3) i::before {
+    background: linear-gradient(90deg, #8e2d2c, #e56b5d);
+    box-shadow: 0 0 10px rgba(229, 107, 93, .24);
+  }
+}
+
+/* Reference map controls: one map selector plus one route toggle. */
+@media (min-width: 901px) {
+  .minimal-shell .map-toolbar {
+    gap: 10px;
+  }
+
+  .minimal-shell .map-toolbar > .tool-select:not(.wide) {
+    display: none;
+  }
+
+  .minimal-shell .tool-select.wide {
+    display: inline-grid;
+    grid-template-columns: 18px minmax(0, max-content) 16px;
+    gap: 9px;
+    min-width: 196px;
+    min-height: 40px;
+    padding-inline: 13px 11px;
+    text-transform: uppercase;
+    letter-spacing: .045em;
+  }
+
+  .minimal-shell .tool-select.wide svg {
+    width: 17px;
+    height: 17px;
+    color: #d5ae62;
+  }
+
+  .minimal-shell .route-toggle {
+    min-height: 40px;
+    padding-inline: 12px 14px;
+    text-transform: uppercase;
+    letter-spacing: .045em;
+  }
+
+  .minimal-shell .map-mode-menu {
+    min-width: 310px;
+  }
+
+  .minimal-shell .map-menu-section {
+    margin: 8px 4px 4px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(216, 166, 82, .14);
+    color: rgba(242, 207, 120, .62);
+    font: 700 10px/1 var(--sans);
+    letter-spacing: .11em;
+    text-transform: uppercase;
+  }
+
+  .minimal-shell .map-mode-menu .layer-option {
+    grid-template-columns: 18px minmax(0, 1fr);
+  }
+
+  .minimal-shell .map-mode-menu .layer-option small {
+    grid-column: 2;
+  }
+
+  .minimal-shell .route-toggle {
+    position: relative;
+    gap: 0;
+  }
+
+  .minimal-shell .route-toggle input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+  }
+
+  .minimal-shell .route-toggle input::after {
+    content: none;
+  }
+
+  .minimal-shell .route-toggle span {
+    position: relative;
+    padding-left: 34px;
+  }
+
+  .minimal-shell .route-toggle span::before,
+  .minimal-shell .route-toggle span::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    border-radius: 999px;
+    transform: translateY(-50%);
+  }
+
+  .minimal-shell .route-toggle span::before {
+    left: 0;
+    width: 25px;
+    height: 15px;
+    background: rgba(255, 255, 255, .13);
+    box-shadow:
+      inset 0 0 0 1px rgba(242, 207, 120, .24),
+      inset 0 1px 2px rgba(0, 0, 0, .7);
+  }
+
+  .minimal-shell .route-toggle span::after {
+    left: 3px;
+    width: 9px;
+    height: 9px;
+    background: rgba(232, 222, 184, .78);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .5);
+    transition: transform .18s ease, background .18s ease;
+  }
+
+  .minimal-shell .route-toggle input:checked + span::before {
+    background: rgba(94, 132, 77, .78);
+  }
+
+  .minimal-shell .route-toggle input:checked + span::after {
+    background: #e9d086;
+    transform: translate(10px, -50%);
+  }
+}
