@@ -247,6 +247,30 @@ try {
     };
   });
 
+  const economyLayout = await page.evaluate(() => {
+    const panel = document.querySelector('.empire-economy');
+    if (!panel) return { exists: false, clippedRows: [], overflowingRows: [] };
+
+    const panelBox = panel.getBoundingClientRect();
+    const rows = [...panel.querySelectorAll('.resource-list li')].map((row) => {
+      const label = row.querySelector('span');
+      const trend = row.querySelector('em');
+      const trendBox = trend?.getBoundingClientRect();
+
+      return {
+        label: label?.textContent?.trim() || '',
+        labelClipped: label ? label.scrollWidth > label.clientWidth + 1 : true,
+        trendOverflow: trendBox ? trendBox.right > panelBox.right - 3 : true,
+      };
+    });
+
+    return {
+      exists: true,
+      clippedRows: rows.filter((row) => row.labelClipped).map((row) => row.label),
+      overflowingRows: rows.filter((row) => row.trendOverflow).map((row) => row.label),
+    };
+  });
+
   await page.getByRole('tab', { name: 'Совет' }).click();
   await page.locator('#chatInput').fill('Совет, разведай Турцию и предложи безопасный план без резкой эскалации.');
   await page.locator('#chatForm').evaluate((form) => form.requestSubmit());
@@ -309,6 +333,9 @@ try {
   assert(chatScrollDiagnostics.messageCount >= 14, 'world chat should accept repeated messages');
   assert(chatScrollDiagnostics.scrollHeight > chatScrollDiagnostics.clientHeight, 'chat should have real scroll overflow');
   assert(chatScrollDiagnostics.scrollTop > 0, 'chat scroll position should be adjustable');
+  assert(economyLayout.exists, 'economy panel should exist');
+  assert(economyLayout.clippedRows.length === 0, `economy labels should not be clipped: ${economyLayout.clippedRows.join(', ')}`);
+  assert(economyLayout.overflowingRows.length === 0, `economy trends should stay inside the panel: ${economyLayout.overflowingRows.join(', ')}`);
   assert(councilAfterCommand.decisionCardCount === 0, 'council command should not render inline decision cards');
   assert(councilAfterCommand.decisionSlotCount === 0, 'chat should not reserve an inline decision slot');
   assert(councilAfterCommand.overflowY === 'auto' || councilAfterCommand.overflowY === 'scroll', 'council chat should stay scrollable');
@@ -327,6 +354,7 @@ try {
     mapModeTitle,
     selectedCountry,
     chatScrollDiagnostics,
+    economyLayout,
     councilAfterCommand,
     finalLayout,
     consoleErrors,

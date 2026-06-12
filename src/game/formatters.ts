@@ -22,5 +22,5 @@ export function formatResourceValue(resource: ResourceState) {
 export function formatResourceTrend(resource: ResourceState) {
   const sign = resource.perTurn >= 0 ? '+' : '';
   if (resource.format === 'population') return `${sign}${resource.perTurn.toFixed(1)}%`;
-  return `${sign}${Math.round(resource.perTurn).toLocaleString('ru-RU')}/ход`;
+  return `${sign}${Math.round(resource.perTurn).toLocaleString('ru-RU').replace(/\s/g, '')}/ход`;
 }

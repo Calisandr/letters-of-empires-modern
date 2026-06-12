@@ -9012,18 +9012,24 @@ textarea:focus-visible,
 /* Economy readability: give the income column enough room so green values do not hug the frame. */
 @media (min-width: 901px) {
   .minimal-shell .empire-economy {
-    padding-right: 12px;
+    padding: 10px 6px 10px 10px;
   }
 
   .minimal-shell .resource-list li {
-    grid-template-columns: minmax(70px, 1fr) minmax(48px, max-content) minmax(68px, max-content);
-    column-gap: 5px;
+    grid-template-columns: minmax(62px, 1fr) max-content max-content;
+    column-gap: 4px;
+  }
+
+  .minimal-shell .resource-list span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .minimal-shell .resource-list em {
     min-width: 0;
     justify-self: end;
-    padding-right: 3px;
+    padding-right: 2px;
     border: 0;
     border-radius: 0;
     background: transparent;
