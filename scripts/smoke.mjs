@@ -183,12 +183,25 @@ try {
   }));
   await page.getByRole('button', { name: 'Сохранить' }).click();
   await page.waitForFunction(() => !document.querySelector('.profile-dialog'));
-  const profileAfterSave = await page.evaluate(() => ({
-    topbarName: document.querySelector('.profile-chip strong')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-    leftName: document.querySelector('.ruler-block strong')?.textContent?.trim() || '',
-    topbarAvatar: document.querySelector('.profile-chip img')?.getAttribute('src')?.slice(0, 15) || '',
-    leftAvatar: document.querySelector('.ruler-block img')?.getAttribute('src')?.slice(0, 15) || '',
-  }));
+  const profileAfterSave = await page.evaluate(() => {
+    const topbarAvatar = document.querySelector('.profile-chip img');
+    const leftAvatar = document.querySelector('.ruler-block img');
+    const stateFlag = document.querySelector('.state-flag .flag');
+    const rect = (node) => {
+      const box = node?.getBoundingClientRect();
+      return box ? { width: box.width, height: box.height } : null;
+    };
+
+    return {
+      topbarName: document.querySelector('.profile-chip strong')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      leftName: document.querySelector('.ruler-block strong')?.textContent?.trim() || '',
+      topbarAvatar: topbarAvatar?.getAttribute('src')?.slice(0, 15) || '',
+      leftAvatar: leftAvatar?.getAttribute('src')?.slice(0, 15) || '',
+      topbarAvatarBox: rect(topbarAvatar),
+      leftAvatarBox: rect(leftAvatar),
+      stateFlagBox: rect(stateFlag),
+    };
+  });
 
   await page.locator('#mapMode').click();
   await page.locator('.map-mode-menu button').nth(2).click();
@@ -304,6 +317,9 @@ try {
   assert(profileAfterSave.leftName === 'АндрейПравитель', 'saved profile name should update empire panel');
   assert(profileAfterSave.topbarAvatar === 'data:image/webp', 'saved profile avatar should update topbar');
   assert(profileAfterSave.leftAvatar === 'data:image/webp', 'saved profile avatar should update empire panel');
+  assert(profileAfterSave.topbarAvatarBox?.width >= 32, 'saved profile avatar should be visible in topbar');
+  assert(profileAfterSave.leftAvatarBox?.width >= 32, 'saved profile avatar should be visible in empire panel');
+  assert(profileAfterSave.stateFlagBox?.width >= 150, 'state flag should fill the ruler flag frame');
   assert(mapModeTitle?.includes('Стратегическая карта'), 'map mode switch should work');
   assert(zoomTransform.includes('matrix') || zoomTransform.includes('1.12'), 'zoom should change map transform');
   assert(selectedCountry.selected === 'France', 'country click should select France');

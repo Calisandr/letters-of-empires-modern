@@ -821,11 +821,25 @@ function CountryFlagMark({
   countryKey,
   countryName,
   fallbackFlag,
+  preferFallback = false,
 }: {
   countryKey?: string;
   countryName?: string;
   fallbackFlag?: string;
+  preferFallback?: boolean;
 }) {
+  if (preferFallback && fallbackFlag && fallbackFlag !== 'neutral') {
+    const code = codeByFlagClass[fallbackFlag] || '';
+
+    return (
+      <span
+        className={`flag ${fallbackFlag}`}
+        title={code ? `Флаг: ${code}` : undefined}
+        aria-hidden="true"
+      />
+    );
+  }
+
   const flagView = getCountryFlagView(countryKey, countryName, fallbackFlag);
 
   return (
@@ -3332,7 +3346,12 @@ function EmpirePanel({
         <div className="empire-identity">
           <h1>{playerCountry.name}</h1>
           <div className="state-flag" aria-label={`Флаг страны: ${playerCountry.name}`}>
-            <CountryFlagMark countryKey="Russia" countryName={playerCountry.name} fallbackFlag={playerCountry.flag} />
+            <CountryFlagMark
+              countryKey="Russia"
+              countryName={playerCountry.name}
+              fallbackFlag={playerCountry.flag}
+              preferFallback
+            />
           </div>
           <div className="ruler-block">
             <ProfileAvatar avatarDataUrl={profile.avatarDataUrl} className="ruler-avatar" />
