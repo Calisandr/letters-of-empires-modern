@@ -9021,7 +9021,9 @@ textarea:focus-visible,
 /* Reference map controls: one map selector plus one route toggle. */
 @media (min-width: 901px) {
   .minimal-shell .map-toolbar {
-    gap: 10px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
   }
 
   .minimal-shell .map-toolbar > .tool-select:not(.wide) {
@@ -9046,13 +9048,17 @@ textarea:focus-visible,
   }
 
   .minimal-shell .route-toggle {
+    min-width: 196px;
     min-height: 40px;
+    justify-content: flex-start;
     padding-inline: 12px 14px;
     text-transform: uppercase;
     letter-spacing: .045em;
   }
 
   .minimal-shell .map-mode-menu {
+    top: 96px;
+    left: 0;
     min-width: 310px;
   }
 
