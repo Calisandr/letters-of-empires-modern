@@ -9057,14 +9057,25 @@ textarea:focus-visible,
   }
 
   .minimal-shell .map-mode-menu {
-    top: 96px;
-    left: 0;
-    min-width: 310px;
+    display: grid;
+    top: 0;
+    left: calc(100% + 12px);
+    width: 430px;
+    max-height: calc(100vh - 130px);
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    overflow-y: auto;
+  }
+
+  .minimal-shell .map-mode-menu > button:not(.layer-option),
+  .minimal-shell .map-menu-section {
+    grid-column: 1 / -1;
   }
 
   .minimal-shell .map-menu-section {
-    margin: 8px 4px 4px;
-    padding-top: 8px;
+    margin: 4px 4px 0;
+    padding-top: 7px;
     border-top: 1px solid rgba(216, 166, 82, .14);
     color: rgba(242, 207, 120, .62);
     font: 700 10px/1 var(--sans);
@@ -9074,6 +9085,8 @@ textarea:focus-visible,
 
   .minimal-shell .map-mode-menu .layer-option {
     grid-template-columns: 18px minmax(0, 1fr);
+    min-height: 46px;
+    padding: 7px 8px;
   }
 
   .minimal-shell .map-mode-menu .layer-option small {
