@@ -9576,13 +9576,23 @@ textarea:focus-visible,
 
 /* Economy readability: give the income column enough room so green values do not hug the frame. */
 @media (min-width: 901px) {
+  .minimal-shell .empire-economy {
+    padding-right: 14px;
+  }
+
   .minimal-shell .resource-list li {
-    grid-template-columns: minmax(54px, 1fr) 50px 76px;
-    column-gap: 4px;
+    grid-template-columns: minmax(66px, 1fr) max-content minmax(80px, max-content);
+    column-gap: 5px;
   }
 
   .minimal-shell .resource-list em {
-    padding-right: 6px;
+    box-sizing: border-box;
+    min-width: 80px;
+    justify-self: end;
+    padding: 1px 9px 1px 6px;
+    border: 1px solid rgba(117, 219, 126, .14);
+    border-radius: 999px;
+    background: rgba(79, 185, 88, .055);
     text-align: right;
   }
 }
