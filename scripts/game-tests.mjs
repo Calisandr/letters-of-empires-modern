@@ -473,6 +473,37 @@ try {
     assert.equal(next.lastNotice.kind, 'error');
   });
 
+  test('profile update keeps nickname limited and avatar safe', () => {
+    const state = clone(initialGameState);
+    const next = gameReducer(state, {
+      type: 'UPDATE_PROFILE',
+      profile: {
+        name: 'Александр Великий Победитель',
+        title: 'Император',
+        status: 'Проверяю границы, торговлю и дипломатические письма перед каждым ходом.',
+        avatarDataUrl: 'data:image/webp;base64,avatar',
+      },
+    });
+
+    assert.equal(Array.from(next.profile.name).length, 15);
+    assert.equal(next.profile.title, 'Правитель');
+    assert.ok(next.profile.avatarDataUrl.startsWith('data:image/webp'));
+    assert.equal(next.lastNotice.kind, 'success');
+
+    const repaired = gameReducer(state, {
+      type: 'UPDATE_PROFILE',
+      profile: {
+        name: '   ',
+        title: 'Император',
+        status: '',
+        avatarDataUrl: 'javascript:alert(1)',
+      },
+    });
+
+    assert.equal(repaired.profile.name, initialGameState.profile.name);
+    assert.equal(repaired.profile.avatarDataUrl, '');
+  });
+
   test('end turn produces a living world report and nation actions', () => {
     const state = clone(initialGameState);
     const next = endTurn(state);
@@ -734,6 +765,12 @@ try {
       quickActionTurns: [],
       selectedCountry: [],
       lastTurnReport: [],
+      profile: {
+        name: 'ОченьДлинныйНикнеймПравителя',
+        title: 'Император',
+        status: 'Короткий статус',
+        avatarDataUrl: 'not-image',
+      },
       turnNumber: '132',
     });
 
@@ -755,6 +792,9 @@ try {
       assert.equal(loaded.selectedCountry, initialGameState.selectedCountry);
       assert.equal(loaded.lastTurnReport, initialGameState.lastTurnReport);
       assert.equal(loaded.turnNumber, initialGameState.turnNumber);
+      assert.equal(Array.from(loaded.profile.name).length, 15);
+      assert.equal(loaded.profile.title, 'Правитель');
+      assert.equal(loaded.profile.avatarDataUrl, '');
       assert.ok(loaded.chatMessages.every((message) => message.channel));
     } finally {
       if (previousWindow === undefined) {

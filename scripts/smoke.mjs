@@ -6,6 +6,10 @@ const screenshotPath = 'tmp/playwright/modern-dashboard.png';
 let server = null;
 const usePreviewServer = process.argv.includes('--preview');
 let baseUrl = usePreviewServer ? '' : process.env.SMOKE_URL || '';
+const tinyAvatarPng = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR42mP8z8BQDwAFgwJ/l5J0uQAAAABJRU5ErkJggg==',
+  'base64',
+);
 
 if (!baseUrl) {
   server = usePreviewServer
@@ -158,6 +162,34 @@ try {
 
   const initialLayout = await readLayoutDiagnostics();
 
+  await page.getByLabel('Профиль правителя').click();
+  await page.waitForSelector('.profile-dialog');
+  await page.locator('.profile-dialog input[aria-describedby="profileNameHint"]').fill('АндрейПравитель');
+  await page.locator('.profile-dialog textarea').fill('Веду империю через письма, совет и карту.');
+  await page.locator('.profile-dialog input[type="file"]').setInputFiles({
+    name: 'avatar.png',
+    mimeType: 'image/png',
+    buffer: tinyAvatarPng,
+  });
+  await page.waitForFunction(() =>
+    document.querySelector('.profile-avatar-large img')?.getAttribute('src')?.startsWith('data:image/webp'),
+  );
+  const profileDialog = await page.evaluate(() => ({
+    title: document.querySelector('.profile-dialog h2')?.textContent?.trim() || '',
+    nameValue: document.querySelector('.profile-dialog input[aria-describedby="profileNameHint"]')?.value || '',
+    counter: document.querySelector('.profile-field span b')?.textContent?.trim() || '',
+    avatarType: document.querySelector('.profile-avatar-large img')?.getAttribute('src')?.slice(0, 15) || '',
+    previewName: document.querySelector('.profile-preview-card h3')?.textContent?.trim() || '',
+  }));
+  await page.getByRole('button', { name: 'Сохранить' }).click();
+  await page.waitForFunction(() => !document.querySelector('.profile-dialog'));
+  const profileAfterSave = await page.evaluate(() => ({
+    topbarName: document.querySelector('.profile-chip strong')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+    leftName: document.querySelector('.ruler-block strong')?.textContent?.trim() || '',
+    topbarAvatar: document.querySelector('.profile-chip img')?.getAttribute('src')?.slice(0, 15) || '',
+    leftAvatar: document.querySelector('.ruler-block img')?.getAttribute('src')?.slice(0, 15) || '',
+  }));
+
   await page.locator('#mapMode').click();
   await page.locator('.map-mode-menu button').nth(2).click();
   const mapModeTitle = await page.locator('#mapMode').textContent();
@@ -263,6 +295,15 @@ try {
   assert(initialLayout.visibleRightPanels === 2, 'right rail should show only summary and mail');
   assert(initialLayout.timelineRows >= 2, 'world summary should still show events');
   assert(initialLayout.mailRows >= 2, 'mail summary should still show letters');
+  assert(profileDialog.title === 'Настройки профиля', 'profile dialog should open from ruler profile');
+  assert(profileDialog.nameValue === 'АндрейПравитель', 'profile nickname should accept Cyrillic text');
+  assert(profileDialog.counter.endsWith('/15'), 'profile nickname limit should be visible');
+  assert(profileDialog.avatarType === 'data:image/webp', 'profile avatar should be converted to WebP data URL');
+  assert(profileDialog.previewName === 'АндрейПравитель', 'profile preview should reflect nickname');
+  assert(profileAfterSave.topbarName.includes('АндрейПравитель'), 'saved profile name should update topbar');
+  assert(profileAfterSave.leftName === 'АндрейПравитель', 'saved profile name should update empire panel');
+  assert(profileAfterSave.topbarAvatar === 'data:image/webp', 'saved profile avatar should update topbar');
+  assert(profileAfterSave.leftAvatar === 'data:image/webp', 'saved profile avatar should update empire panel');
   assert(mapModeTitle?.includes('Стратегическая карта'), 'map mode switch should work');
   assert(zoomTransform.includes('matrix') || zoomTransform.includes('1.12'), 'zoom should change map transform');
   assert(selectedCountry.selected === 'France', 'country click should select France');
@@ -292,6 +333,8 @@ try {
   const result = {
     loaded: true,
     initialLayout,
+    profileDialog,
+    profileAfterSave,
     mapModeTitle,
     selectedCountry,
     chatScrollDiagnostics,

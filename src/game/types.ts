@@ -197,6 +197,13 @@ export type ChatMessage = {
   text: string;
 };
 
+export type PlayerProfile = {
+  name: string;
+  title: string;
+  status: string;
+  avatarDataUrl: string;
+};
+
 export type SelectedCountry = {
   key: string;
   name: string;
@@ -278,6 +285,7 @@ export type GameState = {
   worldTension: number;
   lastTurnReport: TurnReport | null;
   chatMessages: ChatMessage[];
+  profile: PlayerProfile;
   quickActionTurns: Partial<Record<QuickActionId, number>>;
   turnNumber: number;
   selectedCountry: SelectedCountry | null;
@@ -326,5 +334,6 @@ export type GameAction =
   | { type: 'REFINE_OPERATION_PLAN'; id: string }
   | { type: 'DISMISS_OPERATION_PLAN'; id: string }
   | { type: 'RESPOND_TO_LETTER'; letterId: string; responseId: string }
+  | { type: 'UPDATE_PROFILE'; profile: PlayerProfile }
   | { type: 'CANCEL_ORDER'; id: string }
   | { type: 'END_TURN' };

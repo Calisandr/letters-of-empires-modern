@@ -22,8 +22,12 @@ import type {
   OperationPlan,
   OperationPlanKind,
   OrderDraft,
+  PlayerProfile,
   QuickActionId,
 } from './types';
+
+const PROFILE_NAME_MAX_LENGTH = 15;
+const PROFILE_STATUS_MAX_LENGTH = 80;
 
 function markQuickAction(state: GameState, id: QuickActionId) {
   return { ...state.quickActionTurns, [id]: state.turnNumber };
@@ -38,6 +42,22 @@ function appendChatMessages(state: GameState, messages: ChatMessage[]) {
     ...state,
     chatMessages: [...state.chatMessages, ...messages].slice(-MAX_CHAT_MESSAGES),
     nextActionId: state.nextActionId + messages.length,
+  };
+}
+
+function limitText(value: string, maxLength: number) {
+  return Array.from(value).slice(0, maxLength).join('');
+}
+
+function normalizeProfile(profile: PlayerProfile): PlayerProfile {
+  const name = limitText(profile.name.trim(), PROFILE_NAME_MAX_LENGTH) || 'Родерик';
+  const status = limitText(profile.status.trim(), PROFILE_STATUS_MAX_LENGTH);
+
+  return {
+    name,
+    title: 'Правитель',
+    status,
+    avatarDataUrl: profile.avatarDataUrl.startsWith('data:image/') ? profile.avatarDataUrl : '',
   };
 }
 
@@ -595,6 +615,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
   if (action.type === 'REFINE_OPERATION_PLAN') return refineOperationPlan(state, action.id);
   if (action.type === 'DISMISS_OPERATION_PLAN') return dismissOperationPlan(state, action.id);
   if (action.type === 'RESPOND_TO_LETTER') return respondToLetter(state, action.letterId, action.responseId);
+  if (action.type === 'UPDATE_PROFILE') {
+    return createNotice(
+      {
+        ...state,
+        profile: normalizeProfile(action.profile),
+      },
+      'Профиль правителя сохранён',
+    );
+  }
   if (action.type === 'CANCEL_ORDER') return cancelOrder(state, action.id);
   if (action.type === 'END_TURN') return endTurn(state);
 

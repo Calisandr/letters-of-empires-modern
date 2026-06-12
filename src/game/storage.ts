@@ -8,10 +8,14 @@ import type {
   NationProfile,
   OperationPlan,
   Order,
+  PlayerProfile,
   ResourceState,
   TimelineEvent,
   WorldEvent,
 } from './types';
+
+const PROFILE_NAME_MAX_LENGTH = 15;
+const PROFILE_STATUS_MAX_LENGTH = 80;
 
 const SAVE_KEY = 'letters-of-empires:game:v1';
 
@@ -53,6 +57,24 @@ function isChatChannel(value: unknown): value is ChatChannel {
 
 function stringOrDefault(value: unknown, fallback: string) {
   return typeof value === 'string' ? value : fallback;
+}
+
+function limitText(value: string, maxLength: number) {
+  return Array.from(value).slice(0, maxLength).join('');
+}
+
+function normalizeProfile(value: unknown): PlayerProfile {
+  const profile = objectOrDefault<Partial<PlayerProfile>>(value, initialGameState.profile);
+  const name = limitText(stringOrDefault(profile.name, initialGameState.profile.name).trim(), PROFILE_NAME_MAX_LENGTH) || initialGameState.profile.name;
+  const status = limitText(stringOrDefault(profile.status, initialGameState.profile.status).trim(), PROFILE_STATUS_MAX_LENGTH);
+  const avatarDataUrl = stringOrDefault(profile.avatarDataUrl, '');
+
+  return {
+    name,
+    title: 'Правитель',
+    status,
+    avatarDataUrl: avatarDataUrl.startsWith('data:image/') ? avatarDataUrl : '',
+  };
 }
 
 function inferChatChannel(message: Partial<ChatMessage>): ChatChannel {
@@ -107,6 +129,7 @@ export function loadGameState(): GameState {
       nextActionId: numberOrDefault(parsed.nextActionId, initialGameState.nextActionId),
       worldTension: numberOrDefault(parsed.worldTension, initialGameState.worldTension),
       lastTurnReport: nullableObjectOrDefault(parsed.lastTurnReport, initialGameState.lastTurnReport),
+      profile: normalizeProfile(parsed.profile),
       actionStatus: { kind: 'idle', message: '' },
       lastNotice: null,
     };

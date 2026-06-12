@@ -1,4 +1,5 @@
 import {
+  ChangeEvent,
   FormEvent,
   KeyboardEvent,
   MouseEvent,
@@ -60,6 +61,7 @@ import type {
   OperationPlan,
   Order,
   OrderIconKey,
+  PlayerProfile,
   QuickActionId,
   ResourceDelta,
   ResourceState,
@@ -72,6 +74,90 @@ import type {
 type ToastState = {
   message: string;
 };
+
+const PROFILE_NAME_MAX_LENGTH = 15;
+const PROFILE_STATUS_MAX_LENGTH = 80;
+const PROFILE_AVATAR_SIZE = 256;
+const PROFILE_AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+
+function limitText(value: string, maxLength: number) {
+  return Array.from(value).slice(0, maxLength).join('');
+}
+
+function readImage(file: File) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Не удалось прочитать изображение'));
+    };
+    image.src = url;
+  });
+}
+
+function canvasToWebp(canvas: HTMLCanvasElement) {
+  return new Promise<string>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error('Браузер не смог подготовить WebP-аватар'));
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error('Не удалось сохранить аватар'));
+        reader.readAsDataURL(blob);
+      },
+      'image/webp',
+      0.86,
+    );
+  });
+}
+
+async function convertProfileAvatar(file: File) {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Загрузите изображение PNG, JPG или WEBP');
+  }
+
+  if (file.size > PROFILE_AVATAR_MAX_BYTES) {
+    throw new Error('Файл слишком большой. Максимум 5 МБ');
+  }
+
+  const image = await readImage(file);
+  const canvas = document.createElement('canvas');
+  canvas.width = PROFILE_AVATAR_SIZE;
+  canvas.height = PROFILE_AVATAR_SIZE;
+
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Canvas недоступен в браузере');
+
+  const sourceSize = Math.min(image.naturalWidth || image.width, image.naturalHeight || image.height);
+  const sourceX = ((image.naturalWidth || image.width) - sourceSize) / 2;
+  const sourceY = ((image.naturalHeight || image.height) - sourceSize) / 2;
+
+  context.fillStyle = '#101817';
+  context.fillRect(0, 0, PROFILE_AVATAR_SIZE, PROFILE_AVATAR_SIZE);
+  context.drawImage(
+    image,
+    sourceX,
+    sourceY,
+    sourceSize,
+    sourceSize,
+    0,
+    0,
+    PROFILE_AVATAR_SIZE,
+    PROFILE_AVATAR_SIZE,
+  );
+
+  return canvasToWebp(canvas);
+}
 
 const chatChannelByTab = {
   Совет: 'council',
@@ -748,6 +834,14 @@ function CountryFlagMark({
       title={flagView.code ? `Флаг: ${flagView.code}` : undefined}
       aria-hidden="true"
     />
+  );
+}
+
+function ProfileAvatar({ avatarDataUrl, className = '' }: { avatarDataUrl?: string; className?: string }) {
+  return (
+    <span className={`avatar-slot ${avatarDataUrl ? 'has-avatar' : ''} ${className}`} aria-hidden="true">
+      {avatarDataUrl ? <img src={avatarDataUrl} alt="" /> : null}
+    </span>
   );
 }
 
@@ -1843,6 +1937,7 @@ function App() {
   const [activeChatTab, setActiveChatTab] = useState<ChatTabLabel>('Совет');
   const [activeUtilityPanel, setActiveUtilityPanel] = useState<string | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [pendingQuickAction, setPendingQuickAction] = useState<QuickActionId | null>(null);
   const [pendingOperationPlanId, setPendingOperationPlanId] = useState<string | null>(null);
   const [turnReportOpen, setTurnReportOpen] = useState(false);
@@ -1859,6 +1954,7 @@ function App() {
     worldTension,
     lastTurnReport,
     chatMessages,
+    profile,
     turnNumber,
   } = gameState;
 
@@ -1999,6 +2095,12 @@ function App() {
   };
 
   const openUtilityPanel = (label: string) => {
+    if (label === 'Профиль правителя') {
+      setProfileOpen(true);
+      setActiveUtilityPanel(null);
+      return;
+    }
+
     if (label === 'Помощь') {
       setGuideOpen(true);
       setActiveUtilityPanel(null);
@@ -2363,6 +2465,7 @@ function App() {
         <Topbar
           activeNav={activeNav}
           mailCount={letters.length}
+          profile={profile}
           onNavClick={handleNavClick}
           onUtilityAction={openUtilityPanel}
         />
@@ -2380,6 +2483,7 @@ function App() {
         <EmpirePanel
           resources={resources}
           nations={nations}
+          profile={profile}
           turnObjective={turnObjective}
           worldTension={worldTension}
         />
@@ -2580,6 +2684,17 @@ function App() {
         />
       ) : null}
 
+      {profileOpen ? (
+        <ProfileDialog
+          profile={profile}
+          onClose={() => setProfileOpen(false)}
+          onSave={(nextProfile) => {
+            dispatchGame({ type: 'UPDATE_PROFILE', profile: nextProfile });
+            setProfileOpen(false);
+          }}
+        />
+      ) : null}
+
       {turnReportOpen && lastTurnReport ? (
         <TurnReportDialog
           report={lastTurnReport}
@@ -2602,11 +2717,13 @@ function App() {
 function Topbar({
   activeNav,
   mailCount,
+  profile,
   onNavClick,
   onUtilityAction,
 }: {
   activeNav: string;
   mailCount: number;
+  profile: PlayerProfile;
   onNavClick: (label: string) => void;
   onUtilityAction: (label: string) => void;
 }) {
@@ -2669,9 +2786,9 @@ function Topbar({
           </button>
         ))}
         <button className="profile-chip" type="button" aria-label="Профиль правителя" onClick={() => onUtilityAction('Профиль правителя')}>
-          <span className="avatar-slot profile-avatar" aria-hidden="true" />
+          <ProfileAvatar avatarDataUrl={profile.avatarDataUrl} className="profile-avatar" />
           <span className="profile-text">
-            <strong>Родерик Правитель</strong>
+            <strong>{profile.name} {profile.title}</strong>
             <small>Россия</small>
           </span>
           <ChevronDown className="chevron" aria-hidden="true" size={18} />
@@ -2772,6 +2889,184 @@ function UtilityPanel({
         <X aria-hidden="true" />
       </button>
     </section>
+  );
+}
+
+function ProfileDialog({
+  profile,
+  onClose,
+  onSave,
+}: {
+  profile: PlayerProfile;
+  onClose: () => void;
+  onSave: (profile: PlayerProfile) => void;
+}) {
+  const [draft, setDraft] = useState(profile);
+  const [avatarError, setAvatarError] = useState('');
+  const [isProcessingAvatar, setIsProcessingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const nameLength = Array.from(draft.name).length;
+  const statusLength = Array.from(draft.status).length;
+  const canSave = draft.name.trim().length > 0 && !isProcessingAvatar;
+
+  useEffect(() => {
+    setDraft(profile);
+    setAvatarError('');
+  }, [profile]);
+
+  const updateName = (value: string) => {
+    setDraft((current) => ({ ...current, name: limitText(value, PROFILE_NAME_MAX_LENGTH) }));
+  };
+
+  const updateStatus = (value: string) => {
+    setDraft((current) => ({ ...current, status: limitText(value, PROFILE_STATUS_MAX_LENGTH) }));
+  };
+
+  const handleAvatarChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setAvatarError('');
+    setIsProcessingAvatar(true);
+
+    try {
+      const avatarDataUrl = await convertProfileAvatar(file);
+      setDraft((current) => ({ ...current, avatarDataUrl }));
+    } catch (error) {
+      setAvatarError(error instanceof Error ? error.message : 'Не удалось подготовить аватар');
+    } finally {
+      setIsProcessingAvatar(false);
+    }
+  };
+
+  const submitProfile = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!draft.name.trim()) {
+      setAvatarError('Никнейм не может быть пустым');
+      return;
+    }
+
+    onSave({
+      ...draft,
+      name: limitText(draft.name.trim(), PROFILE_NAME_MAX_LENGTH),
+      title: 'Правитель',
+      status: limitText(draft.status.trim(), PROFILE_STATUS_MAX_LENGTH),
+    });
+  };
+
+  return (
+    <div className="modal-backdrop profile-backdrop" role="presentation">
+      <motion.form
+        className="profile-dialog framed-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="profileDialogTitle"
+        onSubmit={submitProfile}
+        initial={{ opacity: 0, y: 18, scale: 0.985 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <header className="profile-dialog-heading">
+          <div>
+            <h2 id="profileDialogTitle">Настройки профиля</h2>
+            <p>Никнейм, аватар и подпись правителя сохраняются в партии.</p>
+          </div>
+          <button className="dialog-close" type="button" aria-label="Закрыть настройки профиля" onClick={onClose}>
+            <X aria-hidden="true" />
+          </button>
+        </header>
+
+        <div className="profile-dialog-body">
+          <section className="profile-avatar-column" aria-label="Аватар профиля">
+            <ProfileAvatar avatarDataUrl={draft.avatarDataUrl} className="profile-avatar-large" />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="sr-only"
+              onChange={handleAvatarChange}
+            />
+            <button type="button" className="profile-upload-button" onClick={() => fileInputRef.current?.click()} disabled={isProcessingAvatar}>
+              {isProcessingAvatar ? 'Подготовка...' : 'Загрузить аватар'}
+            </button>
+            {draft.avatarDataUrl ? (
+              <button
+                type="button"
+                className="profile-remove-button"
+                onClick={() => {
+                  setDraft((current) => ({ ...current, avatarDataUrl: '' }));
+                  setAvatarError('');
+                }}
+              >
+                Убрать аватар
+              </button>
+            ) : null}
+            <p>PNG, JPG или WEBP до 5 МБ. Изображение будет обрезано в квадрат 256x256 и сохранено как WEBP.</p>
+            {avatarError ? <strong className="profile-form-error">{avatarError}</strong> : null}
+          </section>
+
+          <section className="profile-form-column" aria-label="Данные профиля">
+            <label className="profile-field">
+              <span>
+                Никнейм
+                <b>{nameLength}/{PROFILE_NAME_MAX_LENGTH}</b>
+              </span>
+              <input
+                value={draft.name}
+                maxLength={PROFILE_NAME_MAX_LENGTH}
+                onChange={(event) => updateName(event.target.value)}
+                placeholder="Ваш никнейм"
+                aria-describedby="profileNameHint"
+              />
+              <small id="profileNameHint">Любой язык, максимум 15 символов.</small>
+            </label>
+
+            <label className="profile-field">
+              <span>
+                Краткий статус
+                <b>{statusLength}/{PROFILE_STATUS_MAX_LENGTH}</b>
+              </span>
+              <textarea
+                value={draft.status}
+                maxLength={PROFILE_STATUS_MAX_LENGTH}
+                onChange={(event) => updateStatus(event.target.value)}
+                placeholder="Короткая подпись правителя"
+                rows={3}
+              />
+            </label>
+
+            <div className="profile-setting-note">
+              <span>Профиль виден в шапке и левой панели державы.</span>
+              <span>Аватар хранится локально вместе с сохранением партии.</span>
+            </div>
+          </section>
+
+          <aside className="profile-preview-card" aria-label="Предпросмотр профиля">
+            <span>Предпросмотр</span>
+            <div>
+              <ProfileAvatar avatarDataUrl={draft.avatarDataUrl} className="profile-avatar-preview" />
+              <h3>{draft.name.trim() || 'Родерик'}</h3>
+              <p>
+                <CountryFlagMark countryKey="Russia" countryName={playerCountry.name} fallbackFlag={playerCountry.flag} />
+                Россия
+              </p>
+              <small>{draft.status.trim() || 'Статус не указан.'}</small>
+            </div>
+          </aside>
+        </div>
+
+        <footer className="profile-dialog-actions">
+          <button type="button" className="profile-secondary-action" onClick={onClose}>
+            Отмена
+          </button>
+          <button type="submit" className="profile-primary-action" disabled={!canSave}>
+            Сохранить
+          </button>
+        </footer>
+      </motion.form>
+    </div>
   );
 }
 
@@ -3010,11 +3305,13 @@ function TurnObjectiveCard({ objective }: { objective: TurnObjective }) {
 function EmpirePanel({
   resources,
   nations,
+  profile,
   turnObjective,
   worldTension,
 }: {
   resources: ResourceState[];
   nations: NationProfile[];
+  profile: PlayerProfile;
   turnObjective: TurnObjective;
   worldTension: number;
 }) {
@@ -3038,10 +3335,10 @@ function EmpirePanel({
             <CountryFlagMark countryKey="Russia" countryName={playerCountry.name} fallbackFlag={playerCountry.flag} />
           </div>
           <div className="ruler-block">
-            <span className="avatar-slot ruler-avatar" aria-hidden="true" />
+            <ProfileAvatar avatarDataUrl={profile.avatarDataUrl} className="ruler-avatar" />
             <div>
-              <strong>Родерик</strong>
-              <small>Правитель</small>
+              <strong>{profile.name}</strong>
+              <small>{profile.title}</small>
             </div>
           </div>
           <div className="meta-line">

@@ -5,6 +5,7 @@ import type {
   Letter,
   NationProfile,
   Order,
+  PlayerProfile,
   ResourceState,
   TimelineEvent,
   WorldEvent,
@@ -15,6 +16,13 @@ export const GAME_STATE_VERSION = 1;
 export const playerCountry = {
   name: 'Россия',
   flag: 'russia',
+};
+
+export const initialPlayerProfile: PlayerProfile = {
+  name: 'Родерик',
+  title: 'Правитель',
+  status: 'Стратег, дипломат, планирую наперёд.',
+  avatarDataUrl: '',
 };
 
 export const initialResources: ResourceState[] = [
@@ -547,6 +555,7 @@ export const initialGameState: GameState = {
   worldTension: 42,
   lastTurnReport: null,
   chatMessages: initialChatMessages,
+  profile: initialPlayerProfile,
   quickActionTurns: {},
   turnNumber: 123,
   selectedCountry: null,
