@@ -31,6 +31,8 @@ export const MAX_TIMELINE_EVENTS = 7;
 export const MAX_LETTERS = 5;
 export const MAX_CHAT_MESSAGES = 80;
 
+const resourceIds = new Set<ResourceId>(['gold', 'wood', 'stone', 'iron', 'grain', 'population']);
+
 export function createNotice(state: GameState, message: string, kind: ActionStatusKind = 'success') {
   return {
     ...state,
@@ -84,8 +86,30 @@ function mergeNationDelta(...deltas: Record<string, NationDelta>[]) {
   }, {});
 }
 
+function validateResourceDeltaShape(
+  delta: ResourceDelta = {},
+  {
+    allowNegative = true,
+    maxAbs = Number.POSITIVE_INFINITY,
+  }: { allowNegative?: boolean; maxAbs?: number } = {},
+) {
+  for (const [resource, value] of Object.entries(delta)) {
+    if (!resourceIds.has(resource as ResourceId)) return 'Неизвестный ресурс.';
+    if (typeof value !== 'number' || !Number.isFinite(value)) return 'Некорректное значение ресурса.';
+    if (!allowNegative && value < 0) return 'Стоимость не может быть отрицательной.';
+    if (Math.abs(value) > maxAbs) return 'Слишком большой ресурсный эффект.';
+  }
+
+  return '';
+}
+
 export function canPay(resources: ResourceState[], cost: ResourceDelta = {}) {
+  if (validateResourceDeltaShape(cost, { allowNegative: false })) return false;
   return resources.every((resource) => (cost[resource.id] ?? 0) <= resource.value);
+}
+
+function resourceDeltaDoesNotBreakState(state: GameState, delta: ResourceDelta = {}) {
+  return state.resources.every((resource) => resource.value + (delta[resource.id] ?? 0) >= 0);
 }
 
 export function describeResourceCost(resources: ResourceState[], cost: ResourceDelta = {}) {
@@ -617,6 +641,51 @@ export function getLetterResponseOptions(letter: Letter) {
   return letter.responses?.length ? letter.responses : defaultLetterResponses(letter);
 }
 
+function knownEffectTargets(state: GameState, orderTarget?: string) {
+  return new Set([
+    ...state.diplomacy.map((relation) => relation.name),
+    ...state.nations.map((nation) => nation.name),
+    state.selectedCountry?.name,
+    orderTarget,
+  ].filter((name): name is string => Boolean(name)));
+}
+
+function validateDiplomacyDeltaForState(
+  state: GameState,
+  delta: Record<string, number> | undefined,
+  orderTarget?: string,
+) {
+  if (!delta) return '';
+  const knownTargets = knownEffectTargets(state, orderTarget);
+
+  for (const [country, value] of Object.entries(delta)) {
+    if (!knownTargets.has(country)) return `Неизвестная дипломатическая цель: ${country}.`;
+    if (typeof value !== 'number' || !Number.isFinite(value)) return 'Некорректный дипломатический эффект.';
+    if (value < -24 || value > 24) return 'Слишком сильный дипломатический эффект.';
+  }
+
+  return '';
+}
+
+function validateNationDeltaForState(
+  state: GameState,
+  delta: Record<string, NationDelta> | undefined,
+  orderTarget?: string,
+) {
+  if (!delta) return '';
+  const knownTargets = knownEffectTargets(state, orderTarget);
+
+  for (const [country, metrics] of Object.entries(delta)) {
+    if (!knownTargets.has(country)) return `Неизвестная цель досье: ${country}.`;
+    for (const value of Object.values(metrics || {})) {
+      if (typeof value !== 'number' || !Number.isFinite(value)) return 'Некорректный эффект досье.';
+      if (Math.abs(value) > 30) return 'Слишком сильный эффект досье.';
+    }
+  }
+
+  return '';
+}
+
 function resourceCostFromDelta(delta: ResourceDelta = {}) {
   return Object.fromEntries(
     Object.entries(delta)
@@ -684,6 +753,27 @@ export function createStrategicOrder(state: GameState, order: OrderDraft): GameS
   if (activeOrderCount >= MAX_ACTIVE_ORDERS) {
     return createNotice(state, 'Лимит приказов заполнен', 'error');
   }
+
+  const invalidCost = validateResourceDeltaShape(order.cost, { allowNegative: false, maxAbs: 5000 });
+  if (invalidCost) return createNotice(state, `Недопустимая стоимость приказа: ${invalidCost}`, 'error');
+  const invalidReward = validateResourceDeltaShape(order.reward, { allowNegative: false, maxAbs: 5000 });
+  if (invalidReward) return createNotice(state, `Недопустимая награда приказа: ${invalidReward}`, 'error');
+  const invalidFailureCost = validateResourceDeltaShape(order.failureCost, { maxAbs: 5000 });
+  if (invalidFailureCost) return createNotice(state, `Недопустимый риск приказа: ${invalidFailureCost}`, 'error');
+  if (!Number.isFinite(order.remainingTurns) || order.remainingTurns < 1 || order.remainingTurns > 5) {
+    return createNotice(state, 'Недопустимый срок приказа', 'error');
+  }
+  if (!Number.isFinite(order.totalTurns) || order.totalTurns < order.remainingTurns || order.totalTurns > 5) {
+    return createNotice(state, 'Недопустимая длительность приказа', 'error');
+  }
+  const invalidDiplomacy =
+    validateDiplomacyDeltaForState(state, order.diplomacyDelta, order.target) ||
+    validateDiplomacyDeltaForState(state, order.failureDiplomacyDelta, order.target);
+  if (invalidDiplomacy) return createNotice(state, invalidDiplomacy, 'error');
+  const invalidNationDelta =
+    validateNationDeltaForState(state, order.nationDelta, order.target) ||
+    validateNationDeltaForState(state, order.failureNationDelta, order.target);
+  if (invalidNationDelta) return createNotice(state, invalidNationDelta, 'error');
 
   if (!canPay(state.resources, order.cost)) {
     return createNotice(state, `Не хватает ресурсов: ${describeResourceCost(state.resources, order.cost)}`, 'error');
@@ -1197,6 +1287,17 @@ function riskText(risk: NonNullable<Order['riskLevel']>) {
 export function refineOperationPlan(state: GameState, planIdToRefine: string): GameState {
   const plan = state.operationPlans.find((item) => item.id === planIdToRefine);
   if (!plan) return createNotice(state, 'Предложение совета не найдено', 'error');
+
+  if (plan.expiresTurn < state.turnNumber) {
+    return createNotice(
+      {
+        ...state,
+        operationPlans: state.operationPlans.filter((item) => item.id !== planIdToRefine),
+      },
+      'Оперативный план устарел',
+      'error',
+    );
+  }
 
   const refinements = plan.refinements || 0;
   if (refinements >= 2) {
@@ -1757,7 +1858,10 @@ export function endTurn(state: GameState): GameState {
   }
 
   const finalDiplomacy = applyDiplomacyDeltaWithUpserts(state.diplomacy, totalDiplomacyDelta);
-  const finalNations = upsertNationsForDiplomacyDeltas(world.nations, finalDiplomacy, totalDiplomacyDelta);
+  const finalNations = upsertNationsForDiplomacyDeltas(world.nations, finalDiplomacy, totalDiplomacyDelta).map((nation) => {
+    const relation = finalDiplomacy.find((item) => item.name === nation.name);
+    return relation ? { ...nation, relation: relation.score } : nation;
+  });
 
   return createNotice(
     {
@@ -1809,6 +1913,14 @@ export function applyValidatedEffect(state: GameState, effect: EngineEffect): Ga
 
   if (effect.kind === 'create-order' && effect.order) {
     return createStrategicOrder(state, effect.order);
+  }
+
+  if (effect.resourceDelta) {
+    const invalidResourceDelta = validateResourceDeltaShape(effect.resourceDelta, { maxAbs: 2500 });
+    if (invalidResourceDelta) return createNotice(state, invalidResourceDelta, 'error');
+    if (!resourceDeltaDoesNotBreakState(state, effect.resourceDelta)) {
+      return createNotice(state, 'Действие требует больше ресурсов, чем есть в казне', 'error');
+    }
   }
 
   const withResources = effect.resourceDelta

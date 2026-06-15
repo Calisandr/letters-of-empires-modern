@@ -99,18 +99,24 @@ function isActiveOrder(order: Order) {
 }
 
 function isTradeOrder(order: Order) {
-  return order.iconKey === 'anchor' || order.iconKey === 'package' || Boolean(order.reward?.gold || order.reward?.grain);
+  return order.iconKey === 'anchor' || order.iconKey === 'package';
 }
 
 function isMilitaryOrder(order: Order) {
   return order.iconKey === 'swords' || order.iconKey === 'shield' || order.riskLevel === 'high' || order.riskLevel === 'critical';
 }
 
-function resolveOrderCountry(order: Order, knownCountryNames: Set<string>) {
-  const diplomacyTarget = Object.keys(order.diplomacyDelta || {})[0];
-  if (diplomacyTarget) return diplomacyTarget;
-  if (knownCountryNames.has(order.target)) return order.target;
-  return orderTargetAliases[order.target] || order.target;
+function resolveOrderCountries(order: Order, knownCountryNames: Set<string>) {
+  const targets = new Set<string>();
+  Object.keys(order.diplomacyDelta || {}).forEach((target) => targets.add(target));
+  Object.keys(order.failureDiplomacyDelta || {}).forEach((target) => targets.add(target));
+  Object.keys(order.nationDelta || {}).forEach((target) => targets.add(target));
+  Object.keys(order.failureNationDelta || {}).forEach((target) => targets.add(target));
+
+  if (knownCountryNames.has(order.target)) targets.add(order.target);
+  else targets.add(orderTargetAliases[order.target] || order.target);
+
+  return [...targets];
 }
 
 function eventSeverity(impact?: WorldEventImpact, tone?: WorldEventTone) {
@@ -172,7 +178,7 @@ export function buildMapSignals(
     ...state.nations.map((nation) => nation.name),
     ...state.diplomacy.map((relation) => relation.name),
     ...state.worldEvents.map((event) => event.actor),
-    ...activeOrders.map((order) => resolveOrderCountry(order, knownCountryNames)),
+    ...activeOrders.flatMap((order) => resolveOrderCountries(order, knownCountryNames)),
   ]);
 
   if (state.selectedCountry) countryNames.add(state.selectedCountry.name);
@@ -184,7 +190,7 @@ export function buildMapSignals(
 
       const nation = state.nations.find((item) => item.name === countryName);
       const relation = state.diplomacy.find((item) => item.name === countryName);
-      const relatedOrders = activeOrders.filter((order) => resolveOrderCountry(order, knownCountryNames) === countryName);
+      const relatedOrders = activeOrders.filter((order) => resolveOrderCountries(order, knownCountryNames).includes(countryName));
       const relatedEvent = state.worldEvents.find((event) => event.actor === countryName);
       const score = countryName === 'Россия' ? 200 : relation?.score ?? nation?.relation ?? 0;
       const focus = nation?.focus ?? (relatedOrders.some(isTradeOrder) ? 'trade' : relatedOrders.some(isMilitaryOrder) ? 'military' : 'diplomacy');

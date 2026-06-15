@@ -27,6 +27,7 @@ import { formatOrderDue } from './formatters';
 
 const PROFILE_NAME_MAX_LENGTH = 15;
 const PROFILE_STATUS_MAX_LENGTH = 80;
+const PROFILE_AVATAR_DATA_URL_MAX_LENGTH = 512 * 1024;
 
 function appendChatMessages(state: GameState, messages: ChatMessage[]) {
   return {
@@ -43,12 +44,17 @@ function limitText(value: string, maxLength: number) {
 function normalizeProfile(profile: PlayerProfile): PlayerProfile {
   const name = limitText(profile.name.trim(), PROFILE_NAME_MAX_LENGTH) || 'Родерик';
   const status = limitText(profile.status.trim(), PROFILE_STATUS_MAX_LENGTH);
+  const avatarDataUrl =
+    profile.avatarDataUrl.startsWith('data:image/webp;base64,') &&
+    profile.avatarDataUrl.length <= PROFILE_AVATAR_DATA_URL_MAX_LENGTH
+      ? profile.avatarDataUrl
+      : '';
 
   return {
     name,
     title: 'Правитель',
     status,
-    avatarDataUrl: profile.avatarDataUrl.startsWith('data:image/') ? profile.avatarDataUrl : '',
+    avatarDataUrl,
   };
 }
 
@@ -82,9 +88,7 @@ function upsertCouncilProposal(plans: OperationPlan[], plan: OperationPlan) {
     (item) => !(item.target === plan.target && item.kind === plan.kind && item.title === plan.title),
   );
 
-  return [plan, ...withoutSameProposal]
-    .filter((item) => item.expiresTurn >= plan.createdTurn)
-    .slice(0, MAX_OPERATION_PLANS);
+  return [plan, ...withoutSameProposal].slice(0, MAX_OPERATION_PLANS);
 }
 
 function orderToCouncilProposal(
@@ -107,7 +111,7 @@ function orderToCouncilProposal(
     durationTurns: order.remainingTurns,
     riskLevel,
     successChance: order.successChance ?? riskChance(riskLevel),
-    createdTurn: state.nextActionId,
+    createdTurn: state.turnNumber,
     expiresTurn: Number.MAX_SAFE_INTEGER,
     cost: order.cost || {},
     reward: order.reward,

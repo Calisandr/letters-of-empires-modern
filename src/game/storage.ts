@@ -16,6 +16,7 @@ import type {
 
 const PROFILE_NAME_MAX_LENGTH = 15;
 const PROFILE_STATUS_MAX_LENGTH = 80;
+const PROFILE_AVATAR_DATA_URL_MAX_LENGTH = 512 * 1024;
 
 const SAVE_KEY = 'letters-of-empires:game:v1';
 
@@ -68,12 +69,17 @@ function normalizeProfile(value: unknown): PlayerProfile {
   const name = limitText(stringOrDefault(profile.name, initialGameState.profile.name).trim(), PROFILE_NAME_MAX_LENGTH) || initialGameState.profile.name;
   const status = limitText(stringOrDefault(profile.status, initialGameState.profile.status).trim(), PROFILE_STATUS_MAX_LENGTH);
   const avatarDataUrl = stringOrDefault(profile.avatarDataUrl, '');
+  const safeAvatarDataUrl =
+    avatarDataUrl.startsWith('data:image/webp;base64,') &&
+    avatarDataUrl.length <= PROFILE_AVATAR_DATA_URL_MAX_LENGTH
+      ? avatarDataUrl
+      : '';
 
   return {
     name,
     title: 'Правитель',
     status,
-    avatarDataUrl: avatarDataUrl.startsWith('data:image/') ? avatarDataUrl : '',
+    avatarDataUrl: safeAvatarDataUrl,
   };
 }
 

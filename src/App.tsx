@@ -2018,6 +2018,11 @@ function App() {
   const mapSignalByKey = useMemo(() => {
     return new Map(mapSignals.map((signal) => [signal.countryKey, signal]));
   }, [mapSignals]);
+  const activeOrderCount = useMemo(
+    () => orders.filter((order) => order.statusClass !== 'cancelled').length,
+    [orders],
+  );
+  const councilPriorityPlan = useMemo(() => pickCouncilPriorityPlan(operationPlans), [operationPlans]);
   const turnObjective = useMemo(
     () =>
       buildTurnObjective({
@@ -2453,7 +2458,7 @@ function App() {
           <UtilityPanel
             title={activeUtilityPanel}
             mailCount={letters.length}
-            orderCount={orders.filter((order) => order.statusClass !== 'cancelled').length}
+            orderCount={activeOrderCount}
             selectedCountryName={gameState.selectedCountry?.name || 'Россия'}
             onClose={() => setActiveUtilityPanel(null)}
           />
@@ -2595,7 +2600,8 @@ function App() {
               activeChannel={activeChatChannel}
               selectedCountryName={gameState.selectedCountry?.name || 'Россия'}
               allianceNames={allianceNames}
-              orderCount={orders.filter((order) => order.statusClass !== 'cancelled').length}
+              orderCount={activeOrderCount}
+              activeCouncilPlan={activeChatChannel === 'council' ? councilPriorityPlan : undefined}
               worldTension={worldTension}
               onInputChange={setChatInput}
               onTabChange={(tab) => {
@@ -2603,6 +2609,9 @@ function App() {
                 showToast(`Канал "${tab}" открыт`);
               }}
               onSubmit={submitChat}
+              onOpenPlan={openOperationPlanDossier}
+              onApprovePlan={confirmOperationPlan}
+              onDismissPlan={dismissOperationPlan}
               messagesRef={chatMessagesRef}
             />
           </section>
@@ -2632,7 +2641,7 @@ function App() {
         <OperationPlanDossierDialog
           plan={pendingOperationPlan}
           resources={resources}
-          activeOrderCount={orders.filter((order) => order.statusClass !== 'cancelled').length}
+          activeOrderCount={activeOrderCount}
           onClose={() => setPendingOperationPlanId(null)}
           onApprove={confirmOperationPlan}
           onRefine={refineOperationPlan}
@@ -3437,10 +3446,14 @@ function ChatPanel({
   selectedCountryName,
   allianceNames,
   orderCount,
+  activeCouncilPlan,
   worldTension,
   onInputChange,
   onTabChange,
   onSubmit,
+  onOpenPlan,
+  onApprovePlan,
+  onDismissPlan,
   messagesRef,
 }: {
   messages: ChatMessage[];
@@ -3450,10 +3463,14 @@ function ChatPanel({
   selectedCountryName: string;
   allianceNames: string[];
   orderCount: number;
+  activeCouncilPlan?: OperationPlan;
   worldTension: number;
   onInputChange: (value: string) => void;
   onTabChange: (tab: ChatTabLabel) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onOpenPlan: (id: string) => void;
+  onApprovePlan: (id: string) => void;
+  onDismissPlan: (id: string) => void;
   messagesRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -3543,6 +3560,8 @@ function ChatPanel({
     },
   };
   const config = chatConfig[activeChannel];
+  const planDecision = activeCouncilPlan ? describePlanDecision(activeCouncilPlan, orderCount) : null;
+  const planBlocked = orderCount >= 5;
   const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== 'Enter' || event.shiftKey) return;
 
@@ -3552,7 +3571,7 @@ function ChatPanel({
 
   return (
     <motion.section
-      className="chat-panel framed-panel"
+      className={`chat-panel framed-panel${activeCouncilPlan ? ' has-council-plan' : ''}`}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.08, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
@@ -3585,6 +3604,41 @@ function ChatPanel({
           </span>
         ))}
       </div>
+      {activeCouncilPlan && planDecision ? (
+        <section className={`council-plan-strip ${activeCouncilPlan.riskLevel}`} aria-label="Текущее предложение Совета">
+          <span className="council-plan-status">
+            <b>{planDecision.label}</b>
+            <small>
+              шанс {activeCouncilPlan.successChance}% · {planRiskLabel(activeCouncilPlan.riskLevel)}
+            </small>
+          </span>
+          <button
+            type="button"
+            className="council-plan-title"
+            aria-label={`Открыть досье предложения: ${activeCouncilPlan.title}`}
+            onClick={() => onOpenPlan(activeCouncilPlan.id)}
+          >
+            {activeCouncilPlan.title}
+          </button>
+          <div className="council-plan-actions">
+            <button type="button" onClick={() => onOpenPlan(activeCouncilPlan.id)}>
+              Досье
+            </button>
+            <button
+              type="button"
+              className="primary"
+              disabled={planBlocked}
+              title={planBlocked ? 'Лимит активных приказов заполнен' : undefined}
+              onClick={() => onApprovePlan(activeCouncilPlan.id)}
+            >
+              Утвердить
+            </button>
+            <button type="button" onClick={() => onDismissPlan(activeCouncilPlan.id)}>
+              Отложить
+            </button>
+          </div>
+        </section>
+      ) : null}
       <div
         id="chatMessages"
         className="chat-messages"

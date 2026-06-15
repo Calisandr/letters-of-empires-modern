@@ -253,41 +253,63 @@ export function validateEngineEffect(decision: AiArbitrationDecision, state: Gam
   if (decision.feasibility === 'blocked' || effect.kind === 'blocked') {
     return { kind: 'blocked', reason: effect.reason || decision.playerFacingResult };
   }
+  const knownCountries = new Set(state.diplomacy.map((relation) => relation.name));
+  state.nations.forEach((nation) => knownCountries.add(nation.name));
+  if (state.selectedCountry) knownCountries.add(state.selectedCountry.name);
+  const validateDiplomacyDelta = (delta: Record<string, number> | undefined, orderTarget?: string) => {
+    if (!delta) return '';
+    const allowedCountries = new Set(knownCountries);
+    if (orderTarget && knownCountries.has(orderTarget)) allowedCountries.add(orderTarget);
+
+    for (const [country, value] of Object.entries(delta)) {
+      if (!allowedCountries.has(country)) return 'AI выбрал неизвестную дипломатическую цель.';
+      if (typeof value !== 'number' || !Number.isFinite(value)) return 'AI вернул некорректный дипломатический эффект.';
+      if (value < -12 || value > 8) return 'AI вернул слишком сильный дипломатический эффект.';
+    }
+
+    return '';
+  };
 
   const resourceDelta = effect.resourceDelta;
   if (resourceDelta) {
     for (const [resource, value] of Object.entries(resourceDelta)) {
       if (!resourceIds.has(resource as ResourceId)) return { kind: 'blocked', reason: 'AI вернул неизвестный ресурс.' };
+      if (typeof value !== 'number' || !Number.isFinite(value)) return { kind: 'blocked', reason: 'AI вернул некорректный ресурсный эффект.' };
       if (Math.abs(value) > 2500) return { kind: 'blocked', reason: 'AI вернул слишком большой ресурсный эффект.' };
+    }
+    if (!validateResourceDeltaDoesNotBreakState(state, resourceDelta)) {
+      return { kind: 'blocked', reason: 'AI попытался списать больше ресурсов, чем есть в казне.' };
     }
   }
 
   if (effect.diplomacyDelta) {
-    const knownCountries = new Set(state.diplomacy.map((relation) => relation.name));
-    if (state.selectedCountry) knownCountries.add(state.selectedCountry.name);
-    for (const [country, value] of Object.entries(effect.diplomacyDelta)) {
-      if (!knownCountries.has(country)) return { kind: 'blocked', reason: 'AI выбрал неизвестную дипломатическую цель.' };
-      if (value < -12 || value > 8) return { kind: 'blocked', reason: 'AI вернул слишком сильный дипломатический эффект.' };
-    }
+    const diplomacyError = validateDiplomacyDelta(effect.diplomacyDelta);
+    if (diplomacyError) return { kind: 'blocked', reason: diplomacyError };
   }
 
   if (effect.kind === 'create-order') {
     const order = effect.order;
     if (!order) return { kind: 'blocked', reason: 'AI не вернул данные приказа.' };
     if (order.remainingTurns < 1 || order.remainingTurns > 5) return { kind: 'blocked', reason: 'Недопустимый срок приказа.' };
-    if (!canPay(state.resources, order.cost)) return { kind: 'blocked', reason: 'Не хватает ресурсов для приказа.' };
 
     for (const [resource, value] of Object.entries(order.cost || {})) {
-      if (!resourceIds.has(resource as ResourceId) || value < 0) {
+      if (!resourceIds.has(resource as ResourceId) || typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
         return { kind: 'blocked', reason: 'Недопустимая стоимость приказа.' };
       }
     }
 
+    if (!canPay(state.resources, order.cost)) return { kind: 'blocked', reason: 'Не хватает ресурсов для приказа.' };
+
     for (const [resource, value] of Object.entries(order.reward || {}) as [ResourceId, number][]) {
-      if (!resourceIds.has(resource) || value < 0 || value > 5000) {
+      if (!resourceIds.has(resource) || typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 5000) {
         return { kind: 'blocked', reason: 'Недопустимая награда приказа.' };
       }
     }
+
+    const diplomacyError =
+      validateDiplomacyDelta(order.diplomacyDelta, order.target) ||
+      validateDiplomacyDelta(order.failureDiplomacyDelta, order.target);
+    if (diplomacyError) return { kind: 'blocked', reason: diplomacyError };
   }
 
   return effect;

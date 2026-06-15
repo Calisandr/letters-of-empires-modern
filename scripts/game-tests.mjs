@@ -474,6 +474,81 @@ try {
     assert.equal(next.lastNotice.kind, 'error');
   });
 
+  test('engine rejects negative order costs instead of adding resources', () => {
+    const state = clone(initialGameState);
+    const beforeGold = state.resources.find((resource) => resource.id === 'gold').value;
+    const next = createStrategicOrder(state, {
+      iconKey: 'landmark',
+      title: 'Negative cost probe',
+      owner: 'Council',
+      target: 'Moscow',
+      remainingTurns: 1,
+      totalTurns: 1,
+      cost: { gold: -500 },
+      completeText: 'Should not be created.',
+    });
+
+    assert.equal(next.orders.length, state.orders.length);
+    assert.equal(next.resources.find((resource) => resource.id === 'gold').value, beforeGold);
+    assert.equal(next.lastNotice.kind, 'error');
+  });
+
+  test('validated resource effects cannot overdraw the treasury', () => {
+    const state = {
+      ...clone(initialGameState),
+      resources: initialGameState.resources.map((resource) =>
+        resource.id === 'gold' ? { ...resource, value: 100 } : resource,
+      ),
+    };
+    const decision = {
+      feasibility: 'attemptable',
+      judgement: 'possible',
+      riskLevel: 'low',
+      reasoningSummary: 'Resource guard probe.',
+      playerFacingResult: 'Resource guard probe.',
+      engineEffect: {
+        kind: 'resource-delta',
+        resourceDelta: { gold: -200 },
+        eventTitle: 'Resource guard probe',
+        eventDescription: 'Should not apply.',
+      },
+    };
+    const effect = validateEngineEffect(decision, state);
+    const next = applyValidatedEffect(state, effect);
+
+    assert.equal(effect.kind, 'blocked');
+    assert.equal(next.resources.find((resource) => resource.id === 'gold').value, 100);
+    assert.equal(next.lastNotice.kind, 'error');
+  });
+
+  test('validated create-order rejects unknown nested diplomacy targets', () => {
+    const state = clone(initialGameState);
+    const decision = {
+      feasibility: 'attemptable',
+      judgement: 'possible',
+      riskLevel: 'medium',
+      reasoningSummary: 'Diplomacy guard probe.',
+      playerFacingResult: 'Diplomacy guard probe.',
+      engineEffect: {
+        kind: 'create-order',
+        order: {
+          iconKey: 'mail',
+          title: 'Unknown target probe',
+          owner: 'Council',
+          target: 'Atlantis',
+          remainingTurns: 1,
+          totalTurns: 1,
+          cost: { gold: 10 },
+          completeText: 'Should not be created.',
+          diplomacyDelta: { Atlantis: 4 },
+        },
+      },
+    };
+    const effect = validateEngineEffect(decision, state);
+
+    assert.equal(effect.kind, 'blocked');
+  });
+
   test('profile update keeps nickname limited and avatar safe', () => {
     const state = clone(initialGameState);
     const next = gameReducer(state, {
@@ -503,6 +578,18 @@ try {
 
     assert.equal(repaired.profile.name, initialGameState.profile.name);
     assert.equal(repaired.profile.avatarDataUrl, '');
+
+    const unsafeImage = gameReducer(state, {
+      type: 'UPDATE_PROFILE',
+      profile: {
+        name: 'Safe name',
+        title: 'Ruler',
+        status: '',
+        avatarDataUrl: 'data:image/svg+xml;base64,PHN2Zy8+',
+      },
+    });
+
+    assert.equal(unsafeImage.profile.avatarDataUrl, '');
   });
 
   test('legacy world simulation produces a living world report and nation actions', () => {
@@ -687,6 +774,38 @@ try {
     assert.equal(ukraine.marker, 'military');
   });
 
+  test('map intel links a diplomacy order to every affected country', () => {
+    const base = clone(initialGameState);
+    const firstTarget = base.diplomacy[0].name;
+    const secondTarget = base.diplomacy[1].name;
+    const state = {
+      ...base,
+      orders: [
+        {
+          ...base.orders[0],
+          id: 'multi-target-diplomacy',
+          iconKey: 'mail',
+          target: 'Council',
+          statusClass: 'progress',
+          diplomacyDelta: {
+            [firstTarget]: 4,
+            [secondTarget]: 2,
+          },
+        },
+      ],
+    };
+    const signals = buildMapSignals(state, {
+      [firstTarget]: 'FirstTarget',
+      [secondTarget]: 'SecondTarget',
+    });
+    const firstSignal = signals.find((signal) => signal.countryKey === 'FirstTarget');
+    const secondSignal = signals.find((signal) => signal.countryKey === 'SecondTarget');
+
+    assert.equal(firstSignal?.activeOrders, 1);
+    assert.equal(secondSignal?.activeOrders, 1);
+    assert.notEqual(firstSignal?.marker, 'trade');
+  });
+
   test('reckless completed order can fail with validated consequences', () => {
     const state = {
       ...clone(initialGameState),
@@ -810,6 +929,10 @@ try {
     const previousWindow = globalThis.window;
     const saved = JSON.stringify({
       ...initialGameState,
+      profile: {
+        ...initialGameState.profile,
+        avatarDataUrl: 'data:image/svg+xml;base64,PHN2Zy8+',
+      },
       resources: [null],
       letters: [null, initialGameState.letters[0]],
       diplomacy: [null, initialGameState.diplomacy[0]],
@@ -847,6 +970,7 @@ try {
       assert.equal(loaded.nations.length, 1);
       assert.equal(loaded.chatMessages.length, 1);
       assert.equal(loaded.chatMessages[0].channel, initialGameState.chatMessages[0].channel);
+      assert.equal(loaded.profile.avatarDataUrl, '');
     } finally {
       if (previousWindow === undefined) {
         delete globalThis.window;

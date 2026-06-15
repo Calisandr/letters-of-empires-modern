@@ -115,6 +115,7 @@ async function readLayoutDiagnostics() {
       turnFlowVisible: isVisible('.turn-flow'),
       hasVisibleTurnSystemText: /Завершить ход|Текущий ход|До конца хода|Маршрут хода|Цель хода|\/ход/i.test(visibleText),
       inlineCouncilControlsVisible: isVisible('.council-decision-card, .council-decision-slot'),
+      councilPlanStripVisible: isVisible('.council-plan-strip'),
       chatOverflowY: chatMessages ? getComputedStyle(chatMessages).overflowY : '',
       chatScrollHeight: chatMessages?.scrollHeight || 0,
       chatClientHeight: chatMessages?.clientHeight || 0,
@@ -125,6 +126,9 @@ async function readLayoutDiagnostics() {
         const box = node.getBoundingClientRect();
         return style.display !== 'none' && box.height > 0 && box.width > 0;
       }).length,
+      rightPanelClippedHeadings: [...document.querySelectorAll('.right-panel .panel-heading h2')]
+        .filter((node) => node.scrollWidth > node.clientWidth + 1)
+        .map((node) => node.textContent?.replace(/\s+/g, ' ').trim() || ''),
       mailBadge: document.querySelector('.primary-nav .pill')?.textContent?.trim() || '',
     };
   });
@@ -292,12 +296,27 @@ try {
     return {
       decisionCardCount: document.querySelectorAll('.council-decision-card').length,
       decisionSlotCount: document.querySelectorAll('.council-decision-slot').length,
+      planStripCount: document.querySelectorAll('.council-plan-strip').length,
+      planStripTitle: document.querySelector('.council-plan-title')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+      planStripActions: document.querySelectorAll('.council-plan-actions button').length,
       overflowY: messages ? getComputedStyle(messages).overflowY : '',
       messageCount: messages?.querySelectorAll('p').length || 0,
       context: document.querySelector('.chat-context')?.textContent?.replace(/\s+/g, ' ').trim() || '',
       toast: document.querySelector('.toast.visible')?.textContent?.replace(/\s+/g, ' ').trim() || '',
     };
   });
+
+  await page.locator('.council-plan-title').click();
+  await page.waitForSelector('.operation-plan-dialog');
+  const operationPlanDialog = await page.evaluate(() => ({
+    title: document.querySelector('.operation-plan-dialog h2')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+    metricCount: document.querySelectorAll('.operation-plan-dialog .plan-dossier-metrics div').length,
+    outcomeCount: document.querySelectorAll('.operation-plan-dialog .plan-dossier-outcomes article').length,
+    approveButtonVisible: Boolean(document.querySelector('.operation-plan-dialog .plan-dossier-actions .primary')),
+    approveButtonDisabled: document.querySelector('.operation-plan-dialog .plan-dossier-actions .primary')?.disabled || false,
+  }));
+  await page.locator('.operation-plan-dialog .dialog-close').click();
+  await page.waitForFunction(() => !document.querySelector('.operation-plan-dialog'));
 
   const finalLayout = await readLayoutDiagnostics();
   await page.screenshot({ path: screenshotPath, fullPage: true });
@@ -322,6 +341,7 @@ try {
   assert(initialLayout.inlineCouncilControlsVisible === false, 'inline council controls should not crowd the chat');
   assert(initialLayout.chatOverflowY === 'auto' || initialLayout.chatOverflowY === 'scroll', 'chat messages should be scrollable');
   assert(initialLayout.visibleRightPanels === 2, 'right rail should show only summary and mail');
+  assert(initialLayout.rightPanelClippedHeadings.length === 0, `right panel headings should not be clipped: ${initialLayout.rightPanelClippedHeadings.join(', ')}`);
   assert(initialLayout.timelineRows >= 2, 'world summary should still show events');
   assert(initialLayout.mailRows >= 2, 'mail summary should still show letters');
   assert(profileDialog.title === 'Настройки профиля', 'profile dialog should open from ruler profile');
@@ -352,13 +372,23 @@ try {
   assert(economyLayout.shortRows.length === 0, `economy tiles should have enough breathing room: ${economyLayout.shortRows.join(', ')}`);
   assert(councilAfterCommand.decisionCardCount === 0, 'council command should not render inline decision cards');
   assert(councilAfterCommand.decisionSlotCount === 0, 'chat should not reserve an inline decision slot');
+  assert(councilAfterCommand.planStripCount === 1, 'council command should expose one compact plan strip');
+  assert(councilAfterCommand.planStripTitle.length > 3, 'council plan strip should name the proposed action');
+  assert(councilAfterCommand.planStripActions === 3, 'council plan strip should provide dossier, approve, and dismiss actions');
   assert(councilAfterCommand.overflowY === 'auto' || councilAfterCommand.overflowY === 'scroll', 'council chat should stay scrollable');
   assert(councilAfterCommand.messageCount >= 1, 'council command should keep normal chat messages visible');
+  assert(operationPlanDialog.title.length > 3, 'council plan strip should open the operation dossier');
+  assert(operationPlanDialog.metricCount >= 4, 'operation dossier should show plan metrics');
+  assert(operationPlanDialog.outcomeCount >= 2, 'operation dossier should explain success and failure outcomes');
+  assert(operationPlanDialog.approveButtonVisible, 'operation dossier should still allow approval');
+  assert(operationPlanDialog.approveButtonDisabled === false, 'operation dossier approval should be available for a valid plan');
   assert(finalLayout.quickActionsVisible === false, 'quick actions should stay removed after interactions');
   assert(finalLayout.endTurnVisible === false, 'end turn button should stay removed after interactions');
   assert(finalLayout.ordersPanelVisible === false, 'orders panel should stay removed after interactions');
   assert(finalLayout.diplomacyPanelVisible === false, 'diplomacy panel should stay removed after interactions');
   assert(finalLayout.hasVisibleTurnSystemText === false, 'old turn-system copy should stay hidden after interactions');
+  assert(finalLayout.rightPanelClippedHeadings.length === 0, `right panel headings should stay readable: ${finalLayout.rightPanelClippedHeadings.join(', ')}`);
+  assert(finalLayout.councilPlanStripVisible === true, 'compact council plan should remain available after closing dossier');
   assert(finalLayout.chatOverflowY === 'auto' || finalLayout.chatOverflowY === 'scroll', 'chat scroll should stay enabled');
   assert(consoleErrors.length === 0, 'browser console should have no errors');
 
@@ -372,6 +402,7 @@ try {
     chatScrollDiagnostics,
     economyLayout,
     councilAfterCommand,
+    operationPlanDialog,
     finalLayout,
     consoleErrors,
     failures,
