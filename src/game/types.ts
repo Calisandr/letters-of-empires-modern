@@ -335,5 +335,4 @@ export type GameAction =
   | { type: 'DISMISS_OPERATION_PLAN'; id: string }
   | { type: 'RESPOND_TO_LETTER'; letterId: string; responseId: string }
   | { type: 'UPDATE_PROFILE'; profile: PlayerProfile }
-  | { type: 'CANCEL_ORDER'; id: string }
-  | { type: 'END_TURN' };
+  | { type: 'CANCEL_ORDER'; id: string };

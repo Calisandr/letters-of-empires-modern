@@ -44,8 +44,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import worldMapSvg from './assets/world-map.svg?raw';
-import { canPay, getLetterResponseOptions, getLetterRuntimeId, oncePerTurnQuickActions } from './game/engine';
-import { formatResourceTrend, formatResourceValue } from './game/formatters';
+import { canPay, getLetterResponseOptions, getLetterRuntimeId } from './game/engine';
+import { formatOrderDue, formatResourceTrend, formatResourceValue } from './game/formatters';
 import { playerCountry } from './game/initialState';
 import { buildMapSignals, filterMapSignalsForMode, type MapModeId, type MapSignal } from './game/mapIntel';
 import { gameReducer } from './game/reducer';
@@ -547,7 +547,7 @@ const quickActions: Array<{
     label: 'Письмо союзникам',
     icon: Mail,
     description: 'Совет подготовит письмо для закрытого союзного канала.',
-    cadence: 'раз в ход',
+    cadence: 'канцелярия',
   },
   {
     id: 'create-order',
@@ -558,10 +558,10 @@ const quickActions: Array<{
   },
   {
     id: 'manage-lands',
-    label: 'Хозяйственный ход',
+    label: 'Хозяйственное решение',
     icon: Landmark,
     description: 'Внутренний совет предложит безопасный экономический приказ.',
-    cadence: 'раз в ход',
+    cadence: 'экономика',
   },
   {
     id: 'trade-routes',
@@ -582,7 +582,7 @@ const quickActions: Array<{
     label: 'Дипломатический зонд',
     icon: Handshake,
     description: 'Канцелярия проверит окно для осторожных переговоров.',
-    cadence: 'раз в ход',
+    cadence: 'дипломатия',
   },
 ];
 
@@ -918,7 +918,7 @@ function getVisibleIntent(
       tone: 'unknown',
       label: 'Намерение',
       title: 'Оценка не готова',
-      summary: 'Нужны разведка, дипломатия или следующий ход, чтобы понять ближайший замысел страны.',
+      summary: 'Нужны разведка, дипломатия или новое распоряжение, чтобы понять ближайший замысел страны.',
       meta: 'нет донесения',
     };
   }
@@ -1210,7 +1210,7 @@ function firstPlanEffect(plan: OperationPlan) {
   }
 
   if (plan.kind === 'infrastructure' || plan.kind === 'stability') {
-    return reward ? `Внутренний эффект: ${reward}.` : 'Усиливает устойчивость державы и разгружает следующий ход.';
+    return reward ? `Внутренний эффект: ${reward}.` : 'Усиливает устойчивость державы и снижает давление на управление.';
   }
 
   if (reward) return `Эффект: ${reward}.`;
@@ -1237,9 +1237,7 @@ function failurePreview(plan: OperationPlan) {
   return 'Низкий риск: потери при срыве ограничены.';
 }
 
-function describePlanDecision(plan: OperationPlan, activeOrderCount: number, currentTurn: number) {
-  const expiresIn = Math.max(0, plan.expiresTurn - currentTurn);
-
+function describePlanDecision(plan: OperationPlan, activeOrderCount: number) {
   if (activeOrderCount >= 5) {
     return {
       label: 'нужен слот',
@@ -1255,15 +1253,6 @@ function describePlanDecision(plan: OperationPlan, activeOrderCount: number, cur
       tone: 'risk' as PlanDecisionTone,
       nextAction: 'Откройте досье и уточните план, если цена провала слишком высока.',
       reason: `${councilPriorityReason(plan, activeOrderCount)} ${failurePreview(plan)}`,
-    };
-  }
-
-  if (expiresIn <= 1) {
-    return {
-      label: 'решить сейчас',
-      tone: 'watch' as PlanDecisionTone,
-      nextAction: 'Окно почти закрыто: утвердите план или отложите его, чтобы очистить штаб.',
-      reason: councilPriorityReason(plan, activeOrderCount),
     };
   }
 
@@ -1288,8 +1277,8 @@ function buildCouncilStarterPrompts(selectedCountryName: string, worldTension: n
   const target = selectedCountryName || playerCountry.name;
   const pressurePrompt =
     worldTension >= 55
-      ? `Совет, оцени риски вокруг цели "${target}" и предложи оборонительный ход без резкой эскалации.`
-      : `Совет, найди выгодный спокойный ход по цели "${target}" на этот ход.`;
+      ? `Совет, оцени риски вокруг цели "${target}" и предложи оборонительное решение без резкой эскалации.`
+      : `Совет, найди выгодное спокойное решение по цели "${target}".`;
 
   return [
     {
@@ -1311,7 +1300,7 @@ function buildCouncilStarterPrompts(selectedCountryName: string, worldTension: n
 }
 
 function councilChoiceRole(plan: OperationPlan) {
-  if (plan.successChance >= 90 && plan.riskLevel === 'low') return 'Безопасный ход';
+  if (plan.successChance >= 90 && plan.riskLevel === 'low') return 'Безопасное решение';
   if (plan.riskLevel === 'high' || plan.riskLevel === 'critical') return 'Рискованный прорыв';
   if (plan.kind === 'trade') return 'Торговое окно';
   if (plan.kind === 'diplomacy') return 'Дипломатический канал';
@@ -1334,11 +1323,11 @@ function operationPlanDoctrine(plan: OperationPlan) {
   }
 
   if (plan.kind === 'diplomacy') {
-    return 'Дипломатический ход полезен, когда нужно выиграть время и снизить риск прямого столкновения.';
+    return 'Дипломатическое решение полезно, когда нужно выиграть время и снизить риск прямого столкновения.';
   }
 
   if (plan.kind === 'trade') {
-    return 'Торговый ход усиливает доход, но его лучше не откладывать, пока маршрут открыт.';
+    return 'Торговое решение усиливает доход, но его лучше не откладывать, пока маршрут открыт.';
   }
 
   return 'План рабочий, но совет рекомендует сверить цену, срок и последствия перед утверждением.';
@@ -1458,7 +1447,7 @@ function CountryIntelPanel({
       {intel.relatedEvent || !intel.currentIntent ? (
         <p className="country-intel-activity">{intel.relatedEvent?.text || intel.lastAction}</p>
       ) : null}
-      <small>{intel.isDetailed ? 'Досье обновляется каждый ход.' : 'Базовое досье: точность растет через дипломатию и разведку.'}</small>
+      <small>{intel.isDetailed ? 'Досье обновляется после новых действий.' : 'Базовое досье: точность растет через дипломатию и разведку.'}</small>
     </aside>
   );
 }
@@ -1514,8 +1503,8 @@ function buildTurnObjective({
     const relationScore = selectedRelation?.score ?? selectedNation?.relation ?? 0;
 
     return {
-      eyebrow: 'Цель хода',
-      title: `${selectedCountry.name}: оценить ход`,
+      eyebrow: 'Главный фокус',
+      title: `${selectedCountry.name}: оценить риск`,
       summary: selectedNation?.focus
         ? `Фокус: ${focusLabels[selectedNation.focus]}. Давление видно.`
         : 'Совет готов оценить риск и лучший приказ.',
@@ -1602,7 +1591,7 @@ function buildTurnObjective({
       eyebrow: 'Приказы',
       title: closestOrder.title,
       summary: `Исполнитель: ${closestOrder.owner}. Цель: ${closestOrder.target}.`,
-      action: 'Завершите ход или откройте досье.',
+      action: 'Откройте досье или дождитесь результата.',
       metricLabel: 'Прогресс',
       metricValue: `${progress}%`,
       progress,
@@ -1611,7 +1600,7 @@ function buildTurnObjective({
   }
 
   return {
-    eyebrow: 'Цель хода',
+    eyebrow: 'Главный фокус',
     title: 'Дать задачу Совету',
     summary: 'Выберите страну на карте или напишите распоряжение.',
     action: 'Совет: граница, торговля, разведка.',
@@ -1637,7 +1626,7 @@ function buildTurnFlow({
   selectedCountryName: string;
   turnObjective: TurnObjective;
 }) {
-  const targetSelected = selectedCountryName !== playerCountry.name || turnObjective.eyebrow !== 'Цель хода';
+  const targetSelected = selectedCountryName !== playerCountry.name || turnObjective.eyebrow !== 'Главный фокус';
   const activeIndex = (() => {
     if (operationPlanCount > 0) return 2;
     if (orderCount > 0) return 3;
@@ -1667,7 +1656,7 @@ function buildTurnFlow({
       state: stepState(2),
     },
     {
-      label: 'Ход',
+      label: 'Итог',
       detail: orderCount ? `${orderCount}/5 готово` : 'после плана',
       state: stepState(3),
     },
@@ -1675,7 +1664,7 @@ function buildTurnFlow({
 
   const hint = (() => {
     if (operationPlanCount > 0) return 'Выберите план: открыть досье, уточнить или утвердить приказ.';
-    if (orderCount > 0) return 'Приказы в работе: проверьте риск и завершайте ход, когда готовы.';
+    if (orderCount > 0) return 'Приказы в работе: проверьте риск и следите за результатом.';
     if (targetSelected) return 'Цель выбрана: опишите Совету действие обычным текстом.';
     return 'Начните с карты или распоряжения Совету.';
   })();
@@ -1703,7 +1692,7 @@ function buildFallbackTurnCauseLog(report: TurnReport): TurnReport['causeLog'] {
   if (firstOrder) {
     causeLog.push({
       title: firstOrder.succeeded ? 'Приказ дал результат' : 'Приказ дал сбой',
-      cause: `Срок приказа "${firstOrder.title}" закончился на этом ходу.`,
+      cause: `Приказ "${firstOrder.title}" дошёл до результата.`,
       effect: firstOrder.text,
       tone: firstOrder.succeeded ? 'success' : 'danger',
     });
@@ -1719,8 +1708,8 @@ function buildFallbackTurnCauseLog(report: TurnReport): TurnReport['causeLog'] {
   }
 
   causeLog.push({
-    title: 'Баланс хода',
-    cause: 'После завершения хода применены доходы, расходы и дипломатические сдвиги.',
+    title: 'Баланс решения',
+    cause: 'После результата применены доходы, расходы и дипломатические сдвиги.',
     effect: `Ресурсы: ${formatResourceDelta(report.resourceDelta)}. Дипломатия: ${formatDiplomacyDelta(report.diplomacyDelta)}.`,
     tone: report.warnings.length ? 'warning' : 'neutral',
   });
@@ -1744,13 +1733,13 @@ function TurnReportDialog({
     <div className="modal-backdrop" role="presentation">
       <section className="turn-report framed-panel" role="dialog" aria-modal="true" aria-labelledby="turnReportTitle">
         <div className="panel-heading">
-          <h2 id="turnReportTitle">Отчет хода {report.turn}</h2>
-          <button type="button" aria-label="Закрыть отчет хода" onClick={onClose}>
+          <h2 id="turnReportTitle">Сводка события {report.turn}</h2>
+          <button type="button" aria-label="Закрыть сводку события" onClick={onClose}>
             <X aria-hidden="true" />
           </button>
         </div>
         <p className="report-summary">{report.summary}</p>
-        <section className="report-causality" aria-label="Почему изменился ход">
+        <section className="report-causality" aria-label="Почему изменилось состояние партии">
           <div>
             <h3>Почему так вышло</h3>
             <small>Короткая цепочка причин: что сработало, что ответил мир и чем это изменило партию.</small>
@@ -1804,10 +1793,10 @@ function TurnReportDialog({
           </section>
         </div>
         {responses.length ? (
-          <section className="strategic-responses" aria-label="Решения штаба по итогам хода">
+          <section className="strategic-responses" aria-label="Решения штаба по итогам события">
             <div>
               <h3>Решения штаба</h3>
-              <small>Выберите реакцию на текущий ход. Каждое решение сразу меняет состояние партии или создает приказ.</small>
+              <small>Выберите реакцию на текущее событие. Каждое решение сразу меняет состояние партии или создает приказ.</small>
             </div>
             <div className="strategic-response-list">
               {responses.map((response) => (
@@ -1940,7 +1929,6 @@ function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [pendingQuickAction, setPendingQuickAction] = useState<QuickActionId | null>(null);
   const [pendingOperationPlanId, setPendingOperationPlanId] = useState<string | null>(null);
-  const [turnReportOpen, setTurnReportOpen] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const {
     resources,
@@ -1952,10 +1940,8 @@ function App() {
     nations,
     worldEvents,
     worldTension,
-    lastTurnReport,
     chatMessages,
     profile,
-    turnNumber,
   } = gameState;
 
   const mapSectionRef = useRef<HTMLElement | null>(null);
@@ -1974,7 +1960,6 @@ function App() {
   } | null>(null);
   const chatMessagesRef = useRef<HTMLDivElement | null>(null);
   const previousChatScrollRef = useRef<{ tab: ChatTabLabel; count: number } | null>(null);
-  const seenTurnReportRef = useRef(lastTurnReport?.turn ?? null);
   const pendingOperationPlan = useMemo(
     () => operationPlans.find((plan) => plan.id === pendingOperationPlanId) || null,
     [operationPlans, pendingOperationPlanId],
@@ -2060,12 +2045,6 @@ function App() {
       setPendingOperationPlanId(null);
     }
   }, [pendingOperationPlan, pendingOperationPlanId]);
-
-  useEffect(() => {
-    if (!lastTurnReport || lastTurnReport.turn === seenTurnReportRef.current) return;
-    seenTurnReportRef.current = lastTurnReport.turn;
-    setTurnReportOpen(true);
-  }, [lastTurnReport]);
 
   useEffect(() => {
     return () => {
@@ -2616,7 +2595,6 @@ function App() {
               activeChannel={activeChatChannel}
               selectedCountryName={gameState.selectedCountry?.name || 'Россия'}
               allianceNames={allianceNames}
-              turnNumber={turnNumber}
               orderCount={orders.filter((order) => order.statusClass !== 'cancelled').length}
               worldTension={worldTension}
               onInputChange={setChatInput}
@@ -2655,7 +2633,6 @@ function App() {
           plan={pendingOperationPlan}
           resources={resources}
           activeOrderCount={orders.filter((order) => order.statusClass !== 'cancelled').length}
-          currentTurn={turnNumber}
           onClose={() => setPendingOperationPlanId(null)}
           onApprove={confirmOperationPlan}
           onRefine={refineOperationPlan}
@@ -2671,7 +2648,6 @@ function App() {
           operationPlans={operationPlans}
           orders={orders}
           selectedCountryName={gameState.selectedCountry?.name || 'Россия'}
-          turnNumber={turnNumber}
           turnObjective={turnObjective}
           worldTension={worldTension}
           onClose={() => setGuideOpen(false)}
@@ -2686,14 +2662,6 @@ function App() {
             dispatchGame({ type: 'UPDATE_PROFILE', profile: nextProfile });
             setProfileOpen(false);
           }}
-        />
-      ) : null}
-
-      {turnReportOpen && lastTurnReport ? (
-        <TurnReportDialog
-          report={lastTurnReport}
-          onClose={() => setTurnReportOpen(false)}
-          onRunResponse={handleStrategicResponse}
         />
       ) : null}
 
@@ -2816,14 +2784,14 @@ function UtilityPanel({
     },
     Совет: {
       text: `Совет принимает распоряжения обычным текстом и готовит действия с ценой, риском и сроком. Текущая цель: ${selectedCountryName}.`,
-      action: 'Напишите приказ в нижней панели или выберите страну на карте, чтобы совет предложил контекстный ход.',
+      action: 'Напишите приказ в нижней панели или выберите страну на карте, чтобы совет предложил контекстное решение.',
     },
     Почта: {
       text: `Во входящих сейчас ${mailCount} писем. Каждое важное письмо можно открыть и выбрать дипломатический ответ с последствиями.`,
       action: 'Кнопка "Написать" справа отправляет исходящее письмо через канцелярию.',
     },
     Уведомления: {
-      text: 'Здесь собираются важные игровые изменения: завершение хода, результаты приказов, дипломатические ответы.',
+      text: 'Здесь собираются важные игровые изменения: результаты приказов, дипломатические ответы и реакции мира.',
       action: 'Последние события уже отражаются в хронике мира справа.',
     },
     Помощь: {
@@ -2835,7 +2803,7 @@ function UtilityPanel({
       action: 'Состояние партии сохраняется автоматически после игровых действий.',
     },
     Настройки: {
-      text: 'Автосохранение партии включено. Карта, ходы, приказы, письма и ресурсы сохраняются на этом устройстве.',
+      text: 'Автосохранение партии включено. Карта, приказы, письма, дипломатия и ресурсы сохраняются на этом устройстве.',
       action: 'Расширенные настройки графики и малый экран будут добавлены отдельным разделом.',
     },
     'Карта мира': {
@@ -2848,10 +2816,10 @@ function UtilityPanel({
     },
     Приказы: {
       text: `Активных приказов: ${orderCount}/5. Создание приказа открывает подтверждение и проверку казны.`,
-      action: 'Сроки приказов двигаются при завершении хода.',
+      action: 'Приказы выполняются через утверждение, реакцию совета и последующие игровые события.',
     },
     Хроника: {
-      text: 'Хроника показывает важные игровые последствия: письма, приказы, управление землями и начало нового хода.',
+      text: 'Хроника показывает важные игровые последствия: письма, приказы, управление землями и реакции мира.',
       action: 'Повторяющиеся события не спамят верх списка.',
     },
     Архив: {
@@ -3071,7 +3039,6 @@ function GuideDialog({
   operationPlans,
   orders,
   selectedCountryName,
-  turnNumber,
   turnObjective,
   worldTension,
   onClose,
@@ -3082,7 +3049,6 @@ function GuideDialog({
   operationPlans: OperationPlan[];
   orders: Order[];
   selectedCountryName: string;
-  turnNumber: number;
   turnObjective: TurnObjective;
   worldTension: number;
   onClose: () => void;
@@ -3116,21 +3082,21 @@ function GuideDialog({
     if (closestOrder) {
       return {
         title: 'Дайте приказам продвинуться',
-        text: `${closestOrder.title} завершится через ${closestOrder.remainingTurns} ход. Если писем и новых планов нет, завершение хода двинет экономику, арбитра мира и статусы приказов.`,
+        text: `${closestOrder.title}: срок ${closestOrder.due}. Если писем и новых планов нет, дождитесь результата приказа или создайте новое распоряжение через Совет.`,
         tone: closestOrder.riskLevel === 'high' || closestOrder.riskLevel === 'critical' ? 'warning' : 'steady',
       };
     }
 
     if (selectedCountryName !== playerCountry.name) {
       return {
-        title: `Сформулируйте ход по цели "${selectedCountryName}"`,
+        title: `Сформулируйте решение по цели "${selectedCountryName}"`,
         text: 'Напишите распоряжение в Совет или используйте действие из досье страны. Совет вернёт план с ценой, сроком, шансом и последствиями.',
         tone: 'opportunity',
       };
     }
 
     return {
-      title: 'Выберите замысел на ход',
+      title: 'Выберите замысел',
       text: 'Начните с цели: страна на карте, письмо, торговый маршрут, оборона или разведка. Совет превращает обычный текст в проверяемый игровой приказ.',
       tone: worldTension >= 55 ? 'warning' : 'steady',
     };
@@ -3166,12 +3132,12 @@ function GuideDialog({
     {
       title: 'Приказы',
       value: `${activeOrders.length}/5`,
-      text: 'Приказ начинает тратить ресурсы и двигаться по ходам только после утверждения досье. Отмена убирает его из активного списка.',
+      text: 'Приказ начинает тратить ресурсы только после утверждения досье. Отмена убирает его из активного списка.',
     },
     {
-      title: 'Завершить ход',
-      value: `ход ${turnNumber}`,
-      text: 'Нажимайте, когда письма и планы разобраны. Тогда начисляются ресурсы, мир реагирует, а приказы приближаются к результату.',
+      title: 'Реакция мира',
+      value: `${worldTension}/100`,
+      text: 'Мир реагирует на письма, публичные заявления, дипломатию и утвержденные приказы без отдельной кнопки завершения.',
     },
     {
       title: 'Досье державы',
@@ -3184,7 +3150,7 @@ function GuideDialog({
     { title: '1. Цель', text: 'Выберите страну, письмо или проблему на карте.' },
     { title: '2. Замысел', text: 'Напишите Совету обычным текстом, что хотите сделать.' },
     { title: '3. Досье', text: 'Проверьте шанс, цену, срок и риск провала.' },
-    { title: '4. Ход', text: 'Утвердите приказ и завершите ход, чтобы мир ответил.' },
+    { title: '4. Итог', text: 'Утвердите решение и смотрите результат в хронике, письмах и досье держав.' },
   ];
 
   return (
@@ -3196,9 +3162,9 @@ function GuideDialog({
           </span>
           <div>
             <small>Полевой устав Совета</small>
-            <h2 id="guideDialogTitle">Как вести ход</h2>
+            <h2 id="guideDialogTitle">Как играть</h2>
             <p>
-              Ход {turnNumber} · цель: {selectedCountryName} · канал: {activeChatTab}
+              Цель: {selectedCountryName} · канал: {activeChatTab}
             </p>
           </div>
           <strong>
@@ -3217,7 +3183,7 @@ function GuideDialog({
               <p>{nextAction.text}</p>
             </div>
             <div className="guide-current-meter">
-              <span>Цель хода</span>
+              <span>Главный фокус</span>
               <b>{turnObjective.title}</b>
               <i aria-hidden="true">
                 <em style={{ width: `${turnObjective.progress}%` }} />
@@ -3279,7 +3245,7 @@ function GuideDialog({
 
 function TurnObjectiveCard({ objective }: { objective: TurnObjective }) {
   return (
-    <section className={`turn-objective ${objective.tone}`} aria-label="Цель текущего хода">
+    <section className={`turn-objective ${objective.tone}`} aria-label="Главный фокус партии">
       <header>
         <span>{objective.eyebrow}</span>
         <b>
@@ -3444,9 +3410,9 @@ function TurnFlowStrip({
   });
 
   return (
-    <section className="turn-flow" aria-label="Маршрут текущего хода" data-active-step={flow.activeIndex + 1}>
+    <section className="turn-flow" aria-label="Маршрут текущего решения" data-active-step={flow.activeIndex + 1}>
       <div className="turn-flow-head">
-        <b>Маршрут хода</b>
+        <b>Маршрут решения</b>
         <span>{flow.hint}</span>
       </div>
       <ol>
@@ -3470,7 +3436,6 @@ function ChatPanel({
   activeChannel,
   selectedCountryName,
   allianceNames,
-  turnNumber,
   orderCount,
   worldTension,
   onInputChange,
@@ -3484,7 +3449,6 @@ function ChatPanel({
   activeChannel: ChatChannel;
   selectedCountryName: string;
   allianceNames: string[];
-  turnNumber: number;
   orderCount: number;
   worldTension: number;
   onInputChange: (value: string) => void;
@@ -3545,7 +3509,6 @@ function ChatPanel({
       emptyText: 'Напишите действие обычным текстом, и совет оценит риск, ресурсы и последствия.',
       context: [
         { label: 'Цель', value: selectedCountryName },
-        { label: 'Ход', value: turnNumber },
         { label: 'Приказы', value: `${orderCount}/5` },
         { label: 'Мир', value: `${worldTension}/100`, tone: worldTension >= 65 ? 'danger' : worldTension >= 45 ? 'warn' : undefined },
       ],
@@ -3560,7 +3523,6 @@ function ChatPanel({
       emptyText: 'Публичные сообщения видят все державы. Реакции появятся здесь и в хронике.',
       context: [
         { label: 'Видимость', value: 'все державы' },
-        { label: 'Ход', value: turnNumber },
         { label: 'Фокус', value: selectedCountryName },
         { label: 'Напряжение', value: `${worldTension}/100`, tone: worldTension >= 65 ? 'danger' : worldTension >= 45 ? 'warn' : undefined },
       ],
@@ -3576,7 +3538,6 @@ function ChatPanel({
       context: [
         { label: 'Канал', value: 'закрытый' },
         { label: 'Союзники', value: alliesLabel },
-        { label: 'Ход', value: turnNumber },
         { label: 'Приказы', value: `${orderCount}/5` },
       ],
     },
@@ -3679,23 +3640,20 @@ function ChatPanel({
 
 function CouncilPriorityBrief({
   plan,
-  currentTurn,
   activeOrderCount,
   onRunPlan,
   onRefinePlan,
   onDismissPlan,
 }: {
   plan: OperationPlan;
-  currentTurn: number;
   activeOrderCount: number;
   onRunPlan: (id: string) => void;
   onRefinePlan: (id: string) => void;
   onDismissPlan: (id: string) => void;
 }) {
-  const expiresIn = Math.max(0, plan.expiresTurn - currentTurn);
   const refinements = plan.refinements || 0;
   const canApprove = activeOrderCount < 5;
-  const decision = describePlanDecision(plan, activeOrderCount, currentTurn);
+  const decision = describePlanDecision(plan, activeOrderCount);
   const effect = firstPlanEffect(plan);
 
   return (
@@ -3729,15 +3687,15 @@ function CouncilPriorityBrief({
         </li>
         <li>
           <span>Срок</span>
-          <b>{plan.durationTurns} ход</b>
+          <b>{formatOrderDue(plan.durationTurns)}</b>
         </li>
         <li title={formatResourceCost(plan.cost)}>
           <span>Цена</span>
           <b>{formatCompactResourceCost(plan.cost)}</b>
         </li>
         <li>
-          <span>Окно</span>
-          <b>{canApprove ? `${expiresIn} ход` : 'закрыто'}</b>
+          <span>Статус</span>
+          <b>{canApprove ? 'активно' : 'закрыто'}</b>
         </li>
       </ul>
       <div className="council-priority-actions">
@@ -3775,7 +3733,6 @@ function CouncilPriorityBrief({
 function OrdersPanel({
   orders,
   operationPlans,
-  currentTurn,
   onCancel,
   onCreateOrder,
   onRunPlan,
@@ -3784,7 +3741,6 @@ function OrdersPanel({
 }: {
   orders: Order[];
   operationPlans: OperationPlan[];
-  currentTurn: number;
   onCancel: (id: string) => void;
   onCreateOrder: () => void;
   onRunPlan: (id: string) => void;
@@ -3798,7 +3754,7 @@ function OrdersPanel({
     () => (recommendedPlan ? operationPlans.filter((plan) => plan.id !== recommendedPlan.id) : operationPlans),
     [operationPlans, recommendedPlan],
   );
-  const recommendedDecision = recommendedPlan ? describePlanDecision(recommendedPlan, activeOrderCount, currentTurn) : null;
+  const recommendedDecision = recommendedPlan ? describePlanDecision(recommendedPlan, activeOrderCount) : null;
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   return (
@@ -3830,7 +3786,6 @@ function OrdersPanel({
         {recommendedPlan ? (
           <CouncilPriorityBrief
             plan={recommendedPlan}
-            currentTurn={currentTurn}
             activeOrderCount={activeOrderCount}
             onRunPlan={onRunPlan}
             onRefinePlan={onRefinePlan}
@@ -3846,9 +3801,8 @@ function OrdersPanel({
             <div className="operation-plan-list">
               {listedOperationPlans.map((plan) => {
                 const Icon = orderIcons[plan.iconKey];
-                const expiresIn = Math.max(0, plan.expiresTurn - currentTurn);
                 const refinements = plan.refinements || 0;
-                const decision = describePlanDecision(plan, activeOrderCount, currentTurn);
+                const decision = describePlanDecision(plan, activeOrderCount);
                 const effect = firstPlanEffect(plan);
 
                 return (
@@ -3873,7 +3827,7 @@ function OrdersPanel({
                         <span>шанс {plan.successChance}%</span>
                         <span>{planRiskLabel(plan.riskLevel)}</span>
                         <span title={formatResourceCost(plan.cost)}>{formatCompactResourceCost(plan.cost)}</span>
-                        <span>окно {expiresIn} ход</span>
+                        <span>актуально</span>
                       </div>
                     </div>
                     <div className="operation-plan-actions">
@@ -4005,7 +3959,6 @@ function OperationPlanDossierDialog({
   plan,
   resources,
   activeOrderCount,
-  currentTurn,
   onClose,
   onApprove,
   onRefine,
@@ -4014,19 +3967,17 @@ function OperationPlanDossierDialog({
   plan: OperationPlan;
   resources: ResourceState[];
   activeOrderCount: number;
-  currentTurn: number;
   onClose: () => void;
   onApprove: (id: string) => void;
   onRefine: (id: string) => void;
   onDismiss: (id: string) => void;
 }) {
   const Icon = orderIcons[plan.iconKey];
-  const expiresIn = Math.max(0, plan.expiresTurn - currentTurn);
   const refinements = plan.refinements || 0;
   const blockReason = operationPlanApprovalBlockReason(plan, resources, activeOrderCount);
   const canApprove = !blockReason && canPay(resources, plan.cost);
   const readiness = canApprove ? 'Готов к утверждению' : 'Нужна подготовка';
-  const approvalHint = blockReason || 'После утверждения приказ появится в списке активных и начнёт выполняться со следующего хода.';
+  const approvalHint = blockReason || 'После утверждения приказ появится в списке активных и начнет выполняться через игровые события.';
 
   return (
     <div className="modal-backdrop" role="presentation">
@@ -4070,11 +4021,11 @@ function OperationPlanDossierDialog({
             </div>
             <div>
               <dt>Срок</dt>
-              <dd>{plan.durationTurns} ход</dd>
+              <dd>{formatOrderDue(plan.durationTurns)}</dd>
             </div>
             <div>
-              <dt>Окно</dt>
-              <dd>{expiresIn} ход</dd>
+              <dt>Статус</dt>
+              <dd>актуально</dd>
             </div>
             <div>
               <dt>Цена</dt>
@@ -4176,7 +4127,7 @@ function PendingActionDialog({
         </div>
         <p>
           Совет подготовит инфраструктурный приказ для цели: <b>{selectedCountryName}</b>. Сначала он появится в предложениях Совета;
-          ресурсы спишутся только после утверждения, а результат появится в хронике после завершения хода.
+          ресурсы спишутся только после утверждения, а результат появится в хронике после выполнения приказа.
         </p>
         <dl>
           <dt>Тип</dt>
@@ -4247,7 +4198,7 @@ function chronicleAdvice(entry: ChronicleEntry) {
   }
 
   if (entry.tone === 'bronze') {
-    return 'Событие требует наблюдения. Оно не ломает ход сразу, но может стать проблемой, если оставить его без реакции.';
+    return 'Событие требует наблюдения. Оно не ломает партию сразу, но может стать проблемой, если оставить его без реакции.';
   }
 
   return 'Событие зафиксировано в хронике. Оно помогает понять, почему меняются письма, отношения, ресурсы и намерения держав.';
@@ -4627,7 +4578,7 @@ function DiplomacyDialog({ item, nation, onClose }: { item: DiplomacyRelation; n
           ) : null}
         </div>
         <footer className="dialog-footer note-only">
-          <span>Досье обновляется через игровые действия: дипломатия, разведка, торговля и завершение хода.</span>
+          <span>Досье обновляется через игровые действия: дипломатия, разведка, торговля и приказы.</span>
         </footer>
       </section>
     </div>
@@ -4668,7 +4619,7 @@ function RightPanel({
         kind: 'world',
         title: latestWorldEvent.title,
         text: latestWorldEvent.text,
-        time: `ход ${latestWorldEvent.turn}`,
+        time: 'актуально',
         tone: latestWorldEvent.tone,
         flag: latestWorldEvent.flag,
         actor: latestWorldEvent.actor,

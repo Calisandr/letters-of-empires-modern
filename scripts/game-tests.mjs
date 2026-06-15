@@ -64,13 +64,14 @@ try {
     assert.equal(refined.lastNotice.kind, 'success');
   });
 
-  test('once-per-turn action is blocked on the second use', () => {
+  test('repeatable quick action refreshes a council proposal without turn locks', () => {
     const state = clone(initialGameState);
     const afterFirst = gameReducer(state, { type: 'RUN_QUICK_ACTION', id: 'manage-lands' });
     const afterSecond = gameReducer(afterFirst, { type: 'RUN_QUICK_ACTION', id: 'manage-lands' });
 
-    assert.equal(afterSecond.lastNotice.kind, 'error');
+    assert.equal(afterSecond.lastNotice.kind, 'success');
     assert.equal(afterSecond.orders.length, afterFirst.orders.length);
+    assert.ok(afterSecond.operationPlans.some((plan) => plan.title.includes('Хозяйственное решение')));
   });
 
   test('cancelled order is removed from active orders and logged', () => {
@@ -83,7 +84,7 @@ try {
     assert.equal(next.timelineEvents[0].title, 'Приказ отменен');
   });
 
-  test('end turn advances turn and unlocks quick actions', () => {
+  test('legacy world simulation advances internal world state', () => {
     const state = clone(initialGameState);
     const afterAction = gameReducer(state, { type: 'RUN_QUICK_ACTION', id: 'manage-lands' });
     const next = endTurn(afterAction);
@@ -480,7 +481,7 @@ try {
       profile: {
         name: 'Александр Великий Победитель',
         title: 'Император',
-        status: 'Проверяю границы, торговлю и дипломатические письма перед каждым ходом.',
+        status: 'Проверяю границы, торговлю и дипломатические письма перед каждым решением.',
         avatarDataUrl: 'data:image/webp;base64,avatar',
       },
     });
@@ -504,7 +505,7 @@ try {
     assert.equal(repaired.profile.avatarDataUrl, '');
   });
 
-  test('end turn produces a living world report and nation actions', () => {
+  test('legacy world simulation produces a living world report and nation actions', () => {
     const state = clone(initialGameState);
     const next = endTurn(state);
 
@@ -517,7 +518,7 @@ try {
     assert.ok(next.worldTension >= 0 && next.worldTension <= 100);
   });
 
-  test('turn report explains causes and effects of the new turn', () => {
+  test('world report explains causes and effects of the new event', () => {
     const next = endTurn(clone(initialGameState));
     const causeLog = next.lastTurnReport.causeLog;
 
@@ -542,7 +543,7 @@ try {
     assert.ok(next.lastTurnReport.summary.includes('активных намерений держав'));
   });
 
-  test('turn report offers playable strategic responses', () => {
+  test('world report offers playable strategic responses', () => {
     const afterTurn = endTurn(clone(initialGameState));
     const responses = afterTurn.lastTurnReport.strategicResponses;
     const response = responses.find((item) => item.kind === 'counter-threat' || item.kind === 'secure-trade');

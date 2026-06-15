@@ -180,13 +180,13 @@ export function fallbackJudgeCouncilCommand(text: string, state: GameState): AiA
 
   if (includesAny(normalized, ['диплом', 'отнош', 'союз', 'переговор'])) {
     return attemptable(
-      `Дипломаты подготовили осторожный ход по цели "${target}".`,
+      `Дипломаты подготовили осторожное решение по цели "${target}".`,
       {
         kind: 'diplomacy-delta',
         diplomacyDelta: clampDiplomacyDelta({ [target]: 4 }),
-        letter: { tone: 'gold', from: target, subject: 'Ответ на дипломатический ход', time: 'только что' },
-        eventTitle: 'Дипломатический ход принят',
-        eventText: `Канцелярия направила предложение державе "${target}". Отношения могут улучшиться, если ход не вызовет сопротивления.`,
+        letter: { tone: 'gold', from: target, subject: 'Ответ на дипломатическое решение', time: 'только что' },
+        eventTitle: 'Дипломатическое решение принято',
+        eventText: `Канцелярия направила предложение державе "${target}". Отношения могут улучшиться, если решение не вызовет сопротивления.`,
       },
       'low',
     );

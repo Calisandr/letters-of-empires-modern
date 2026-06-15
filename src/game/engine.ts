@@ -16,7 +16,6 @@ import type {
   OrderDraft,
   OperationPlan,
   OrderStatusClass,
-  QuickActionId,
   ResourceDelta,
   ResourceId,
   ResourceState,
@@ -31,7 +30,6 @@ export const MAX_OPERATION_PLANS = 4;
 export const MAX_TIMELINE_EVENTS = 7;
 export const MAX_LETTERS = 5;
 export const MAX_CHAT_MESSAGES = 80;
-export const oncePerTurnQuickActions = new Set<QuickActionId>(['compose-letter', 'manage-lands', 'diplomacy']);
 
 export function createNotice(state: GameState, message: string, kind: ActionStatusKind = 'success') {
   return {
@@ -245,7 +243,7 @@ function upsertNationsForDiplomacyDeltas(
       relation,
       pressure: relation < 0 ? 52 : 30,
       threat: relation < 0 ? 54 : 28,
-      lastAction: 'Досье открыто через дипломатический ход России.',
+      lastAction: 'Досье открыто через дипломатическое решение России.',
     });
   }, nations);
 }
@@ -439,7 +437,7 @@ function buildOperationPlan(
       target: country.name,
       title: critical ? `Сорвать давление: ${country.name}` : `Ограниченная операция: ${country.name}`,
       summary: critical
-        ? `Разведка предлагает не атаковать в лоб, а вскрыть подготовку цели "${country.name}" и снизить угрозу до следующего хода.`
+        ? `Разведка предлагает не атаковать в лоб, а вскрыть подготовку цели "${country.name}" и снизить угрозу до следующего кризиса.`
         : `Штаб подготовил ограниченную операцию против цели "${country.name}" с понятной ценой, шансом успеха и последствиями провала.`,
       advisor: 'Оперативный штаб',
       iconKey: critical ? 'shield' : 'swords',
@@ -471,7 +469,7 @@ function buildOperationPlan(
       kind: 'trade',
       target: country.name,
       title: `Торговый коридор: ${country.name}`,
-      summary: `Разведка подтвердила окно сделки с целью "${country.name}". План закрепит маршрут и даст прибыль через несколько ходов.`,
+      summary: `Разведка подтвердила окно сделки с целью "${country.name}". План закрепит маршрут и даст прибыль после исполнения.`,
       advisor: 'Торговый совет',
       iconKey: 'anchor',
       owner: 'Торговый совет',
@@ -497,7 +495,7 @@ function buildOperationPlan(
     kind: 'diplomacy',
     target: country.name,
     title: `Переговорная миссия: ${country.name}`,
-    summary: `Канцелярия подготовила безопасный дипломатический ход по цели "${country.name}" без резкого военного риска.`,
+    summary: `Канцелярия подготовила безопасное дипломатическое решение по цели "${country.name}" без резкого военного риска.`,
     advisor: 'Канцелярия',
     iconKey: 'mail',
     owner: 'Канцелярия',
@@ -1361,7 +1359,7 @@ function buildOrderCounterMove(state: GameState, order: Order, nextTurn: number)
         tone: pressure ? 'bronze' : 'green',
         title: move.title,
         text: move.text,
-        time: `Ход ${nextTurn}`,
+        time: `Событие ${nextTurn}`,
       },
     };
   }
@@ -1399,7 +1397,7 @@ function buildOrderCounterMove(state: GameState, order: Order, nextTurn: number)
         tone: move.severity === 'high' ? 'red' : 'bronze',
         title: move.title,
         text: move.text,
-        time: `Ход ${nextTurn}`,
+        time: `Событие ${nextTurn}`,
       },
     };
   }
@@ -1427,7 +1425,7 @@ function buildOrderCounterMove(state: GameState, order: Order, nextTurn: number)
         tone: 'green',
         title: move.title,
         text: move.text,
-        time: `Ход ${nextTurn}`,
+        time: `Событие ${nextTurn}`,
       },
     };
   }
@@ -1455,7 +1453,7 @@ function buildOrderCounterMove(state: GameState, order: Order, nextTurn: number)
         tone: 'bronze',
         title: move.title,
         text: move.text,
-        time: `Ход ${nextTurn}`,
+        time: `Событие ${nextTurn}`,
       },
     };
   }
@@ -1521,7 +1519,7 @@ function resolveCompletedOrder(order: Order, nextTurn: number): ResolvedOrderOut
         tone: order.diplomacyDelta?.Украина ? 'bronze' : 'green',
         title: 'Приказ выполнен',
         text: order.completeText,
-        time: `Ход ${nextTurn}`,
+        time: `Событие ${nextTurn}`,
       },
       resourceDelta: order.reward || {},
       diplomacyDelta: order.diplomacyDelta || {},
@@ -1554,7 +1552,7 @@ function resolveCompletedOrder(order: Order, nextTurn: number): ResolvedOrderOut
       tone: 'red',
       title: 'Приказ провален',
       text,
-      time: `Ход ${nextTurn}`,
+      time: `Событие ${nextTurn}`,
     },
     resourceDelta: failureCost,
     diplomacyDelta: failureDiplomacyDelta,
@@ -1622,7 +1620,7 @@ function buildTurnCauseLog({
   const causeLog: TurnCause[] = [
     {
       title: 'Казна и снабжение',
-      cause: `Ход ${nextTurn} начался: держава получила доход, а затем были применены расходы, награды и внешнее давление.`,
+      cause: `Событие ${nextTurn}: держава получила доход, а затем были применены расходы, награды и внешнее давление.`,
       effect: `Итог ресурсов: ${describeReportResourceDelta(totalResourceDelta)}.`,
       tone: Object.values(totalResourceDelta).some((value) => Number(value) < 0) ? 'warning' : 'success',
     },
@@ -1656,7 +1654,7 @@ function buildTurnCauseLog({
   if (expiredOperationPlans.length) {
     causeLog.push({
       title: 'Окно плана закрылось',
-      cause: `Оперативные планы живут ограниченное число ходов, а разведданные устарели на ходе ${nextTurn}.`,
+      cause: `Оперативные планы живут ограниченный срок, а разведданные устарели к событию ${nextTurn}.`,
       effect: `Снято планов: ${expiredOperationPlans.length}. Подготовьте новое досье, если цель всё ещё важна.`,
       tone: 'warning',
     });
@@ -1722,15 +1720,15 @@ export function endTurn(state: GameState): GameState {
     tone: event.tone,
     title: event.title,
     text: event.text,
-    time: `Ход ${nextTurn}`,
+    time: `Событие ${nextTurn}`,
   }));
   const turnEvent: TimelineEvent = {
     icon: '⌛',
     tone: 'blue',
-    title: `Ход ${nextTurn} начался`,
+    title: `Событие ${nextTurn} началось`,
     text: completedOrders.length
-      ? `Завершено приказов: ${completedOrders.length}. Доход начислен, державы мира сделали ответные ходы.`
-      : 'Доход начислен, текущие приказы продвинулись, державы мира сделали ответные ходы.',
+      ? `Завершено приказов: ${completedOrders.length}. Доход начислен, державы мира отреагировали.`
+      : 'Доход начислен, текущие приказы продвинулись, державы мира отреагировали.',
     time: 'только что',
   };
   const expiredPlanEvent: TimelineEvent | null = expiredOperationPlans.length
@@ -1739,7 +1737,7 @@ export function endTurn(state: GameState): GameState {
         tone: 'bronze',
         title: 'Оперативные планы устарели',
         text: `Устарело планов: ${expiredOperationPlans.length}. Разведданные нужно обновлять перед запуском рискованных действий.`,
-        time: `Ход ${nextTurn}`,
+        time: `Событие ${nextTurn}`,
       }
     : null;
   let nextLetters = state.letters;
@@ -1753,7 +1751,7 @@ export function endTurn(state: GameState): GameState {
     nextLetters = pushLetter(nextLetters, {
       tone: 'neutral',
       from: 'Совет империи',
-      subject: `Отчет за ход ${nextTurn}`,
+      subject: `Сводка события ${nextTurn}`,
       time: 'только что',
     });
   }
@@ -1800,7 +1798,7 @@ export function endTurn(state: GameState): GameState {
       chatMessages: [...state.chatMessages, ...world.chatMessages].slice(-MAX_CHAT_MESSAGES),
       quickActionTurns: {},
     },
-    `Ход ${nextTurn} начался`,
+    `Событие ${nextTurn} началось`,
   );
 }
 

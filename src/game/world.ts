@@ -108,7 +108,7 @@ function chooseNationIntent(
       title: underPressure ? 'Стабилизировать державу' : 'Укрепить хозяйство державы',
       summary: underPressure
         ? 'Совет держит резервы ближе к столице и просит не перегружать фронтир рискованными приказами.'
-        : 'Канцелярия готовит спокойный хозяйственный ход: налоги, зерно и снабжение должны идти ровнее.',
+        : 'Канцелярия готовит спокойное хозяйственное решение: налоги, зерно и снабжение должны идти ровнее.',
       confidence: underPressure ? 86 : 78,
       visibility: 'open',
       pressureDelta: underPressure ? -2 : -3,
@@ -287,7 +287,7 @@ function createIntentResponse(turn: number, nation: NationProfile, intent: Natio
       kind: 'industrial-contract',
       target: nation.name,
       title: `Промышленный договор: ${nation.name}`,
-      description: `Промышленные палаты "${nation.name}" готовы говорить о поставках. Такой ход даст железо и немного улучшит отношения.`,
+      description: `Промышленные палаты "${nation.name}" готовы говорить о поставках. Такое решение даст железо и немного улучшит отношения.`,
       actionLabel: 'Заключить договор',
       tone: 'opportunity',
     };
@@ -476,7 +476,7 @@ export function simulateWorldTurn(
       tone: 'blue',
       impact: 'diplomacy',
     });
-    opportunities.push('Тихий ход удобен для развития земель или дипломатического письма.');
+    opportunities.push('Спокойное окно удобно для развития земель или дипломатического письма.');
   }
 
   const nextWorldTension = clamp(state.worldTension + tensionDelta);
@@ -490,7 +490,7 @@ export function simulateWorldTurn(
     tone: event.tone === 'red' ? 'danger' : event.tone === 'bronze' ? 'warning' : event.tone === 'green' ? 'success' : 'neutral',
   }));
 
-  const summary = `Ход ${nextTurn}: завершено приказов ${completedOrders.length}, активных намерений держав ${nations.filter((nation) => nation.currentIntent).length}, событий мира ${events.length}, напряжение мира ${nextWorldTension}/100.`;
+  const summary = `Событие ${nextTurn}: завершено приказов ${completedOrders.length}, активных намерений держав ${nations.filter((nation) => nation.currentIntent).length}, событий мира ${events.length}, напряжение мира ${nextWorldTension}/100.`;
   const report: TurnReport = {
     turn: nextTurn,
     summary,

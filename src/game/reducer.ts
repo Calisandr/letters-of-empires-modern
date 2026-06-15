@@ -4,8 +4,6 @@ import {
   MAX_OPERATION_PLANS,
   cancelOrder,
   createNotice,
-  endTurn,
-  oncePerTurnQuickActions,
   pushTimeline,
   dismissOperationPlan,
   refineOperationPlan,
@@ -25,17 +23,10 @@ import type {
   PlayerProfile,
   QuickActionId,
 } from './types';
+import { formatOrderDue } from './formatters';
 
 const PROFILE_NAME_MAX_LENGTH = 15;
 const PROFILE_STATUS_MAX_LENGTH = 80;
-
-function markQuickAction(state: GameState, id: QuickActionId) {
-  return { ...state.quickActionTurns, [id]: state.turnNumber };
-}
-
-function quickActionAlreadyUsed(state: GameState, id: QuickActionId) {
-  return oncePerTurnQuickActions.has(id) && state.quickActionTurns[id] === state.turnNumber;
-}
 
 function appendChatMessages(state: GameState, messages: ChatMessage[]) {
   return {
@@ -83,7 +74,7 @@ function diplomacyDeltaForCouncilOrder(delta: Record<string, number> = {}) {
 }
 
 function councilProposalId(state: GameState, tag: string) {
-  return `proposal-${state.turnNumber}-${state.nextActionId}-${tag.toLowerCase().replace(/[^a-zа-я0-9-]+/gi, '-')}`;
+  return `proposal-${state.nextActionId}-${tag.toLowerCase().replace(/[^a-zа-я0-9-]+/gi, '-')}`;
 }
 
 function upsertCouncilProposal(plans: OperationPlan[], plan: OperationPlan) {
@@ -116,8 +107,8 @@ function orderToCouncilProposal(
     durationTurns: order.remainingTurns,
     riskLevel,
     successChance: order.successChance ?? riskChance(riskLevel),
-    createdTurn: state.turnNumber,
-    expiresTurn: state.turnNumber + 2,
+    createdTurn: state.nextActionId,
+    expiresTurn: Number.MAX_SAFE_INTEGER,
     cost: order.cost || {},
     reward: order.reward,
     diplomacyDelta: order.diplomacyDelta,
@@ -147,7 +138,7 @@ function effectToCouncilProposal(state: GameState, effect: EngineEffect, sourceT
       state,
       {
         iconKey: 'mail',
-        title: `Дипломатический ход: ${target}`,
+        title: `Дипломатическое решение: ${target}`,
         owner: 'Канцелярия',
         target,
         remainingTurns: 1,
@@ -162,7 +153,7 @@ function effectToCouncilProposal(state: GameState, effect: EngineEffect, sourceT
         successChance: 90,
       },
       sourceText,
-      `Совет предлагает оформить дипломатический ход. Утверждение создаст приказ канцелярии и изменит отношения только после исполнения.`,
+      `Совет предлагает оформить дипломатическое решение. Утверждение создаст приказ канцелярии и изменит отношения после исполнения.`,
     );
   }
 
@@ -200,7 +191,7 @@ function addCouncilProposal(state: GameState, plan: OperationPlan, notice = 'С�
         icon: '⚑',
         tone: plan.riskLevel === 'high' || plan.riskLevel === 'critical' ? 'bronze' : 'blue',
         title: 'Совет подготовил предложение',
-        text: `${plan.title}. Шанс ${plan.successChance}%, срок ${plan.durationTurns} ход.`,
+        text: `${plan.title}. Шанс ${plan.successChance}%, срок ${formatOrderDue(plan.durationTurns)}.`,
       }),
     },
     notice,
@@ -217,7 +208,7 @@ function addQuickActionProposal(
   state: GameState,
   plan: OperationPlan,
   notice: string,
-  time = `ход ${state.turnNumber}`,
+  time = 'только что',
 ) {
   const proposed = addCouncilProposal(state, plan, notice);
 
@@ -328,7 +319,7 @@ function submitWorldMessage(state: GameState, text: string, time: string): GameS
       time,
       flag: responder.flag,
       faction: responder.name,
-      text: `${responder.name} отмечает публичное заявление России. Дальнейшая реакция будет зависеть от приказов, писем и следующего хода.`,
+      text: `${responder.name} отмечает публичное заявление России. Дальнейшая реакция будет зависеть от приказов, писем и новых решений.`,
     },
   ]);
 
@@ -407,15 +398,9 @@ function submitAllianceMessage(state: GameState, text: string, time: string): Ga
 }
 
 function runQuickAction(state: GameState, id: QuickActionId, time?: string): GameState {
-  if (quickActionAlreadyUsed(state, id)) {
-    if (id === 'compose-letter') return createNotice(state, 'Совет уже подготовил письмо союзникам в этом ходу', 'error');
-    if (id === 'manage-lands') return createNotice(state, 'Совет уже подготовил хозяйственный ход в этом ходу', 'error');
-    if (id === 'diplomacy') return createNotice(state, 'Совет уже подготовил дипломатический зонд в этом ходу', 'error');
-  }
-
   if (id === 'compose-letter') {
     return addQuickActionProposal(
-      { ...state, quickActionTurns: markQuickAction(state, id) },
+      state,
       orderToCouncilProposal(
         state,
         {
@@ -443,12 +428,12 @@ function runQuickAction(state: GameState, id: QuickActionId, time?: string): Gam
 
   if (id === 'manage-lands') {
     return addQuickActionProposal(
-      { ...state, quickActionTurns: markQuickAction(state, id) },
+      state,
       orderToCouncilProposal(
         state,
         {
           iconKey: 'landmark',
-          title: 'Хозяйственный ход: упорядочить земли',
+          title: 'Хозяйственное решение: упорядочить земли',
           owner: 'Внутренний совет',
           target: 'Россия',
           remainingTurns: 1,
@@ -461,10 +446,10 @@ function runQuickAction(state: GameState, id: QuickActionId, time?: string): Gam
           riskLevel: 'low',
           successChance: 96,
         },
-        'Быстрое действие: хозяйственный ход',
-        'Совет предлагает хозяйственный ход: безопасный внутренний приказ с понятной ценой и быстрым результатом.',
+        'Быстрое действие: хозяйственное решение',
+        'Совет предлагает хозяйственное решение: безопасный внутренний приказ с понятной ценой и быстрым результатом.',
       ),
-      'Совет подготовил хозяйственный ход',
+      'Совет подготовил хозяйственное решение',
       time,
     );
   }
@@ -527,7 +512,7 @@ function runQuickAction(state: GameState, id: QuickActionId, time?: string): Gam
 
   if (id === 'diplomacy') {
     return addQuickActionProposal(
-      { ...state, quickActionTurns: markQuickAction(state, id) },
+      state,
       orderToCouncilProposal(
         state,
         {
@@ -568,7 +553,7 @@ function runQuickAction(state: GameState, id: QuickActionId, time?: string): Gam
         cost: { gold: 520, wood: 260, stone: 220 },
         reward: { stone: 620, gold: 260 },
         completeText: `Инфраструктура в цели "${target}" улучшена: логистика и сбор налогов стали эффективнее.`,
-        failureText: `Инфраструктурный ход по цели "${target}" может затянуться и потерять часть материалов.`,
+        failureText: `Инфраструктурный план по цели "${target}" может затянуться и потерять часть материалов.`,
         riskLevel: 'medium',
         successChance: 80,
       },
@@ -625,7 +610,6 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     );
   }
   if (action.type === 'CANCEL_ORDER') return cancelOrder(state, action.id);
-  if (action.type === 'END_TURN') return endTurn(state);
 
   return state;
 }

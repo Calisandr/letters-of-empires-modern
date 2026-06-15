@@ -95,6 +95,7 @@ async function readLayoutDiagnostics() {
     const chatPanel = rect('.chat-panel');
     const map = rect('.map-section');
     const rightPanel = rect('.right-panel');
+    const visibleText = document.body.innerText || '';
 
     return {
       title: document.title,
@@ -108,9 +109,11 @@ async function readLayoutDiagnostics() {
       rightPanel,
       chatPanel,
       quickActionsVisible: isVisible('.quick-actions'),
+      endTurnVisible: isVisible('.end-turn-button'),
       ordersPanelVisible: isVisible('.orders-panel'),
       diplomacyPanelVisible: isVisible('.diplomacy-panel'),
       turnFlowVisible: isVisible('.turn-flow'),
+      hasVisibleTurnSystemText: /Завершить ход|Текущий ход|До конца хода|Маршрут хода|Цель хода|\/ход/i.test(visibleText),
       inlineCouncilControlsVisible: isVisible('.council-decision-card, .council-decision-slot'),
       chatOverflowY: chatMessages ? getComputedStyle(chatMessages).overflowY : '',
       chatScrollHeight: chatMessages?.scrollHeight || 0,
@@ -311,9 +314,11 @@ try {
   assert(initialLayout.map?.height > 430, 'map should stay the dominant top surface');
   assert(initialLayout.chatPanel?.width > 900, 'chat should occupy the full lower center');
   assert(initialLayout.quickActionsVisible === false, 'left quick action block should be removed');
+  assert(initialLayout.endTurnVisible === false, 'end turn button should be removed');
   assert(initialLayout.ordersPanelVisible === false, 'separate orders dashboard should be removed');
   assert(initialLayout.diplomacyPanelVisible === false, 'permanent diplomacy list should be removed');
   assert(initialLayout.turnFlowVisible === false, 'turn flow strip should be removed from the main screen');
+  assert(initialLayout.hasVisibleTurnSystemText === false, 'old turn-system copy should not be visible');
   assert(initialLayout.inlineCouncilControlsVisible === false, 'inline council controls should not crowd the chat');
   assert(initialLayout.chatOverflowY === 'auto' || initialLayout.chatOverflowY === 'scroll', 'chat messages should be scrollable');
   assert(initialLayout.visibleRightPanels === 2, 'right rail should show only summary and mail');
@@ -350,8 +355,10 @@ try {
   assert(councilAfterCommand.overflowY === 'auto' || councilAfterCommand.overflowY === 'scroll', 'council chat should stay scrollable');
   assert(councilAfterCommand.messageCount >= 1, 'council command should keep normal chat messages visible');
   assert(finalLayout.quickActionsVisible === false, 'quick actions should stay removed after interactions');
+  assert(finalLayout.endTurnVisible === false, 'end turn button should stay removed after interactions');
   assert(finalLayout.ordersPanelVisible === false, 'orders panel should stay removed after interactions');
   assert(finalLayout.diplomacyPanelVisible === false, 'diplomacy panel should stay removed after interactions');
+  assert(finalLayout.hasVisibleTurnSystemText === false, 'old turn-system copy should stay hidden after interactions');
   assert(finalLayout.chatOverflowY === 'auto' || finalLayout.chatOverflowY === 'scroll', 'chat scroll should stay enabled');
   assert(consoleErrors.length === 0, 'browser console should have no errors');
 
